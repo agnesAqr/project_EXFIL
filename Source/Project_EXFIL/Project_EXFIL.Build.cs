@@ -9,6 +9,7 @@ public class Project_EXFIL : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
 		PublicDependencyModuleNames.AddRange(new string[] {
+			// Day 1
 			"Core",
 			"CoreUObject",
 			"Engine",
@@ -17,8 +18,14 @@ public class Project_EXFIL : ModuleRules
 			"AIModule",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
+			// Day 2
 			"UMG",
-			"Slate"
+			"SlateCore",
+			"Slate",
+			"CommonUI",
+			"CommonInput",
+			"ModelViewViewModel",
+			"GameplayTags"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -27,6 +34,7 @@ public class Project_EXFIL : ModuleRules
 			"Project_EXFIL",
 			"Project_EXFIL/Core",
 			"Project_EXFIL/Inventory",
+			"Project_EXFIL/UI",
 			"Project_EXFIL/Variant_Platforming",
 			"Project_EXFIL/Variant_Platforming/Animation",
 			"Project_EXFIL/Variant_Combat",
