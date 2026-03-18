@@ -6,7 +6,7 @@
 
 - **엔진:** Unreal Engine 5.6, C++ 전용 (블루프린트 금지)
 - **프로젝트명:** EXFIL
-- **모듈명:** EXFIL (Build.cs: `EXFIL_API`)
+- **모듈명:** Project_EXFIL (Build.cs: `PROJECT_EXFIL_API`)
 - **목적:** Krafton Orion + Nexon 낙원 포트폴리오
 - **기간:** 8일 스프린트 (하루 15시간)
 
@@ -16,7 +16,7 @@
 EXFIL/
 ├── CLAUDE.md                  ← 이 파일 (자동 로드)
 ├── MEMORY.md                  ← 세션 간 자동 기억
-├── Source/EXFIL/
+├── Source/Project_EXFIL/
 │   ├── Inventory/             ← UInventoryComponent, FInventorySlot
 │   ├── GAS/                   ← USurvivalAttributeSet, GameplayEffects
 │   ├── Crafting/              ← UCraftingComponent, UGA_Craft
@@ -29,7 +29,7 @@ EXFIL/
 │   └── DailyLogs/
 │       └── DayN_Design.md     ← 일일 설계 지시서 + 완료 보고
 ├── Config/
-└── EXFIL.uproject
+└── Project_EXFIL.uproject
 ```
 
 ## 작업 흐름 (필수 준수)
@@ -38,6 +38,15 @@ EXFIL/
 2. **현재 코드 파악:** `Source/` 폴더 구조와 기존 코드를 확인
 3. **설계서에 따라 구현:** 설계서에 명시된 클래스, 함수, UPROPERTY 지정자를 그대로 따름
 4. **완료 후 보고:** `DayN_Design.md`의 "완료 보고" 섹션을 작성
+
+## 모델 선택 가이드
+
+- **기본:** Sonnet 4.6 (설계서가 상세하므로 구현에 충분)
+- **Opus 4.6 전환 시점:**
+  - GAS 연동에서 복잡한 상속/보일러플레이트 문제 발생 시
+  - Replication/RPC 디버깅에서 원인 파악이 어려울 시
+  - 아키텍처 수준의 판단이 필요한 예외 상황 발생 시
+- 설계 변경이 필요하면 구현 탭에서 해결하지 말고 채팅 탭(Opus)에 문의
 
 ## 코딩 컨벤션
 

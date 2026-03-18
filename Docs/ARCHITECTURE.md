@@ -228,7 +228,7 @@ WorldItem 스폰/소멸                 서버 응답 후 확정/롤백
 ## 5. 폴더별 파일 매핑 (예정)
 
 ```
-Source/EXFIL/
+Source/Project_EXFIL/
 ├── Core/
 │   ├── EXFILCharacter.h/.cpp          ← 플레이어 캐릭터
 │   ├── EXFILGameMode.h/.cpp           ← 게임 모드
@@ -275,7 +275,7 @@ Source/EXFIL/
 ## 6. Build.cs 의존성
 
 ```csharp
-// EXFIL.Build.cs
+// Project_EXFIL.Build.cs
 PublicDependencyModuleNames.AddRange(new string[]
 {
     "Core",
