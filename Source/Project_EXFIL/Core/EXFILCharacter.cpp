@@ -20,11 +20,15 @@ void AEXFILCharacter::BeginPlay()
 		InventoryViewModel = NewObject<UInventoryViewModel>(this);
 		InventoryViewModel->Initialize(InventoryComponent);
 
-		// ===== PIE 테스트용 더미 아이템 =====
-		InventoryComponent->TryAddItem(FName("TestBullet"),   FItemSize(1, 1), 5, 30);
-		InventoryComponent->TryAddItem(FName("TestMagazine"), FItemSize(2, 1), 1, 1);
-		InventoryComponent->TryAddItem(FName("TestPistol"),   FItemSize(2, 3), 1, 1);
-		// ====================================
+		// ===== Day 3 PIE 테스트 — DataTable 기반 추가 (완료 후 삭제) =====
+		InventoryComponent->TryAddItemByID(FName("Bandage"),    3);  // 1x1, 스택 3
+		InventoryComponent->TryAddItemByID(FName("Pistol"));         // 2x1
+		InventoryComponent->TryAddItemByID(FName("BodyArmor"));      // 2x3
+		InventoryComponent->TryAddItemByID(FName("ScrapMetal"), 5);  // 1x1, 스택 5
+		InventoryComponent->TryAddItemByID(FName("Medkit"));         // 1x2
+
+		InventoryComponent->DebugPrintGrid();
+		// =================================================================
 	}
 
 	// 로컬 플레이어만 UI 생성

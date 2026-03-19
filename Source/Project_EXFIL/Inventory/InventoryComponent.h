@@ -36,6 +36,10 @@ public:
 	bool TryAddItem(FName ItemDataID, FItemSize Size,
 	                int32 StackCount = 1, int32 MaxStack = 1);
 
+	/** DataTable에서 크기·스택 정보를 자동 조회한 뒤 추가 (Day 3) */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool TryAddItemByID(FName ItemDataID, int32 StackCount = 1);
+
 	/** 지정 위치에 아이템 배치 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool TryAddItemAt(FName ItemDataID, FItemSize Size,
