@@ -22,8 +22,7 @@ class PROJECT_EXFIL_API UItemDataSubsystem : public UGameInstanceSubsystem
 public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
-    /** RowName으로 FItemData 조회. 없으면 nullptr */
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "ItemData")
+    /** RowName으로 FItemData 조회. 없으면 nullptr (C++ 전용 — UHT USTRUCT 포인터 반환 불가) */
     const FItemData* GetItemData(FName ItemDataID) const;
 
     /** DataTable에 등록된 모든 RowName 반환 */
@@ -34,8 +33,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "ItemData")
     TArray<FName> GetItemIDsByType(EItemType Type) const;
 
-    /** RowName으로 FCraftingRecipe 조회. 없으면 nullptr */
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "ItemData")
+    /** RowName으로 FCraftingRecipe 조회. 없으면 nullptr (C++ 전용 — UHT USTRUCT 포인터 반환 불가) */
     const FCraftingRecipe* GetCraftingRecipe(FName RecipeID) const;
 
     /** 크래프팅 DataTable의 모든 RowName 반환 */

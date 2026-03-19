@@ -187,7 +187,24 @@ void UInventorySlotWidget::RefreshVisuals()
 
     if (ItemIcon)
     {
-        ItemIcon->SetVisibility(bIsEmpty ? ESlateVisibility::Hidden : ESlateVisibility::Visible);
+        if (!bIsEmpty && SlotVM->IsRootSlot())
+        {
+            // 아이콘 텍스처 로드 및 세팅 (Soft Reference → 동기 로드)
+            TSoftObjectPtr<UTexture2D> IconPtr = SlotVM->GetIcon();
+            if (!IconPtr.IsNull())
+            {
+                UTexture2D* IconTex = IconPtr.LoadSynchronous();
+                if (IconTex)
+                {
+                    ItemIcon->SetBrushFromTexture(IconTex, /*bMatchSize=*/true);
+                }
+            }
+            ItemIcon->SetVisibility(ESlateVisibility::Visible);
+        }
+        else
+        {
+            ItemIcon->SetVisibility(ESlateVisibility::Hidden);
+        }
     }
 
     if (StackCountText)

@@ -108,7 +108,7 @@ bool UInventoryComponent::TryAddItemAt(FName ItemDataID, FItemSize Size,
 	NewItem.RootPosition = Position;
 	NewItem.ItemSize = Size;
 	NewItem.bIsRotated = bRotated;
-	NewItem.StackCount = StackCount;
+	NewItem.StackCount = FMath::Clamp(StackCount, 1, MaxStack);
 	NewItem.MaxStackCount = MaxStack;
 
 	// 4. 슬롯 점유
@@ -118,9 +118,10 @@ bool UInventoryComponent::TryAddItemAt(FName ItemDataID, FItemSize Size,
 	ItemInstances.Add(NewItem.InstanceID, NewItem);
 
 	UE_LOG(LogProject_EXFIL, Log,
-	       TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Rotated:%s"),
+	       TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Stack:%d/%d Rotated:%s"),
 	       *ItemDataID.ToString(), *NewItem.InstanceID.ToString(),
 	       Position.X, Position.Y, EffectiveSize.Width, EffectiveSize.Height,
+	       NewItem.StackCount, NewItem.MaxStackCount,
 	       bRotated ? TEXT("Yes") : TEXT("No"));
 
 	// 6. 델리게이트 브로드캐스트
