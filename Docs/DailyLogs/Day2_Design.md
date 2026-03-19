@@ -505,16 +505,16 @@ bool UInventoryPanelWidget::NativeOnHandleBackAction()
 
 ## 10. 검증 기준 (Done Criteria)
 
-- [ ] UBT 빌드 성공
-- [ ] UMG ViewModel 플러그인 + CommonUI 플러그인 활성화 확인
-- [ ] InventoryPanelWidget WBP 생성 → GridPanel에 슬롯 위젯이 10×6 그리드로 정상 배치
-- [ ] BeginPlay에서 테스트 아이템 추가 시 해당 슬롯에 시각적 변화 (아이콘/색상)
-- [ ] 아이템 있는 슬롯에서 드래그 시작 → 드래그 비주얼 표시
-- [ ] 빈 슬롯에 드롭 → Model에 MoveItem 호출 → 그리드 상태 정상 갱신
-- [ ] 점유된 슬롯에 드롭 → 실패 피드백 (빨간 하이라이트 등)
-- [ ] ESC/B 버튼으로 인벤토리 패널 닫기 동작
-- [ ] View에서 Model 직접 참조가 없는지 코드 리뷰
-- [ ] UE 에디터 PIE 테스트 통과
+- [x] UBT 빌드 성공
+- [x] UMG ViewModel 플러그인 + CommonUI 플러그인 활성화 확인
+- [x] InventoryPanelWidget WBP 생성 → GridPanel에 슬롯 위젯이 10×6 그리드로 정상 배치
+- [x] BeginPlay에서 테스트 아이템 추가 시 해당 슬롯에 시각적 변화 (아이콘/색상)
+- [x] 아이템 있는 슬롯에서 드래그 시작 → 드래그 비주얼 표시 (멀티셀 포함)
+- [x] 빈 슬롯에 드롭 → Model에 MoveItem 호출 → 그리드 상태 정상 갱신
+- [x] 점유된 슬롯에 드롭 → 실패 피드백 (빨간 하이라이트 등)
+- [x] ~~ESC/B 버튼으로 인벤토리 패널 닫기 동작~~ → **I 키 토글로 대체** (ESC는 PIE 종료 단축키 충돌)
+- [x] View에서 Model 직접 참조가 없는지 코드 리뷰
+- [x] UE 에디터 PIE 테스트 통과
 
 ---
 
@@ -536,35 +536,52 @@ bool UInventoryPanelWidget::NativeOnHandleBackAction()
 - [x] `UInventoryDragDropOp` 헤더/구현 생성
 
 ### 2. 미완료 / 내일로 이월
-- **PIE 검증 미완료:** UBT 빌드 후 에디터에서 WBP(Widget Blueprint) 생성 및 GridPanel BindWidget 설정이 필요. C++ 코드만 작성된 상태.
-- **캐릭터 ViewModel 초기화 코드 미추가:** `AEXFILCharacter`에서 `UInventoryViewModel::Initialize` 호출 코드 없음. Day 3 시작 전 또는 PIE 테스트 시점에 추가 필요.
-- **WBP 서브클래스:** `SlotWidgetClass`는 BP에서 지정해야 하므로 에디터 작업 필요.
+- 없음. Done Criteria 전항목 통과.
 
 ### 3. 트러블슈팅
 | 문제 | 원인 | 해결 |
 |------|------|------|
-| NativeOnDrop에서 ViewModel 직접 접근 불가 | SlotWidget → ViewModel 직접 참조는 MVVM 위반 | PanelWidget에 `ForwardMoveRequest()` 중계 함수 추가. SlotWidget → PanelWidget → ViewModel → Model 흐름 유지 |
-| `.generated.h` 경로 혼동 | 처음에 `"UI/XXX.generated.h"` 형태로 작성 | UHT 규칙에 따라 파일명만 사용 (`"XXX.generated.h"`) |
+| UHT Getter 네이밍 오류 | `Getter` 지정자 단독 사용 시 `GetbEmpty()` 형태 자동 탐색 | UPROPERTY에 `Getter="IsEmpty"` 명시적 지정 |
+| `FUIInputConfig` protected 멤버 접근 오류 | UE 5.6에서 멤버가 protected로 변경 | 생성자 `FUIInputConfig(ECommonInputMode, EMouseCaptureMode)` 방식으로 변경 |
+| `GameplayTags` 링커 에러 | CommonUI 내부에서 `FUIActionTag` (GameplayTags 기반) 사용하나 Build.cs에 누락 | `"GameplayTags"` 모듈 추가 |
+| PIE 시작 직후 즉시 종료 (`BeginTearingDown`) | `r.RayTracing=True` 설정으로 SBT 재초기화 중 크래시 | `DefaultEngine.ini`에서 `r.RayTracing=False`로 변경 |
+| BindWidget 미연결 오류 | WBP 위젯 이름 불일치 또는 `Is Variable` 미체크 | 위젯명을 C++ 변수명과 정확히 일치시키고 자물쇠(Is Variable) 체크 |
+| `CommonGameViewportClient` 경고 | CommonUI Input Routing이 기본 ViewportClient에서 미작동 | `DefaultEngine.ini`에 `GameViewportClientClassName` 추가 |
+| UniformGridPanel 화면 전체 확장 | 크기 제약 없이 AddToViewport 시 풀스크린으로 확장됨 | WBP_InventoryPanel에 Canvas Panel → Border → SizeBox(676×404) → GridPanel 계층 구성 |
+| 슬롯 드래그 시 원본 슬롯에 구멍 발생 | `DefaultDragVisual = this` 사용 시 원본 위젯이 Grid에서 탈착됨 | `CreateWidget(GetOwningPlayer(), GetClass())`로 복사본 생성 후 DragVisual로 사용 |
+| 비루트 슬롯 드래그 시 MoveItem 범위 초과 | 드롭 위치를 아이템 루트로 그대로 전달 | DragOp에 `DragOffset` 추가, 드롭 위치에서 오프셋 역산하여 루트 위치 계산 |
+| NativeOnDrop에서 ViewModel 직접 접근 불가 | SlotWidget → ViewModel 직접 참조는 MVVM 위반 | PanelWidget에 `ForwardMoveRequest()` 중계 함수 추가 |
+| BP_ThirdPersonCharacter 부모 클래스 미스매치 | 기본 부모가 `AProject_EXFILCharacter`라 `InventoryPanelWidgetClass` 노출 안 됨 | Reparent Blueprint → `AEXFILCharacter`로 변경 |
+| `I` 키 토글 미작동 | `Set Input Mode UI Only` 상태에서 캐릭터 이벤트 그래프 키 입력 차단 | `Set Input Mode Game And UI`로 변경 |
 
 ### 4. 파일 구조 변경사항
 | 파일 | 변경 유형 | 변경 내용 요약 |
 |------|----------|---------------|
 | `CLAUDE.md` | 수정 | 모듈명 PROJECT_EXFIL_API로 정정, 경로 수정, 모델 선택 가이드 추가 |
 | `Docs/ARCHITECTURE.md` | 수정 | Source/Project_EXFIL/ 경로 정정 |
+| `Config/DefaultEngine.ini` | 수정 | `r.RayTracing=False`, `CommonGameViewportClient` 설정 추가 |
 | `Source/Project_EXFIL/Inventory/InventoryComponent.cpp` | 수정 | BeginPlay 테스트 코드 삭제 |
-| `Source/Project_EXFIL/Project_EXFIL.Build.cs` | 수정 | Day 2 모듈 의존성 추가, UI 폴더 IncludePath 추가 |
+| `Source/Project_EXFIL/Project_EXFIL.Build.cs` | 수정 | Day 2 모듈 의존성 추가 (`UMG`, `CommonUI`, `CommonInput`, `ModelViewViewModel`, `GameplayTags`) |
 | `Project_EXFIL.uproject` | 수정 | CommonUI, ModelViewViewModel 플러그인 활성화 |
+| `Source/Project_EXFIL/Core/EXFILCharacter.h/.cpp` | 신규 생성 | BeginPlay에서 ViewModel 생성·초기화, WBP_InventoryPanel 생성 및 Viewport 추가 |
 | `Source/Project_EXFIL/UI/InventorySlotViewModel.h/.cpp` | 신규 생성 | 개별 슬롯 ViewModel (FieldNotify Getter/Setter) |
 | `Source/Project_EXFIL/UI/InventoryViewModel.h/.cpp` | 신규 생성 | 전체 인벤토리 ViewModel (Model 델리게이트 구독, RefreshAllSlots) |
-| `Source/Project_EXFIL/UI/InventoryPanelWidget.h/.cpp` | 신규 생성 | 인벤토리 패널 View (BuildGrid, Back액션, Input Routing) |
-| `Source/Project_EXFIL/UI/InventorySlotWidget.h/.cpp` | 신규 생성 | 슬롯 View (DragDrop, 하이라이트) |
-| `Source/Project_EXFIL/UI/InventoryDragDropOp.h/.cpp` | 신규 생성 | 드래그앤드롭 오퍼레이션 데이터 |
+| `Source/Project_EXFIL/UI/InventoryPanelWidget.h/.cpp` | 신규 생성 | 인벤토리 패널 View (BuildGrid, ForwardMoveRequest, Input Routing) |
+| `Source/Project_EXFIL/UI/InventorySlotWidget.h/.cpp` | 신규 생성 | 슬롯 View (DragDrop, 멀티셀 하이라이트, 드래그 비주얼 복사본 생성) |
+| `Source/Project_EXFIL/UI/InventoryDragDropOp.h/.cpp` | 신규 생성 | 드래그앤드롭 오퍼레이션 데이터 (`DragOffset` 포함) |
+| `Content/UI/WBP_InventorySlot.uasset` | 신규 생성 | SizeBox(64×64) → SlotBorder → Overlay → ItemIcon + StackCountText |
+| `Content/UI/WBP_InventoryPanel.uasset` | 신규 생성 | Canvas Panel → Border → SizeBox(676×404) → GridPanel |
 
-### 5. 다음 Day 참고사항
-- **UBT 빌드 먼저:** 에디터 열기 전 UnrealBuildTool로 빌드 성공 확인 필수
-- **WBP 생성 순서:** `WBP_InventorySlot` (SlotBorder, ItemIcon, StackCountText BindWidget) → `WBP_InventoryPanel` (GridPanel BindWidget, SlotWidgetClass 지정) 순서로 생성
-- **AEXFILCharacter 연결:** InventoryComponent가 있는 캐릭터의 BeginPlay에서 `UInventoryViewModel` 생성 후 `Initialize(InventoryComp)` 호출, `UInventoryPanelWidget::SetViewModel` 연결
-- **ForwardMoveRequest:** 설계서에 없는 추가 함수 — Day 3 설계서 작성 시 채팅 탭에 이 패턴이 적절한지 검토 요청
+### 5. 설계서 대비 변경사항
+- **`ForwardMoveRequest()` 추가:** SlotWidget에서 PanelWidget을 통해 ViewModel에 이동 요청을 중계하는 함수. MVVM 단방향 흐름 유지를 위해 추가.
+- **`DragOffset` 추가:** 비루트 슬롯 드래그 시 루트 위치 역산을 위해 `UInventoryDragDropOp`에 `FIntPoint DragOffset` 추가.
+- **`ParentPanel` 약참조 추가:** SlotWidget에서 PanelWidget 역참조를 위해 `TWeakObjectPtr<UInventoryPanelWidget>` 추가. `BuildGrid()`에서 `SetParentPanel(this)` 세팅.
+- **ESC → I 키:** CommonUI BackAction 대신 BP에서 I 키 토글로 인벤토리 개폐 처리.
 
-### 6. Git 커밋
-- `feat(Day2): MVVM InventoryViewModel + CommonUI InventoryPanel` — (빌드 성공 후 커밋 예정)
+### 6. 다음 Day 참고사항
+- **r.RayTracing=False 유지:** PIE 안정성을 위해 개발 기간 중 레이트레이싱 비활성화 상태 유지
+- **WBP_InventorySlot 슬롯 크기:** 64×64 고정. 추후 아이템 크기(2×3 등)에 따른 멀티셀 시각화는 DragPreviewWidget 별도 구현 필요
+- **ForwardMoveRequest 패턴:** Day 3 설계서 작성 시 채팅 탭에 이 패턴의 적절성 검토 요청
+
+### 7. Git 커밋
+- `feat(Day2): MVVM InventoryViewModel + CommonUI InventoryPanel` — 2026-03-19 푸시 완료
