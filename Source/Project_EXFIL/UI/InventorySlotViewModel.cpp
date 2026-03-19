@@ -39,3 +39,8 @@ void UInventorySlotViewModel::SetItemInstanceID(FGuid NewValue)
 {
     UE_MVVM_SET_PROPERTY_VALUE(ItemInstanceID, NewValue);
 }
+
+void UInventorySlotViewModel::SetIcon(TSoftObjectPtr<UTexture2D> NewValue)
+{
+    UE_MVVM_SET_PROPERTY_VALUE(Icon, NewValue);
+}

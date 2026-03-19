@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "MVVMViewModelBase.h"
 #include "Inventory/EXFILInventoryTypes.h"
+
+class UTexture2D;
+
 #include "InventorySlotViewModel.generated.h"
 
 UCLASS()
@@ -35,6 +38,9 @@ public:
     UFUNCTION(BlueprintPure, FieldNotify)
     FGuid GetItemInstanceID() const { return ItemInstanceID; }
 
+    UFUNCTION(BlueprintPure, FieldNotify)
+    TSoftObjectPtr<UTexture2D> GetIcon() const { return Icon; }
+
     // === Request (View → ViewModel → Model) ===
     UFUNCTION(BlueprintCallable, Category = "Inventory|Request")
     void RequestDrop();
@@ -47,6 +53,7 @@ protected:
     void SetIsRootSlot(bool bNewValue);
     void SetGridPosition(FIntPoint NewValue);
     void SetItemInstanceID(FGuid NewValue);
+    void SetIcon(TSoftObjectPtr<UTexture2D> NewValue);
 
 private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsEmpty", Setter = "SetEmpty",
@@ -72,4 +79,9 @@ private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter, Setter = "SetItemInstanceID",
               meta = (AllowPrivateAccess = true))
     FGuid ItemInstanceID;
+
+    /** 아이콘 텍스처 — Getter 명시적 지정 (UHT GetbXxx 오탐 방지) */
+    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetIcon", Setter = "SetIcon",
+              meta = (AllowPrivateAccess = true))
+    TSoftObjectPtr<UTexture2D> Icon;
 };

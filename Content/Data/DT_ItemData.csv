@@ -1,0 +1,8 @@
+---,DisplayName,Description,ItemType,SizeWidth,SizeHeight,Weight,MaxStackCount,Icon,ConsumableEffect,EquipmentEffect,EquipmentSlotTag
+Bandage,"붕대","체력을 소량 회복",Consumable,1,1,0.1,5,,,,
+Medkit,"의료 키트","체력을 대량 회복",Consumable,1,2,0.5,1,,,,
+Pistol,"권총","기본 사이드암",Equipment,2,1,1.2,1,,,,Weapon
+BodyArmor,"방탄복","피해를 감소",Equipment,2,3,3.5,1,,,,Body
+ScrapMetal,"고철","크래프팅 재료",Material,1,1,0.3,10,,,,
+Cloth,"천","크래프팅 재료",Material,1,1,0.1,20,,,,
+PistolAmmo,"9mm 탄약","권총용 탄약",Ammo,1,1,0.05,60,,,,

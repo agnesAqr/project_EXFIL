@@ -1,6 +1,9 @@
 // Copyright Project EXFIL. All Rights Reserved.
 
 #include "InventoryComponent.h"
+#include "CoreMinimal.h"
+#include "Engine/GameInstance.h"
+#include "Data/ItemDataSubsystem.h"
 #include "Project_EXFIL.h"
 
 UInventoryComponent::UInventoryComponent()
@@ -51,6 +54,34 @@ bool UInventoryComponent::TryAddItem(FName ItemDataID, FItemSize Size,
 	}
 
 	return TryAddItemAt(ItemDataID, Size, FoundPosition, false, StackCount, MaxStack);
+}
+
+bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
+{
+	// 서브시스템에서 아이템 정의 조회
+	UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
+	UItemDataSubsystem* Sub = GI ? GI->GetSubsystem<UItemDataSubsystem>() : nullptr;
+
+	if (!Sub)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+		       TEXT("TryAddItemByID: UItemDataSubsystem을 찾을 수 없습니다."));
+		return false;
+	}
+
+	const FItemData* ItemData = Sub->GetItemData(ItemDataID);
+	if (!ItemData)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+		       TEXT("TryAddItemByID: ItemDataID '%s'를 DataTable에서 찾을 수 없습니다."),
+		       *ItemDataID.ToString());
+		return false;
+	}
+
+	const FItemSize Size = ItemData->GetItemSize();
+	const int32 MaxStack = ItemData->MaxStackCount;
+
+	return TryAddItem(ItemDataID, Size, StackCount, MaxStack);
 }
 
 bool UInventoryComponent::TryAddItemAt(FName ItemDataID, FItemSize Size,
