@@ -2,7 +2,9 @@
 
 #include "UI/InventoryViewModel.h"
 #include "CoreMinimal.h"
+#include "Engine/GameInstance.h"
 #include "Inventory/InventoryComponent.h"
+#include "Data/ItemDataSubsystem.h"
 
 void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
 {
@@ -130,6 +132,16 @@ void UInventoryViewModel::RefreshAllSlots()
         return;
     }
 
+    // ItemDataSubsystem — 아이콘 조회용 (없어도 크래시하지 않음)
+    UItemDataSubsystem* ItemSub = nullptr;
+    if (UWorld* World = InventoryComp->GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            ItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+        }
+    }
+
     for (int32 i = 0; i < SlotViewModels.Num(); ++i)
     {
         UInventorySlotViewModel* SlotVM = SlotViewModels[i].Get();
@@ -151,6 +163,13 @@ void UInventoryViewModel::RefreshAllSlots()
             SlotVM->SetStackCount(ItemInstance.StackCount);
             SlotVM->SetIsRootSlot(bIsRoot);
             SlotVM->SetItemInstanceID(ItemInstance.InstanceID);
+
+            // 아이콘 — DataTable에서 조회 (없으면 null Soft Ref 유지)
+            if (ItemSub)
+            {
+                const FItemData* ItemData = ItemSub->GetItemData(ItemInstance.ItemDataID);
+                SlotVM->SetIcon(ItemData ? ItemData->Icon : TSoftObjectPtr<UTexture2D>());
+            }
         }
         else
         {
@@ -159,6 +178,7 @@ void UInventoryViewModel::RefreshAllSlots()
             SlotVM->SetStackCount(0);
             SlotVM->SetIsRootSlot(false);
             SlotVM->SetItemInstanceID(FGuid());
+            SlotVM->SetIcon(TSoftObjectPtr<UTexture2D>());
         }
     }
 }
