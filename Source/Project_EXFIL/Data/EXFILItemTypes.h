@@ -6,9 +6,6 @@
 #include "Engine/DataTable.h"
 #include "Inventory/EXFILInventoryTypes.h"
 
-// GameplayAbilities 모듈은 Day 4에서 추가 — 전방 선언으로 TSoftClassPtr 컴파일 허용
-class UGameplayEffect;
-
 #include "EXFILItemTypes.generated.h"
 
 // ─────────────────────────────────────────────
@@ -58,13 +55,13 @@ struct PROJECT_EXFIL_API FItemData : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|UI")
     TSoftObjectPtr<UTexture2D> Icon;
 
-    /** 소비 시 적용할 GE (Day 4에서 활성화) */
+    /** 소비 시 적용할 GE 클래스 경로 (Day 4에서 TSoftClassPtr<UGameplayEffect>로 교체) */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|GAS")
-    TSoftClassPtr<UGameplayEffect> ConsumableEffect;
+    FSoftClassPath ConsumableEffect;
 
-    /** 장착 시 적용할 GE (Day 4에서 활성화) */
+    /** 장착 시 적용할 GE 클래스 경로 (Day 4에서 TSoftClassPtr<UGameplayEffect>로 교체) */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|GAS")
-    TSoftClassPtr<UGameplayEffect> EquipmentEffect;
+    FSoftClassPath EquipmentEffect;
 
     /** 장비 슬롯 태그 — Equipment일 때만 유효 */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|Equipment")
