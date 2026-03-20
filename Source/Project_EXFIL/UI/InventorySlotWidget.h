@@ -37,8 +37,11 @@ protected:
     virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent,
         UDragDropOperation* InOperation) override;
 
-    /** 아이템 아이콘 이미지 (WBP에서 BindWidget) */
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    /**
+     * 아이템 아이콘 이미지 — Day 4부터 InventoryIconOverlay로 이전.
+     * WBP에서 이미 존재하는 경우를 위해 Optional로 유지하되 표시하지 않음.
+     */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     TObjectPtr<UImage> ItemIcon;
 
     /** 스택 수량 텍스트 (WBP에서 BindWidget) */
@@ -52,6 +55,10 @@ protected:
 public:
     /** 드래그 진입/이탈 시 테두리 하이라이트 — PanelWidget에서도 호출 */
     void SetHighlight(bool bHighlighted, bool bIsValid = true);
+
+    /** 슬롯 1칸의 픽셀 크기 — WBP에서 실제 슬롯 크기에 맞춰 설정 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|UI")
+    float CellPixelSize = 60.f;
 
 protected:
 

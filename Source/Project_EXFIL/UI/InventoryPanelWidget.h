@@ -9,6 +9,7 @@
 
 class UInventoryViewModel;
 class UInventorySlotWidget;
+class UInventoryIconOverlay;
 class UUniformGridPanel;
 
 UCLASS(Abstract)
@@ -46,6 +47,10 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UUniformGridPanel> GridPanel;
 
+    /** 멀티셀 아이콘 오버레이 — CanvasPanel 기반 (WBP에서 BindWidget으로 연결) */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    TObjectPtr<UInventoryIconOverlay> IconOverlay;
+
     /** BP 서브클래스에서 지정. 실제 레이아웃은 WBP에서 구성 */
     UPROPERTY(EditDefaultsOnly, Category = "Inventory|UI")
     TSubclassOf<UInventorySlotWidget> SlotWidgetClass;
@@ -62,4 +67,10 @@ private:
 
     /** GridPanel 초기화 */
     void ClearGrid();
+
+    /** IconOverlay에 아이콘 갱신 요청 */
+    void RefreshIconOverlay();
+
+    /** ViewModel RefreshAllSlots 후 콜백 핸들 */
+    FDelegateHandle ViewModelRefreshedHandle;
 };

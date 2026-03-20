@@ -25,7 +25,10 @@ public class Project_EXFIL : ModuleRules
 			"CommonUI",
 			"CommonInput",
 			"ModelViewViewModel",
-			"GameplayTags"
+			"GameplayTags",
+			// Day 4
+			"GameplayAbilities",
+			"GameplayTasks"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -33,8 +36,11 @@ public class Project_EXFIL : ModuleRules
 		PublicIncludePaths.AddRange(new string[] {
 			"Project_EXFIL",
 			"Project_EXFIL/Core",
+			"Project_EXFIL/Data",
 			"Project_EXFIL/Inventory",
 			"Project_EXFIL/UI",
+			"Project_EXFIL/GAS",
+			"Project_EXFIL/Equipment",
 			"Project_EXFIL/Variant_Platforming",
 			"Project_EXFIL/Variant_Platforming/Animation",
 			"Project_EXFIL/Variant_Combat",

@@ -34,6 +34,8 @@ void UInventorySlotWidget::SetSlotViewModel(UInventorySlotViewModel* InSlotVM)
             UInventorySlotViewModel::FFieldNotificationClassDescriptor::StackCount, Delegate);
         SlotVM->AddFieldValueChangedDelegate(
             UInventorySlotViewModel::FFieldNotificationClassDescriptor::ItemDataID, Delegate);
+        SlotVM->AddFieldValueChangedDelegate(
+            UInventorySlotViewModel::FFieldNotificationClassDescriptor::Icon, Delegate);
     }
 
     RefreshVisuals();
@@ -185,26 +187,10 @@ void UInventorySlotWidget::RefreshVisuals()
 
     const bool bIsEmpty = SlotVM->IsEmpty();
 
+    // 아이콘은 InventoryIconOverlay가 담당 — 슬롯 위젯의 ItemIcon은 항상 숨김
     if (ItemIcon)
     {
-        if (!bIsEmpty && SlotVM->IsRootSlot())
-        {
-            // 아이콘 텍스처 로드 및 세팅 (Soft Reference → 동기 로드)
-            TSoftObjectPtr<UTexture2D> IconPtr = SlotVM->GetIcon();
-            if (!IconPtr.IsNull())
-            {
-                UTexture2D* IconTex = IconPtr.LoadSynchronous();
-                if (IconTex)
-                {
-                    ItemIcon->SetBrushFromTexture(IconTex, /*bMatchSize=*/true);
-                }
-            }
-            ItemIcon->SetVisibility(ESlateVisibility::Visible);
-        }
-        else
-        {
-            ItemIcon->SetVisibility(ESlateVisibility::Hidden);
-        }
+        ItemIcon->SetVisibility(ESlateVisibility::Hidden);
     }
 
     if (StackCountText)
