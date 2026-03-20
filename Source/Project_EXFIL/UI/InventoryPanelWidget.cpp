@@ -5,14 +5,24 @@
 #include "Components/UniformGridPanel.h"
 #include "UI/InventoryViewModel.h"
 #include "UI/InventorySlotWidget.h"
+#include "UI/InventoryIconOverlay.h"
 #include "Input/CommonUIInputTypes.h"
 
 void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
 {
+    // 기존 델리게이트 해제
+    if (ViewModel)
+    {
+        ViewModel->OnViewModelRefreshed.Remove(ViewModelRefreshedHandle);
+        ViewModelRefreshedHandle.Reset();
+    }
+
     ViewModel = InViewModel;
 
     if (ViewModel)
     {
+        ViewModelRefreshedHandle = ViewModel->OnViewModelRefreshed.AddUObject(
+            this, &UInventoryPanelWidget::RefreshIconOverlay);
         BuildGrid();
     }
 }
@@ -72,6 +82,9 @@ void UInventoryPanelWidget::BuildGrid()
             SlotWidgets.Add(SlotWidget);
         }
     }
+
+    // 초기 아이콘 오버레이 갱신
+    RefreshIconOverlay();
 }
 
 bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition,
@@ -112,6 +125,16 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
                 SlotWidgets[Index]->SetHighlight(true, bIsValid);
             }
         }
+    }
+}
+
+void UInventoryPanelWidget::RefreshIconOverlay()
+{
+    if (IconOverlay && ViewModel && !SlotWidgets.IsEmpty())
+    {
+        // SlotWidget의 CellPixelSize를 기준으로 사용
+        const float CellSize = SlotWidgets[0] ? SlotWidgets[0]->CellPixelSize : 60.f;
+        IconOverlay->RefreshIcons(ViewModel, CellSize);
     }
 }
 

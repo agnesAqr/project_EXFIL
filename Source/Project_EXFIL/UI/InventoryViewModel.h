@@ -10,6 +10,9 @@
 
 class UInventoryComponent;
 
+/** PanelWidget이 아이콘 오버레이 갱신 시점을 알기 위한 델리게이트 */
+DECLARE_MULTICAST_DELEGATE(FOnInventoryViewModelRefreshed);
+
 UCLASS()
 class PROJECT_EXFIL_API UInventoryViewModel : public UMVVMViewModelBase
 {
@@ -51,6 +54,9 @@ public:
     /** 아이템의 유효 크기 반환 (회전 반영) */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     FItemSize GetItemEffectiveSize(FGuid ItemInstanceID) const;
+
+    /** 인벤토리 갱신 시 브로드캐스트 — IconOverlay 갱신용 */
+    FOnInventoryViewModelRefreshed OnViewModelRefreshed;
 
 private:
     UPROPERTY()
