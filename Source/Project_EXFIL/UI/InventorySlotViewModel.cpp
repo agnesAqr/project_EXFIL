@@ -44,3 +44,13 @@ void UInventorySlotViewModel::SetIcon(TSoftObjectPtr<UTexture2D> NewValue)
 {
     UE_MVVM_SET_PROPERTY_VALUE(Icon, NewValue);
 }
+
+void UInventorySlotViewModel::SetItemSizeX(int32 NewValue)
+{
+    UE_MVVM_SET_PROPERTY_VALUE(ItemSizeX, NewValue);
+}
+
+void UInventorySlotViewModel::SetItemSizeY(int32 NewValue)
+{
+    UE_MVVM_SET_PROPERTY_VALUE(ItemSizeY, NewValue);
+}

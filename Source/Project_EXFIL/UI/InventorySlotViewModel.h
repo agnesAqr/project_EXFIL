@@ -41,6 +41,12 @@ public:
     UFUNCTION(BlueprintPure, FieldNotify)
     TSoftObjectPtr<UTexture2D> GetIcon() const { return Icon; }
 
+    UFUNCTION(BlueprintPure, FieldNotify)
+    int32 GetItemSizeX() const { return ItemSizeX; }
+
+    UFUNCTION(BlueprintPure, FieldNotify)
+    int32 GetItemSizeY() const { return ItemSizeY; }
+
     // === Request (View → ViewModel → Model) ===
     UFUNCTION(BlueprintCallable, Category = "Inventory|Request")
     void RequestDrop();
@@ -54,6 +60,8 @@ protected:
     void SetGridPosition(FIntPoint NewValue);
     void SetItemInstanceID(FGuid NewValue);
     void SetIcon(TSoftObjectPtr<UTexture2D> NewValue);
+    void SetItemSizeX(int32 NewValue);
+    void SetItemSizeY(int32 NewValue);
 
 private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsEmpty", Setter = "SetEmpty",
@@ -84,4 +92,13 @@ private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetIcon", Setter = "SetIcon",
               meta = (AllowPrivateAccess = true))
     TSoftObjectPtr<UTexture2D> Icon;
+
+    /** 아이템 그리드 크기 — 루트 슬롯에서 아이콘 크기 계산용 */
+    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetItemSizeX", Setter = "SetItemSizeX",
+              meta = (AllowPrivateAccess = true))
+    int32 ItemSizeX = 1;
+
+    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetItemSizeY", Setter = "SetItemSizeY",
+              meta = (AllowPrivateAccess = true))
+    int32 ItemSizeY = 1;
 };

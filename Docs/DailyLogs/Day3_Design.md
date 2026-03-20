@@ -380,10 +380,10 @@ if (UInventoryComponent* Inv = FindComponentByClass<UInventoryComponent>())
 - [x] `Content/Data/DT_ItemData.csv` 신규 생성 — 7종 아이템 (Bandage, Medkit, Pistol, BodyArmor, ScrapMetal, Cloth, PistolAmmo)
 
 ### 2. 미완료 / 내일로 이월
-- **DT_CraftingRecipe** — `TArray<FCraftingIngredient>` 필드가 있어 CSV 임포트 불가. UE 에디터에서 직접 DataTable 생성 후 행 입력 필요. Day 4 이전 에디터 작업으로 처리.
-- **DT_ItemData 에디터 임포트** — CSV는 생성됨. UE 에디터에서 `Content/Data/` 위치에 `FItemData` 구조체 기반 DataTable로 임포트 필요. 임포트 전까지 서브시스템에서 `nullptr` 반환 (경고 로그 출력됨).
-- **아이콘 텍스처** — Day 3에서는 텍스처 에셋이 없으므로 Icon 열이 비어 있음. `SlotVM->SetIcon`은 null Soft Ref를 설정하며, UI에서 null 처리 필요.
-- **UBT 빌드 확인** — 코드 작성 완료. 에디터에서 빌드 후 에러 0 확인 필요.
+- ~~**DT_CraftingRecipe**~~ → ✅ 2026-03-20 에디터에서 직접 생성 완료 (Recipe_Bandage, Recipe_Medkit 행 입력)
+- ~~**DT_ItemData 에디터 임포트**~~ → ✅ 2026-03-20 임포트 완료 + 40종으로 확장
+- **아이콘 텍스처** — 텍스처 에셋 미확보. `DT_ItemData` Icon 열은 비어 있음. Day 4~5에서 에셋 추가 후 채울 것.
+- ~~**UBT 빌드 확인**~~ → ✅ 2026-03-20 빌드 성공 (에러 0)
 
 ### 3. 트러블슈팅
 | 문제 | 원인 | 해결 |
@@ -391,27 +391,88 @@ if (UInventoryComponent* Inv = FindComponentByClass<UInventoryComponent>())
 | `TSoftClassPtr<UGameplayEffect>` 전방 선언 | `GameplayAbilities` 모듈이 Day 4에서 추가됨 | `class UGameplayEffect;` 전방 선언으로 `EXFILItemTypes.h` 컴파일 통과 |
 | `InventorySlotViewModel`의 새 Icon 필드 Getter | Day 2 트러블슈팅: `Getter` 단독 사용 시 UHT가 `GetbIcon()` 탐색 | `Getter="GetIcon"` 명시적 지정으로 해결 |
 | `UInventoryViewModel`에서 `UItemDataSubsystem` 접근 | ViewModel은 UObject — `GetWorld()` 직접 호출 불가 | `InventoryComp->GetWorld()->GetGameInstance()` 경로로 우회 |
+| UHT 빌드 에러 — `TSoftClassPtr<UGameplayEffect>` (2026-03-20) | UHT는 전방 선언된 클래스를 `TSoftClassPtr` 템플릿 인자로 인식 불가 | `FSoftClassPath`(plain struct)로 교체. Day 4에서 GameplayAbilities 모듈 추가 후 `TSoftClassPtr<UGameplayEffect>`로 복원 |
+| UHT 빌드 에러 — `const FItemData*` UFUNCTION 반환 (2026-03-20) | UHT는 USTRUCT 포인터를 UFUNCTION 반환형으로 허용하지 않음 | `GetItemData`, `GetCraftingRecipe`에서 `UFUNCTION` 제거 (C++ 전용 함수로 유지) |
+| `TryAddItemAt` 스택 클램핑 누락 (2026-03-20) | `NewItem.StackCount = StackCount` 직접 대입 — MaxStack 초과 가능 | `FMath::Clamp(StackCount, 1, MaxStack)`으로 수정 |
+| `DT_ItemData` Icon 경로 미적용 (2026-03-20) | Soft Object Path 형식이 `/Game/UI/Icons/T_Bandage` — AssetName 누락 | `/Game/UI/Icons/T_Bandage.T_Bandage` 형식(패키지경로.에셋명)으로 수정 후 리임포트 |
+| 멀티셀 아이콘 스패닝 시도 실패 (2026-03-20) | `SetBrushSize` + `EWidgetClipping::Inherit` 적용 시 아이콘이 뷰포트 전체를 덮음 | 원상복구(`bMatchSize=true`). 근본 원인: `UniformGridPanel` 구조에서 각 슬롯이 독립 위젯이므로 `SetBrushSize`는 브러시 내부 크기만 변경하고 실제 레이아웃 크기는 부모 할당에 따름. 아이콘이 Stretch 모드로 부모를 채워 전체 화면 확장 |
 
 ### 4. 파일 구조 변경사항
 | 파일 | 변경 유형 | 변경 내용 요약 |
 |------|----------|---------------|
-| `Source/Project_EXFIL/Data/EXFILItemTypes.h` | 신규 생성 | `EItemType`, `FItemData`, `FCraftingIngredient`, `FCraftingRecipe` |
-| `Source/Project_EXFIL/Data/ItemDataSubsystem.h` | 신규 생성 | `UGameInstanceSubsystem` 기반 아이템·레시피 조회 서브시스템 선언 |
+| `Source/Project_EXFIL/Data/EXFILItemTypes.h` | 신규 생성 → 수정 | `EItemType`, `FItemData`, `FCraftingIngredient`, `FCraftingRecipe` / UHT 픽스: `FSoftClassPath`로 교체 |
+| `Source/Project_EXFIL/Data/ItemDataSubsystem.h` | 신규 생성 → 수정 | `UGameInstanceSubsystem` 기반 서브시스템 / UHT 픽스: UFUNCTION 제거 |
 | `Source/Project_EXFIL/Data/ItemDataSubsystem.cpp` | 신규 생성 | `LoadObject<UDataTable>` 기반 로딩 + 조회 함수 구현 |
 | `Source/Project_EXFIL/Inventory/InventoryComponent.h` | 수정 | `TryAddItemByID` 선언 추가 |
-| `Source/Project_EXFIL/Inventory/InventoryComponent.cpp` | 수정 | `TryAddItemByID` 구현 + `Data/ItemDataSubsystem.h` include |
-| `Source/Project_EXFIL/UI/InventorySlotViewModel.h` | 수정 | `Icon` 필드 + `GetIcon` getter + `SetIcon` setter 선언 |
-| `Source/Project_EXFIL/UI/InventorySlotViewModel.cpp` | 수정 | `SetIcon` 구현 추가 |
-| `Source/Project_EXFIL/UI/InventoryViewModel.cpp` | 수정 | `RefreshAllSlots` 내 `UItemDataSubsystem` 연동 + `SetIcon` 호출 |
+| `Source/Project_EXFIL/Inventory/InventoryComponent.cpp` | 수정 | `TryAddItemByID` 구현 / 스택 클램핑 추가 / 로그에 `Stack:N/M` 출력 |
+| `Source/Project_EXFIL/UI/InventorySlotViewModel.h` | 수정 | `Icon` 필드 + `GetIcon`/`SetIcon` / `ItemSizeX`·`ItemSizeY` 필드 + getter/setter 추가 |
+| `Source/Project_EXFIL/UI/InventorySlotViewModel.cpp` | 수정 | `SetIcon`, `SetItemSizeX`, `SetItemSizeY` 구현 추가 |
+| `Source/Project_EXFIL/UI/InventoryViewModel.cpp` | 수정 | `RefreshAllSlots` 내 `UItemDataSubsystem` 연동 + `SetIcon` / `SetItemSizeX`·`Y` 호출 |
+| `Source/Project_EXFIL/UI/InventorySlotWidget.h` | 수정 | `CellPixelSize` UPROPERTY 추가 (기본값 60.f, WBP에서 오버라이드 가능) |
+| `Source/Project_EXFIL/UI/InventorySlotWidget.cpp` | 수정 | 아이콘 Soft Reference 동기 로드 + `SetBrushFromTexture(bMatchSize=true)` 표시 로직 |
 | `Source/Project_EXFIL/Core/EXFILCharacter.cpp` | 수정 | Day 2 더미 → Day 3 `TryAddItemByID` 테스트 코드로 교체 |
-| `Content/Data/DT_ItemData.csv` | 신규 생성 | 7종 아이템 정의 CSV (에디터 임포트 전 단계) |
+| `Content/Data/DT_ItemData.csv` | 신규 생성 → 수정 | 7종 → **40종** 아이템 확장 / Icon 경로 형식 수정 (`패키지.에셋명`) |
+| `Content/Data/DT_ItemData.uasset` | 신규 생성 | 에디터 임포트 완료 |
+| `Content/Data/DT_CraftingRecipe.uasset` | 신규 생성 | 에디터에서 직접 생성, Recipe_Bandage / Recipe_Medkit 행 입력 완료 |
 
 ### 5. 다음 Day 참고사항
-- **Day 4 Build.cs**: `GameplayAbilities`, `GameplayTasks` 모듈 추가 필요. 이후 `TSoftClassPtr<UGameplayEffect>`의 ConsumableEffect / EquipmentEffect 실제 연결 가능.
+
+#### Day 4 필수 작업
+- **Build.cs**: `GameplayAbilities`, `GameplayTasks` 모듈 추가 필요. 이후 `EXFILItemTypes.h`의 `FSoftClassPath` → `TSoftClassPtr<UGameplayEffect>` 복원 가능.
 - **`UItemDataSubsystem` 접근 패턴 확립**: `GetWorld()->GetGameInstance()->GetSubsystem<UItemDataSubsystem>()` — Day 4~5에서 동일 패턴으로 GAS / 크래프팅 연동 시 재사용.
-- **DT_CraftingRecipe 에디터 작업**: Day 4 진입 전 에디터에서 `FCraftingRecipe` 기반 DataTable 생성 + Recipe_Bandage, Recipe_Medkit 행 입력 권장.
-- **아이콘 텍스처**: Day 4~5에서 실제 텍스처 에셋 추가 시, `DT_ItemData`의 Icon 열 경로만 채우면 UI 자동 반영됨 (Soft Reference 구조 덕분).
 - **기존 `TryAddItem(FName, FItemSize, ...)` API 유지**: 하위 호환 보장됨.
 
+#### ⚠️ Day 4 FieldNotify Getter/Setter 필수 규칙 (Day 2~3 트러블슈팅에서 확립)
+
+Day 4에서 GAS 관련 ViewModel(`USurvivalAttributeViewModel` 등)을 새로 만들 때 반드시 준수해야 함.
+
+**규칙: `FieldNotify`가 붙는 모든 `UPROPERTY`는 Getter/Setter를 반드시 문자열로 명시한다.**
+
+```cpp
+// ✅ 올바름 — 항상 문자열로 명시
+UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetHealth", Setter = "SetHealth",
+          meta = (AllowPrivateAccess = true))
+float Health = 100.f;
+
+// ✅ bool도 동일하게 — Getter에 실제 함수명 문자열 사용
+UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsDead", Setter = "SetDead",
+          meta = (AllowPrivateAccess = true))
+bool bDead = false;
+
+// ❌ 금지 — Getter 단독 (인자 없이) 사용
+UPROPERTY(BlueprintReadWrite, FieldNotify, Getter, Setter = "SetHealth", ...)
+float Health = 100.f;
+
+// ❌ 특히 위험 — bool + Getter 단독
+// UHT가 GetbDead() 를 탐색 → 컴파일 에러
+UPROPERTY(BlueprintReadWrite, FieldNotify, Getter, Setter = "SetDead", ...)
+bool bDead = false;
+```
+
+**원인 상세:**
+- UHT는 `Getter` 단독 사용 시 변수명 앞에 `Get`을 붙여 함수를 탐색함
+- bool의 경우 변수명이 `bXxx` 형태이므로 → `GetbXxx()` 라는 잘못된 이름으로 탐색
+- 결과: `Unable to find function 'GetbXxx'` 빌드 에러
+- **문자열로 명시하면 UHT가 해당 문자열을 그대로 함수명으로 사용** → 문제 없음
+
+**Day 4에서 새로 만들 ViewModel 예상 필드:**
+- `Health`, `MaxHealth`, `Stamina`, `MaxStamina` (float) → `Getter = "GetHealth"` 형식
+- `bIsAlive`, `bIsEncumbered` 등 (bool) → `Getter = "IsAlive"` 형식 (Get 없이 Is/Has 사용 권장)
+- AttributeSet 연동 델리게이트 바인딩 시에도 동일 규칙 적용
+
+#### 아이콘 관련 미해결 사항 (Day 8 폴리시 대상)
+- **멀티셀 아이콘 스패닝 미구현**: 현재 아이콘은 루트 슬롯(1칸)에만 표시됨. 올바른 구현은 `UniformGridPanel` 위에 `CanvasPanel` 오버레이 레이어를 별도로 두고, 각 아이템 아이콘을 `(rootX × cellSize, rootY × cellSize)` 위치에 `(itemW × cellSize, itemH × cellSize)` 크기로 배치해야 함. 타르코프 방식과 동일. `UniformGridPanel` 구조에서는 `SetBrushSize`가 레이아웃 크기에 영향을 주지 못해 불가.
+- **`InventorySlotViewModel`에 `ItemSizeX`/`ItemSizeY` 이미 추가됨**: 위 Canvas 방식 구현 시 재활용 가능.
+- **`CellPixelSize` UPROPERTY**: `InventorySlotWidget`에 추가됨 (기본 60.f). WBP_InventorySlot 디테일 패널에서 실제 셀 크기에 맞춰 수정 필요.
+- **`DT_ItemData` Icon 경로 현황**: Bandage, Medkit, Painkillers, Tourniquet, Splint까지 입력 완료. 나머지 35종은 아이콘 에셋 확보 후 채울 것.
+- **Soft Object Path 형식 주의**: DataTable Icon 열 입력 시 반드시 `/Game/UI/Icons/T_Bandage.T_Bandage` 형식 (패키지경로.에셋명) 사용. 에셋명 없이 `/Game/UI/Icons/T_Bandage`만 입력 시 Soft Ref 해석 실패.
+
+#### WBP 중복 파일 정리 필요
+- `Content/UI/WBP_InventoryPanel`, `Content/UI/WBP_InventorySlot` (구버전 추정)
+- `Content/UI/Inventory/WBP_InventoryPanel`, `Content/UI/Inventory/WBP_InventorySlot` (신버전 추정)
+- **확인 방법**: `BP_EXFILCharacter` → `Inventory Panel Widget Class` 경로 확인 → 사용 중인 쪽 유지, 나머지 삭제
+- `WBP_InventoryPanel` → `Slot Widget Class` 항목도 동일하게 확인 필요
+
 ### 6. Git 커밋
-- `feat(Day3): Data-driven item system + crafting recipe DataTable` — (빌드 확인 후 커밋)
+- `feat(Day3): Data-driven item system + crafting recipe DataTable` — 2026-03-19
+- `fix(Day3): UHT 빌드 에러 수정 + 스택 클램핑 + 아이템 데이터 확장` — 2026-03-20

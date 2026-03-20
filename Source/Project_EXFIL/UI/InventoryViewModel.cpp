@@ -164,6 +164,21 @@ void UInventoryViewModel::RefreshAllSlots()
             SlotVM->SetIsRootSlot(bIsRoot);
             SlotVM->SetItemInstanceID(ItemInstance.InstanceID);
 
+            // 아이템 그리드 크기 — 루트 슬롯에만 실제 크기 저장 (아이콘 크기 계산용)
+            if (bIsRoot)
+            {
+                const FItemSize EffSize = ItemInstance.bIsRotated
+                    ? ItemInstance.ItemSize.GetRotated()
+                    : ItemInstance.ItemSize;
+                SlotVM->SetItemSizeX(EffSize.Width);
+                SlotVM->SetItemSizeY(EffSize.Height);
+            }
+            else
+            {
+                SlotVM->SetItemSizeX(1);
+                SlotVM->SetItemSizeY(1);
+            }
+
             // 아이콘 — DataTable에서 조회 (없으면 null Soft Ref 유지)
             if (ItemSub)
             {
@@ -178,9 +193,14 @@ void UInventoryViewModel::RefreshAllSlots()
             SlotVM->SetStackCount(0);
             SlotVM->SetIsRootSlot(false);
             SlotVM->SetItemInstanceID(FGuid());
+            SlotVM->SetItemSizeX(1);
+            SlotVM->SetItemSizeY(1);
             SlotVM->SetIcon(TSoftObjectPtr<UTexture2D>());
         }
     }
+
+    // 아이콘 오버레이 갱신 알림
+    OnViewModelRefreshed.Broadcast();
 }
 
 int32 UInventoryViewModel::PositionToIndex(FIntPoint Position) const
