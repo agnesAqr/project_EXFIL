@@ -100,6 +100,28 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID(FName ItemDataID) const;
 
+	/**
+	 * 특정 아이템 인스턴스의 StackCount를 1 감소.
+	 * 0이 되면 자동 RemoveItem. 서버 전용.
+	 * @return 감소 후 남은 StackCount (제거됐으면 0)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	int32 DecrementStack(const FGuid& InstanceID);
+
+	// ========== Server RPCs (Day 6) ==========
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_TryAddItemByID(FName ItemDataID, int32 StackCount);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RemoveItem(FGuid ItemInstanceID);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_MoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_ConsumeItemByID(FName ItemDataID, int32 Count);
+
 	// ========== 델리게이트 ==========
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnInventoryUpdated OnInventoryUpdated;
@@ -110,19 +132,26 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnItemRemoved OnItemRemoved;
 
+	// ========== Replication (Day 6) ==========
+	virtual void GetLifetimeReplicatedProps(
+		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 protected:
 	virtual void BeginPlay() override;
 
 private:
-	// ========== 내부 데이터 ==========
+	// ========== Replicated 데이터 (Day 6) ==========
 
 	/** 1D 배열로 표현한 2D 그리드 (Index = Y * GridWidth + X) */
-	UPROPERTY()
+	UPROPERTY(Replicated)
 	TArray<FInventorySlot> GridSlots;
 
-	/** 인벤토리에 존재하는 모든 아이템 인스턴스 */
-	UPROPERTY()
-	TMap<FGuid, FInventoryItemInstance> ItemInstances;
+	/** 인벤토리에 존재하는 모든 아이템 인스턴스 (TMap→TArray: TMap은 리플리케이션 불가) */
+	UPROPERTY(ReplicatedUsing = OnRep_Items)
+	TArray<FInventoryItemInstance> Items;
+
+	UFUNCTION()
+	void OnRep_Items();
 
 	// ========== 내부 헬퍼 ==========
 	bool IsValidGridPosition(FIntPoint Position) const;
@@ -134,4 +163,9 @@ private:
 	                 const FGuid& ItemID);
 	void FreeSlots(const FInventoryItemInstance& Item);
 	void InitializeGrid();
+
+	/** TArray에서 InstanceID로 아이템 검색 (TMap→TArray 전환 헬퍼) */
+	FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID);
+	const FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID) const;
+	int32 FindItemIndexByInstanceID(const FGuid& InstanceID) const;
 };

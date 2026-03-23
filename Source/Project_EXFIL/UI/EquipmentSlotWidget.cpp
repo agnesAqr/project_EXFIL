@@ -7,6 +7,10 @@
 #include "Components/TextBlock.h"
 #include "Blueprint/DragDropOperation.h"
 #include "UI/InventoryDragDropOp.h"
+#include "Data/Equipment/EquipmentComponent.h"
+#include "Data/EXFILItemTypes.h"
+#include "Data/ItemDataSubsystem.h"
+#include "Engine/GameInstance.h"
 
 void UEquipmentSlotWidget::NativeOnInitialized()
 {
@@ -34,15 +38,110 @@ void UEquipmentSlotWidget::NativeOnInitialized()
     ApplyEmptyStyle();
 }
 
+void UEquipmentSlotWidget::NativeConstruct()
+{
+    Super::NativeConstruct();
+
+    // OwningPlayer → Pawn → EquipmentComponent 자동 바인딩
+    APlayerController* PC = GetOwningPlayer();
+    APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+    if (Pawn)
+    {
+        UEquipmentComponent* EquipComp = Pawn->FindComponentByClass<UEquipmentComponent>();
+        if (EquipComp && !BoundEquipComp.IsValid())
+        {
+            BoundEquipComp = EquipComp;
+            EquipComp->OnItemEquipped.AddDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemEquipped);
+            EquipComp->OnItemUnequipped.AddDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemUnequipped);
+
+            // 초기 상태 반영
+            RefreshFromEquipmentComponent();
+        }
+    }
+}
+
+void UEquipmentSlotWidget::NativeDestruct()
+{
+    // 델리게이트 해제
+    if (BoundEquipComp.IsValid())
+    {
+        BoundEquipComp->OnItemEquipped.RemoveDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemEquipped);
+        BoundEquipComp->OnItemUnequipped.RemoveDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemUnequipped);
+        BoundEquipComp.Reset();
+    }
+
+    Super::NativeDestruct();
+}
+
+void UEquipmentSlotWidget::OnEquipmentItemEquipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item)
+{
+    if (InSlot == SlotType)
+    {
+        RefreshFromEquipmentComponent();
+    }
+}
+
+void UEquipmentSlotWidget::OnEquipmentItemUnequipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item)
+{
+    if (InSlot == SlotType)
+    {
+        // 빈 슬롯으로 갱신
+        FEquipmentSlotData EmptyData(SlotType);
+        RefreshSlot(EmptyData);
+    }
+}
+
+void UEquipmentSlotWidget::RefreshFromEquipmentComponent()
+{
+    if (!BoundEquipComp.IsValid())
+    {
+        return;
+    }
+
+    FInventoryItemInstance EquippedItem;
+    if (BoundEquipComp->GetEquippedItem(SlotType, EquippedItem))
+    {
+        FEquipmentSlotData Data(SlotType);
+        Data.EquippedItemID = EquippedItem.InstanceID;
+        Data.ItemInstance = EquippedItem;
+        RefreshSlot(Data);
+    }
+    else
+    {
+        FEquipmentSlotData EmptyData(SlotType);
+        RefreshSlot(EmptyData);
+    }
+}
+
 void UEquipmentSlotWidget::RefreshSlot(const FEquipmentSlotData& SlotData)
 {
     CachedSlotData = SlotData;
 
-    if (SlotData.bIsOccupied)
+    if (!SlotData.IsEmpty())
     {
-        // 아이콘 표시
+        // 아이콘 텍스처 로드 및 표시
         if (Image_ItemIcon)
         {
+            UItemDataSubsystem* Sub = nullptr;
+            if (UWorld* World = GetWorld())
+            {
+                if (UGameInstance* GI = World->GetGameInstance())
+                {
+                    Sub = GI->GetSubsystem<UItemDataSubsystem>();
+                }
+            }
+            if (Sub)
+            {
+                const FItemData* ItemData = Sub->GetItemData(SlotData.ItemInstance.ItemDataID);
+                if (ItemData && !ItemData->Icon.IsNull())
+                {
+                    UTexture2D* IconTexture = ItemData->Icon.LoadSynchronous();
+                    if (IconTexture)
+                    {
+                        Image_ItemIcon->SetBrushFromTexture(IconTexture, true);
+                    }
+                }
+            }
             Image_ItemIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
         }
         // 아이템 이름 표시
@@ -57,6 +156,7 @@ void UEquipmentSlotWidget::RefreshSlot(const FEquipmentSlotData& SlotData)
     {
         if (Image_ItemIcon)
         {
+            Image_ItemIcon->SetBrushFromTexture(nullptr);
             Image_ItemIcon->SetVisibility(ESlateVisibility::Collapsed);
         }
         if (TextBlock_ItemName)
@@ -75,7 +175,7 @@ void UEquipmentSlotWidget::SetDragHighlight(bool bVisible, bool bIsValid)
     }
     else
     {
-        if (CachedSlotData.bIsOccupied)
+        if (!CachedSlotData.IsEmpty())
         {
             ApplyEquippedStyle();
         }
@@ -136,7 +236,7 @@ void UEquipmentSlotWidget::ApplyDragHoverStyle(bool bIsValid)
 FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
                                                       const FPointerEvent& InMouseEvent)
 {
-    if (InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton) && CachedSlotData.bIsOccupied)
+    if (InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton) && !CachedSlotData.IsEmpty())
     {
         return FReply::Handled().DetectDrag(GetCachedWidget().ToSharedRef(), EKeys::LeftMouseButton);
     }
@@ -147,7 +247,7 @@ void UEquipmentSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry,
                                                  const FPointerEvent& InMouseEvent,
                                                  UDragDropOperation*& OutOperation)
 {
-    if (!CachedSlotData.bIsOccupied)
+    if (CachedSlotData.IsEmpty())
     {
         return;
     }
@@ -158,6 +258,8 @@ void UEquipmentSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry,
     DragOp->ItemSize               = CachedSlotData.ItemInstance.ItemSize;
     DragOp->DragItemSize           = CachedSlotData.ItemInstance.GetEffectiveSize();
     DragOp->bWasRotated            = CachedSlotData.ItemInstance.bIsRotated;
+    DragOp->bFromEquipment         = true;
+    DragOp->SourceEquipmentSlot    = SlotType;
     OutOperation = DragOp;
 }
 
@@ -165,7 +267,62 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
                                          const FDragDropEvent& InDragDropEvent,
                                          UDragDropOperation* InOperation)
 {
-    // 기본 구현: 드롭 수락 여부만 반환 (실제 장착 로직은 BP 또는 Character에서 처리)
     UInventoryDragDropOp* DragOp = Cast<UInventoryDragDropOp>(InOperation);
-    return DragOp != nullptr;
+    if (!DragOp)
+    {
+        return false;
+    }
+
+    // 장비슬롯에서 온 드래그는 여기서 처리하지 않음 (장비→장비 교환은 미지원)
+    if (DragOp->bFromEquipment)
+    {
+        return false;
+    }
+
+    // 인벤토리에서 온 드래그 → 장착 시도
+    // 1. DataTable에서 슬롯 타입 검증
+    UItemDataSubsystem* Sub = nullptr;
+    if (UWorld* World = GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            Sub = GI->GetSubsystem<UItemDataSubsystem>();
+        }
+    }
+
+    if (Sub)
+    {
+        const FItemData* ItemData = Sub->GetItemData(DragOp->ItemDataID);
+        if (!ItemData || ItemData->ItemType != EItemType::Equipment)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("EquipmentSlotWidget: Item '%s' is not equipment"),
+                *DragOp->ItemDataID.ToString());
+            return false;
+        }
+
+        const EEquipmentSlot RequiredSlot = UEquipmentComponent::SlotTagToEnum(ItemData->EquipmentSlotTag);
+        if (RequiredSlot != EEquipmentSlot::None && RequiredSlot != SlotType)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("EquipmentSlotWidget: Slot mismatch — item wants %d, this is %d"),
+                static_cast<int32>(RequiredSlot), static_cast<int32>(SlotType));
+            return false;
+        }
+    }
+
+    // 2. 소유 Actor의 EquipmentComponent로 복합 RPC 호출
+    APlayerController* PC = GetOwningPlayer();
+    APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+    if (!Pawn)
+    {
+        return false;
+    }
+
+    UEquipmentComponent* EquipComp = Pawn->FindComponentByClass<UEquipmentComponent>();
+    if (!EquipComp)
+    {
+        return false;
+    }
+
+    EquipComp->Server_EquipFromInventory(SlotType, DragOp->DraggedItemInstanceID);
+    return true;
 }
