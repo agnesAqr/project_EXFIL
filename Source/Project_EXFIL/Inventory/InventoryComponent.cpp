@@ -301,6 +301,81 @@ int32 UInventoryComponent::GetItemCount(FName ItemDataID) const
 	return Count;
 }
 
+// ========== Day 5 추가 API ==========
+
+bool UInventoryComponent::ConsumeItemByID(FName ItemDataID, int32 Count)
+{
+	if (Count <= 0)
+	{
+		return false;
+	}
+
+	// 보유량 사전 확인
+	if (GetItemCountByID(ItemDataID) < Count)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+		       TEXT("ConsumeItemByID: Not enough '%s' (need %d)"), *ItemDataID.ToString(), Count);
+		return false;
+	}
+
+	int32 Remaining = Count;
+
+	// ItemInstances를 순회하며 해당 ID 아이템을 소비
+	TArray<FGuid> ToRemove;
+	for (auto& Pair : ItemInstances)
+	{
+		if (Remaining <= 0)
+		{
+			break;
+		}
+		if (Pair.Value.ItemDataID != ItemDataID)
+		{
+			continue;
+		}
+
+		if (Pair.Value.StackCount <= Remaining)
+		{
+			Remaining -= Pair.Value.StackCount;
+			ToRemove.Add(Pair.Key);
+		}
+		else
+		{
+			Pair.Value.StackCount -= Remaining;
+			Remaining = 0;
+		}
+	}
+
+	// 스택이 0이 된 인스턴스 제거
+	for (const FGuid& ID : ToRemove)
+	{
+		if (FInventoryItemInstance* Item = ItemInstances.Find(ID))
+		{
+			FreeSlots(*Item);
+		}
+		ItemInstances.Remove(ID);
+		OnItemRemoved.Broadcast(ID);
+	}
+
+	OnInventoryUpdated.Broadcast();
+
+	UE_LOG(LogProject_EXFIL, Log,
+	       TEXT("ConsumeItemByID: '%s' x%d consumed"), *ItemDataID.ToString(), Count);
+	return true;
+}
+
+int32 UInventoryComponent::GetItemCountByID(FName ItemDataID) const
+{
+	int32 Total = 0;
+	for (const auto& Pair : ItemInstances)
+	{
+		if (Pair.Value.ItemDataID == ItemDataID)
+		{
+			Total += Pair.Value.StackCount;
+		}
+	}
+	return Total;
+}
+
 // ========== 유틸리티 ==========
 
 void UInventoryComponent::DebugPrintGrid() const

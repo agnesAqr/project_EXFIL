@@ -86,6 +86,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory|Debug")
 	void DebugPrintGrid() const;
 
+	// ========== Day 5 추가 API ==========
+
+	/**
+	 * 인벤토리에서 해당 ItemDataID 아이템을 Count만큼 스택 소비.
+	 * 여러 슬롯에 분산된 경우 순서대로 소비.
+	 * 스택이 0이 되는 인스턴스는 자동 제거.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
+	bool ConsumeItemByID(FName ItemDataID, int32 Count = 1);
+
+	/** 인벤토리 내 해당 ItemDataID의 총 스택 수 합산 반환 */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetItemCountByID(FName ItemDataID) const;
+
 	// ========== 델리게이트 ==========
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnInventoryUpdated OnInventoryUpdated;
