@@ -1,6 +1,6 @@
 // Copyright Project EXFIL. All Rights Reserved.
 
-#include "Equipment/EquipmentComponent.h"
+#include "Data/Equipment/EquipmentComponent.h"
 #include "CoreMinimal.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"

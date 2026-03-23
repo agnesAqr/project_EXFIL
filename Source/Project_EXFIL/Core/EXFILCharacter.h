@@ -12,6 +12,7 @@ class UInventoryViewModel;
 class UInventoryPanelWidget;
 class UAbilitySystemComponent;
 class USurvivalAttributeSet;
+class UCraftingComponent;
 class UInputAction;
 struct FInputActionValue;
 
@@ -63,5 +64,13 @@ protected:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
     TObjectPtr<USurvivalAttributeSet> SurvivalAttributes;
+
+    // === Crafting ===
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+              meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UCraftingComponent> CraftingComponent;
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Crafting")
+    UCraftingComponent* GetCraftingComponent() const { return CraftingComponent; }
 
 };

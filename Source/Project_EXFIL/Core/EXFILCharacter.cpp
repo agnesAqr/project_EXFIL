@@ -5,13 +5,16 @@
 #include "AbilitySystemComponent.h"
 #include "GAS/SurvivalAttributeSet.h"
 #include "Inventory/InventoryComponent.h"
+#include "Crafting/CraftingComponent.h"
 #include "UI/InventoryViewModel.h"
 #include "UI/InventoryPanelWidget.h"
+#include "UI/CraftingPanelWidget.h"
 #include "Blueprint/UserWidget.h"
 
 AEXFILCharacter::AEXFILCharacter()
 {
     InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
+    CraftingComponent  = CreateDefaultSubobject<UCraftingComponent>(TEXT("CraftingComponent"));
 
     // GAS — AttributeSet은 반드시 생성자에서 CreateDefaultSubobject
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
@@ -71,6 +74,12 @@ void AEXFILCharacter::BeginPlay()
             if (InventoryPanelWidget)
             {
                 InventoryPanelWidget->SetViewModel(InventoryViewModel);
+
+                // CraftingPanel이 WBP 안에 있으면 컴포넌트 연결
+                if (UCraftingPanelWidget* CraftingPanel = InventoryPanelWidget->GetCraftingPanel())
+                {
+                    CraftingPanel->SetupCrafting(CraftingComponent, InventoryComponent);
+                }
             }
         }
     }

@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "ActiveGameplayEffectHandle.h"
-#include "Equipment/EquipmentTypes.h"
+#include "Data/Equipment/EquipmentTypes.h"
 #include "Inventory/EXFILInventoryTypes.h"
 #include "EquipmentComponent.generated.h"
 

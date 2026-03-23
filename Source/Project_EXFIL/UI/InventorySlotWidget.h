@@ -9,7 +9,6 @@
 class UInventorySlotViewModel;
 class UInventoryPanelWidget;
 class UImage;
-class UTextBlock;
 class UBorder;
 
 UCLASS(Abstract)
@@ -36,17 +35,8 @@ protected:
         const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
     virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent,
         UDragDropOperation* InOperation) override;
-
-    /**
-     * 아이템 아이콘 이미지 — Day 4부터 InventoryIconOverlay로 이전.
-     * WBP에서 이미 존재하는 경우를 위해 Optional로 유지하되 표시하지 않음.
-     */
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
-    TObjectPtr<UImage> ItemIcon;
-
-    /** 스택 수량 텍스트 (WBP에서 BindWidget) */
-    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
-    TObjectPtr<UTextBlock> StackCountText;
+    virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent,
+        UDragDropOperation* InOperation) override;
 
     /** 슬롯 테두리 — 하이라이트 색상 변경용 (WBP에서 BindWidget) */
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))

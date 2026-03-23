@@ -2,8 +2,6 @@
 
 #include "UI/InventorySlotWidget.h"
 #include "CoreMinimal.h"
-#include "Components/Image.h"
-#include "Components/TextBlock.h"
 #include "Components/Border.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "UI/InventorySlotViewModel.h"
@@ -30,12 +28,6 @@ void UInventorySlotWidget::SetSlotViewModel(UInventorySlotViewModel* InSlotVM)
             this, &UInventorySlotWidget::OnSlotFieldChanged);
         SlotVM->AddFieldValueChangedDelegate(
             UInventorySlotViewModel::FFieldNotificationClassDescriptor::bEmpty, Delegate);
-        SlotVM->AddFieldValueChangedDelegate(
-            UInventorySlotViewModel::FFieldNotificationClassDescriptor::StackCount, Delegate);
-        SlotVM->AddFieldValueChangedDelegate(
-            UInventorySlotViewModel::FFieldNotificationClassDescriptor::ItemDataID, Delegate);
-        SlotVM->AddFieldValueChangedDelegate(
-            UInventorySlotViewModel::FFieldNotificationClassDescriptor::Icon, Delegate);
     }
 
     RefreshVisuals();
@@ -163,8 +155,42 @@ void UInventorySlotWidget::NativeOnDragEnter(const FGeometry& InGeometry,
     if (DragOp && SlotVM && ParentPanel.IsValid())
     {
         const FIntPoint RootPos = SlotVM->GetGridPosition() - DragOp->DragOffset;
-        // 범위 내 빈 슬롯인지 간단 체크 (자기 슬롯 기준)
-        const bool bCanPlace = SlotVM->IsEmpty();
+
+        // 전체 영역의 배치 가능 여부 확인
+        bool bCanPlace = true;
+        if (UInventoryViewModel* VM = ParentPanel->GetViewModel())
+        {
+            const int32 GridWidth = VM->GetGridWidth();
+            const int32 GridHeight = VM->GetGridHeight();
+
+            // 경계 검사 — 범위 밖이면 하이라이트 없이 리턴
+            if (RootPos.X < 0 || RootPos.Y < 0 ||
+                RootPos.X + DragOp->DragItemSize.Width > GridWidth ||
+                RootPos.Y + DragOp->DragItemSize.Height > GridHeight)
+            {
+                ParentPanel->ClearAreaHighlights();
+                return;
+            }
+
+            // 범위 내일 때만 슬롯별 점유 검사
+            for (int32 Y = RootPos.Y; Y < RootPos.Y + DragOp->DragItemSize.Height && bCanPlace; ++Y)
+            {
+                for (int32 X = RootPos.X; X < RootPos.X + DragOp->DragItemSize.Width && bCanPlace; ++X)
+                {
+                    UInventorySlotViewModel* TargetSlot = VM->GetSlotAt(FIntPoint(X, Y));
+                    if (!TargetSlot)
+                    {
+                        bCanPlace = false;
+                    }
+                    else if (!TargetSlot->IsEmpty()
+                        && TargetSlot->GetItemInstanceID() != DragOp->DraggedItemInstanceID)
+                    {
+                        bCanPlace = false;
+                    }
+                }
+            }
+        }
+
         ParentPanel->HighlightArea(RootPos, DragOp->DragItemSize, bCanPlace);
     }
 }
@@ -172,6 +198,16 @@ void UInventorySlotWidget::NativeOnDragEnter(const FGeometry& InGeometry,
 void UInventorySlotWidget::NativeOnDragLeave(const FDragDropEvent& InDragDropEvent,
     UDragDropOperation* InOperation)
 {
+    if (ParentPanel.IsValid())
+    {
+        ParentPanel->ClearAreaHighlights();
+    }
+}
+
+void UInventorySlotWidget::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent,
+    UDragDropOperation* InOperation)
+{
+    // 드래그 취소(ESC 등) 시 하이라이트 복구
     if (ParentPanel.IsValid())
     {
         ParentPanel->ClearAreaHighlights();
@@ -186,25 +222,6 @@ void UInventorySlotWidget::RefreshVisuals()
     }
 
     const bool bIsEmpty = SlotVM->IsEmpty();
-
-    // 아이콘은 InventoryIconOverlay가 담당 — 슬롯 위젯의 ItemIcon은 항상 숨김
-    if (ItemIcon)
-    {
-        ItemIcon->SetVisibility(ESlateVisibility::Hidden);
-    }
-
-    if (StackCountText)
-    {
-        if (!bIsEmpty && SlotVM->IsRootSlot() && SlotVM->GetStackCount() > 1)
-        {
-            StackCountText->SetText(FText::AsNumber(SlotVM->GetStackCount()));
-            StackCountText->SetVisibility(ESlateVisibility::Visible);
-        }
-        else
-        {
-            StackCountText->SetVisibility(ESlateVisibility::Hidden);
-        }
-    }
 
     if (SlotBorder)
     {
