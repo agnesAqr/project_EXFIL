@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "ActiveGameplayEffectHandle.h"
 #include "Data/Equipment/EquipmentTypes.h"
 #include "Inventory/EXFILInventoryTypes.h"
 #include "EquipmentComponent.generated.h"
@@ -19,9 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 /**
  * UEquipmentComponent — Head / Body / Weapon 슬롯 장비 관리
  *
- * EquipItem 시 FItemData::EquipmentEffect(Infinite Duration GE)를 ASC에 Apply.
- * UnequipItem 시 저장된 핸들로 GE 제거.
- * 소유 Actor의 AbilitySystemComponent를 GetOwner()->FindComponentByClass로 획득.
+ * Day 6: TMap→TArray 변환 + 리플리케이션 + Server RPC
  */
 UCLASS(ClassGroup=(Equipment), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UEquipmentComponent : public UActorComponent
@@ -50,24 +47,63 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     bool IsSlotOccupied(EEquipmentSlot Slot) const;
 
+    // ========== Server RPCs (Day 6) ==========
+
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_EquipItem(EEquipmentSlot Slot, FInventoryItemInstance ItemInstance);
+
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_UnequipItem(EEquipmentSlot Slot);
+
+    // ========== 복합 Server RPCs (핫픽스 A: 드래그 장착/해제) ==========
+
+    /** 인벤토리에서 아이템 제거 + 장비 슬롯에 장착 (원자적 서버 연산) */
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_EquipFromInventory(EEquipmentSlot Slot, FGuid ItemInstanceID);
+
+    /** 장비 해제 + 인벤토리에 아이템 추가 (원자적 서버 연산) */
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_UnequipToInventory(EEquipmentSlot Slot);
+
+    /** EquipmentSlotTag(FName) → EEquipmentSlot 매핑 헬퍼 */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
+    static EEquipmentSlot SlotTagToEnum(FName SlotTag);
+
+    // ========== 델리게이트 ==========
+
     UPROPERTY(BlueprintAssignable, Category = "Equipment|Events")
     FOnEquipmentChanged OnItemEquipped;
 
     UPROPERTY(BlueprintAssignable, Category = "Equipment|Events")
     FOnEquipmentChanged OnItemUnequipped;
 
-private:
-    UPROPERTY()
-    TMap<EEquipmentSlot, FInventoryItemInstance> EquippedItems;
+    // ========== Replication (Day 6) ==========
+    virtual void GetLifetimeReplicatedProps(
+        TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-    UPROPERTY()
-    TMap<EEquipmentSlot, FActiveGameplayEffectHandle> ActiveEffectHandles;
+protected:
+    virtual void BeginPlay() override;
+
+private:
+    /** Replicated 슬롯 배열 (TMap→TArray: TMap은 리플리케이션 불가) */
+    UPROPERTY(ReplicatedUsing = OnRep_Slots)
+    TArray<FEquipmentSlotData> ReplicatedSlots;
+
+    UFUNCTION()
+    void OnRep_Slots();
+
+    /** 슬롯 초기화 */
+    void InitializeSlots();
+
+    /** TArray에서 슬롯 검색 헬퍼 */
+    FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType);
+    const FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType) const;
 
     /** EquipmentEffect(Infinite Duration GE) 로드 및 ASC Apply */
-    void ApplyEquipmentEffect(EEquipmentSlot Slot, const FInventoryItemInstance& Item);
+    void ApplyEquipmentEffect(FEquipmentSlotData& SlotData, const FInventoryItemInstance& Item);
 
     /** ASC에서 저장된 핸들로 GE 제거 */
-    void RemoveEquipmentEffect(EEquipmentSlot Slot);
+    void RemoveEquipmentEffect(FEquipmentSlotData& SlotData);
 
     /** 소유 Actor의 ASC 획득 헬퍼 */
     UAbilitySystemComponent* GetASC() const;
