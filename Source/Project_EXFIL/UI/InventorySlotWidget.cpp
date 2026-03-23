@@ -9,6 +9,7 @@
 #include "UI/InventoryDragPreviewWidget.h"
 #include "UI/InventoryViewModel.h"
 #include "UI/InventoryPanelWidget.h"
+#include "Data/Equipment/EquipmentComponent.h"
 #include "FieldNotificationId.h"
 
 void UInventorySlotWidget::SetSlotViewModel(UInventorySlotViewModel* InSlotVM)
@@ -113,6 +114,33 @@ bool UInventorySlotWidget::NativeOnDrop(const FGeometry& InGeometry,
     {
         return false;
     }
+
+    // ── 핫픽스 A: 장비슬롯에서 온 드래그 → 해제 + 인벤토리 추가 ──
+    if (DragOp->bFromEquipment)
+    {
+        APlayerController* PC = GetOwningPlayer();
+        APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+        if (!Pawn)
+        {
+            return false;
+        }
+
+        UEquipmentComponent* EquipComp = Pawn->FindComponentByClass<UEquipmentComponent>();
+        if (!EquipComp)
+        {
+            return false;
+        }
+
+        EquipComp->Server_UnequipToInventory(DragOp->SourceEquipmentSlot);
+
+        if (ParentPanel.IsValid())
+        {
+            ParentPanel->ClearAreaHighlights();
+        }
+        return true;
+    }
+
+    // ── 기존 인벤토리 내부 드래그 (MoveItem) ──
 
     // 같은 루트 위치에 드롭하면 무시
     const FIntPoint NewRootCheck = SlotVM->GetGridPosition() - DragOp->DragOffset;

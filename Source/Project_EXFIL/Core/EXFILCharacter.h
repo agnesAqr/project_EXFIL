@@ -13,12 +13,15 @@ class UInventoryPanelWidget;
 class UAbilitySystemComponent;
 class USurvivalAttributeSet;
 class UCraftingComponent;
+class UEquipmentComponent;
 class UInputAction;
 struct FInputActionValue;
 
 /**
  * AEXFILCharacter — EXFIL 프로젝트의 플레이어 캐릭터
  * 인벤토리, GAS(ASC+AttributeSet), 장비, 크래프팅 컴포넌트의 부착 대상
+ *
+ * Day 6: bReplicates, SetIsReplicated, ASC Mixed Mode, IsLocallyControlled 가드
  */
 UCLASS()
 class PROJECT_EXFIL_API AEXFILCharacter : public AProject_EXFILCharacter,
@@ -38,6 +41,10 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     UInventoryViewModel* GetInventoryViewModel() const { return InventoryViewModel; }
+
+    // === Equipment ===
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
+    UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
 protected:
     virtual void BeginPlay() override;
@@ -72,5 +79,10 @@ protected:
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Crafting")
     UCraftingComponent* GetCraftingComponent() const { return CraftingComponent; }
+
+    // === Equipment ===
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+              meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UEquipmentComponent> EquipmentComponent;
 
 };

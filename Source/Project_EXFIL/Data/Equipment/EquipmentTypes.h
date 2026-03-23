@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ActiveGameplayEffectHandle.h"
 #include "Inventory/EXFILInventoryTypes.h"
 #include "EquipmentTypes.generated.h"
 
@@ -19,19 +20,34 @@ enum class EEquipmentSlot : uint8
     Weapon2  UMETA(DisplayName = "Weapon 2")
 };
 
-/** 슬롯 UI에 전달되는 데이터 (EquipmentSlotWidget::RefreshSlot 인자) */
+/**
+ * FEquipmentSlotData — 장비 슬롯 상태 (Day 6: TMap→TArray 변환용)
+ *
+ * 리플리케이션 대상. ActiveGEHandle은 서버 전용(NotReplicated).
+ */
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FEquipmentSlotData
 {
     GENERATED_BODY()
 
-    UPROPERTY(BlueprintReadOnly)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     EEquipmentSlot SlotType = EEquipmentSlot::None;
 
-    UPROPERTY(BlueprintReadOnly)
-    bool bIsOccupied = false;
+    /** 장착된 아이템의 InstanceID (Invalid = 빈 슬롯) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    FGuid EquippedItemID;
 
-    /** 장착된 아이템 (bIsOccupied == false 이면 무효) */
-    UPROPERTY(BlueprintReadOnly)
+    /** 장착된 아이템 인스턴스 (EquippedItemID가 Valid일 때만 유효) */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     FInventoryItemInstance ItemInstance;
+
+    /** 서버 전용 — GE Handle은 리플리케이션 제외 */
+    UPROPERTY(NotReplicated)
+    FActiveGameplayEffectHandle ActiveGEHandle;
+
+    FEquipmentSlotData() = default;
+    explicit FEquipmentSlotData(EEquipmentSlot InSlotType)
+        : SlotType(InSlotType) {}
+
+    bool IsEmpty() const { return !EquippedItemID.IsValid(); }
 };

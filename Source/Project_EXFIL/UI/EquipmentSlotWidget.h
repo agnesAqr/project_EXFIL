@@ -11,6 +11,7 @@ class UBorder;
 class UImage;
 class UTextBlock;
 class UInventoryDragDropOp;
+class UEquipmentComponent;
 
 /**
  * UEquipmentSlotWidget — 장비 슬롯 하나를 표현하는 위젯
@@ -24,6 +25,7 @@ class UInventoryDragDropOp;
  *
  * SlotType은 BP 디테일 패널에서 지정.
  * NativeOnInitialized에서 SlotLabel 자동 설정.
+ * NativeConstruct에서 EquipmentComponent 자동 바인딩.
  */
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UEquipmentSlotWidget : public UCommonActivatableWidget
@@ -45,6 +47,8 @@ public:
 
 protected:
     virtual void NativeOnInitialized() override;
+    virtual void NativeConstruct() override;
+    virtual void NativeDestruct() override;
 
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry,
                                            const FPointerEvent& InMouseEvent) override;
@@ -70,6 +74,20 @@ protected:
 private:
     /** 현재 장착 상태 캐시 */
     FEquipmentSlotData CachedSlotData;
+
+    /** 바인딩된 EquipmentComponent 참조 */
+    UPROPERTY()
+    TWeakObjectPtr<UEquipmentComponent> BoundEquipComp;
+
+    /** EquipmentComponent 델리게이트 콜백 */
+    UFUNCTION()
+    void OnEquipmentItemEquipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item);
+
+    UFUNCTION()
+    void OnEquipmentItemUnequipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item);
+
+    /** EquipmentComponent에서 현재 슬롯 상태를 조회하여 RefreshSlot 호출 */
+    void RefreshFromEquipmentComponent();
 
     /** 슬롯 상태별 Border 색상 적용 */
     void ApplyEmptyStyle();

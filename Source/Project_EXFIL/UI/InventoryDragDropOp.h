@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/DragDropOperation.h"
 #include "Inventory/EXFILInventoryTypes.h"
+#include "Data/Equipment/EquipmentTypes.h"
 #include "InventoryDragDropOp.generated.h"
 
 UCLASS()
@@ -35,4 +36,14 @@ public:
 
     UPROPERTY(BlueprintReadWrite)
     FName ItemDataID;
+
+    // ========== 핫픽스 A: 장비슬롯 출처 정보 ==========
+
+    /** true면 장비슬롯에서 시작된 드래그 (해제 흐름) */
+    UPROPERTY(BlueprintReadWrite)
+    bool bFromEquipment = false;
+
+    /** 장비슬롯에서 드래그 시 출처 슬롯 타입 */
+    UPROPERTY(BlueprintReadWrite)
+    EEquipmentSlot SourceEquipmentSlot = EEquipmentSlot::None;
 };
