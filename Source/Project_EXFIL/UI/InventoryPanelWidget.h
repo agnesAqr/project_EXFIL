@@ -14,6 +14,8 @@ class UCraftingPanelWidget;
 class UUniformGridPanel;
 class UWidgetSwitcher;
 class UButton;
+class UStatEntryWidget;
+class USurvivalViewModel;
 
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UInventoryPanelWidget : public UCommonActivatableWidget
@@ -43,6 +45,12 @@ public:
     /** CraftingPanel 접근용 (Character BeginPlay에서 Initialize 호출) */
     UCraftingPanelWidget* GetCraftingPanel() const { return CraftingPanel; }
 
+    /**
+     * 내부의 StatEntry 4개를 SurvivalViewModel에 바인딩.
+     * EXFILCharacter::BeginPlay에서 InventoryPanelWidget 생성 후 호출.
+     */
+    void BindStatsToViewModel(USurvivalViewModel* InSurvivalViewModel);
+
 protected:
     virtual void NativeOnInitialized() override;
     virtual void NativeOnActivated() override;
@@ -50,6 +58,8 @@ protected:
     virtual void NativeConstruct() override;
     virtual bool NativeOnHandleBackAction() override;
     virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+    virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry,
+                                           const FPointerEvent& InMouseEvent) override;
     virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
     virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
                               const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements,
@@ -81,6 +91,20 @@ protected:
     /** 크래프팅 패널 위젯 (WBP 안에 인스턴스로 배치) */
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     TObjectPtr<UCraftingPanelWidget> CraftingPanel;
+
+    // ─── BindWidget: StatEntry (BindWidgetOptional — 없어도 빌드 오류 없음) ──
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    TObjectPtr<UStatEntryWidget> StatEntry_HP;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    TObjectPtr<UStatEntryWidget> StatEntry_HU;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    TObjectPtr<UStatEntryWidget> StatEntry_TH;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    TObjectPtr<UStatEntryWidget> StatEntry_ST;
 
     // ─── 설정 ─────────────────────────────────────────────────────────────────
 

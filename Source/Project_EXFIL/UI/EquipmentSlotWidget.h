@@ -12,6 +12,7 @@ class UImage;
 class UTextBlock;
 class UInventoryDragDropOp;
 class UEquipmentComponent;
+class UItemContextMenuWidget;
 
 /**
  * UEquipmentSlotWidget — 장비 슬롯 하나를 표현하는 위젯
@@ -71,9 +72,17 @@ protected:
     UPROPERTY(meta = (BindWidgetOptional))
     TObjectPtr<UTextBlock> TextBlock_ItemName;
 
+    /** 컨텍스트 메뉴 위젯 클래스 — BP 디테일에서 할당 */
+    UPROPERTY(EditAnywhere, Category = "UI")
+    TSubclassOf<UItemContextMenuWidget> ContextMenuWidgetClass;
+
 private:
     /** 현재 장착 상태 캐시 */
     FEquipmentSlotData CachedSlotData;
+
+    /** 지연 생성되는 컨텍스트 메뉴 인스턴스 */
+    UPROPERTY()
+    TObjectPtr<UItemContextMenuWidget> ContextMenuWidget;
 
     /** 바인딩된 EquipmentComponent 참조 */
     UPROPERTY()

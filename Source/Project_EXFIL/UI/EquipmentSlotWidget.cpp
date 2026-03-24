@@ -7,6 +7,7 @@
 #include "Components/TextBlock.h"
 #include "Blueprint/DragDropOperation.h"
 #include "UI/InventoryDragDropOp.h"
+#include "UI/ItemContextMenuWidget.h"
 #include "Data/Equipment/EquipmentComponent.h"
 #include "Data/EXFILItemTypes.h"
 #include "Data/ItemDataSubsystem.h"
@@ -236,6 +237,45 @@ void UEquipmentSlotWidget::ApplyDragHoverStyle(bool bIsValid)
 FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
                                                       const FPointerEvent& InMouseEvent)
 {
+    // 우클릭: 메뉴가 열려있으면 무조건 먼저 닫고, 아이템이 있으면 새 메뉴 열기
+    if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
+    {
+        if (ContextMenuWidget &&
+            ContextMenuWidget->GetVisibility() == ESlateVisibility::Visible)
+        {
+            ContextMenuWidget->CloseMenu();
+        }
+
+        if (!CachedSlotData.IsEmpty())
+        {
+            // 지연 생성
+            if (!ContextMenuWidget && ContextMenuWidgetClass)
+            {
+                APlayerController* PC = GetOwningPlayer();
+                if (PC)
+                {
+                    ContextMenuWidget = CreateWidget<UItemContextMenuWidget>(PC, ContextMenuWidgetClass);
+                    if (ContextMenuWidget)
+                    {
+                        ContextMenuWidget->AddToViewport(100);
+                        ContextMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+                    }
+                }
+            }
+
+            if (ContextMenuWidget)
+            {
+                ContextMenuWidget->ShowForEquippedItem(
+                    SlotType, CachedSlotData.ItemInstance.ItemDataID);
+                ContextMenuWidget->SetMenuPosition(InMouseEvent.GetScreenSpacePosition());
+            }
+        }
+        // 빈 슬롯 우클릭 → 닫기만 하고 끝
+
+        return FReply::Handled();
+    }
+
+    // 좌클릭 → 드래그
     if (InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton) && !CachedSlotData.IsEmpty())
     {
         return FReply::Handled().DetectDrag(GetCachedWidget().ToSharedRef(), EKeys::LeftMouseButton);
@@ -300,12 +340,25 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
             return false;
         }
 
-        const EEquipmentSlot RequiredSlot = UEquipmentComponent::SlotTagToEnum(ItemData->EquipmentSlotTag);
-        if (RequiredSlot != EEquipmentSlot::None && RequiredSlot != SlotType)
+        // EquipmentSlotTag → 후보 슬롯 목록으로 이 슬롯 타입 허용 여부 검사
+        // (예: "Weapon" → Weapon1, Weapon2 모두 허용)
+        const FName& Tag = ItemData->EquipmentSlotTag;
+        if (!Tag.IsNone())
         {
-            UE_LOG(LogTemp, Warning, TEXT("EquipmentSlotWidget: Slot mismatch — item wants %d, this is %d"),
-                static_cast<int32>(RequiredSlot), static_cast<int32>(SlotType));
-            return false;
+            // 후보 슬롯 인라인 매핑 (FindTargetSlot과 동일 기준)
+            TArray<EEquipmentSlot> ValidSlots;
+            if      (Tag == FName("Weapon"))  ValidSlots = { EEquipmentSlot::Weapon1, EEquipmentSlot::Weapon2 };
+            else if (Tag == FName("Head"))    ValidSlots = { EEquipmentSlot::Head    };
+            else if (Tag == FName("Face"))    ValidSlots = { EEquipmentSlot::Face    };
+            else if (Tag == FName("Eyewear")) ValidSlots = { EEquipmentSlot::Eyewear };
+            else if (Tag == FName("Body"))    ValidSlots = { EEquipmentSlot::Body    };
+
+            if (ValidSlots.Num() > 0 && !ValidSlots.Contains(SlotType))
+            {
+                UE_LOG(LogTemp, Warning, TEXT("EquipmentSlotWidget: '%s'(Tag=%s)는 이 슬롯[%d]에 장착 불가"),
+                    *DragOp->ItemDataID.ToString(), *Tag.ToString(), static_cast<int32>(SlotType));
+                return false;
+            }
         }
     }
 

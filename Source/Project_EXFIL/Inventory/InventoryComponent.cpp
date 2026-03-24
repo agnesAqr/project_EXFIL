@@ -4,7 +4,10 @@
 #include "CoreMinimal.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/GameInstance.h"
+#include "AbilitySystemComponent.h"
+#include "GameplayEffect.h"
 #include "Data/ItemDataSubsystem.h"
+#include "World/WorldItem.h"
 #include "Project_EXFIL.h"
 
 UInventoryComponent::UInventoryComponent()
@@ -37,6 +40,8 @@ void UInventoryComponent::GetLifetimeReplicatedProps(
 
 void UInventoryComponent::OnRep_Items()
 {
+	UE_LOG(LogTemp, Warning, TEXT("OnRep_Items called — Items count: %d, Listeners: %d"),
+		Items.Num(), OnInventoryUpdated.IsBound() ? 1 : 0);
 	OnInventoryUpdated.Broadcast();
 }
 
@@ -85,7 +90,94 @@ bool UInventoryComponent::Server_ConsumeItemByID_Validate(
 void UInventoryComponent::Server_ConsumeItemByID_Implementation(
 	FName ItemDataID, int32 Count)
 {
+	// 1. ConsumableEffect → ASC에 적용 (StatsBar 반영)
+	if (AActor* Owner = GetOwner())
+	{
+		if (UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>())
+		{
+			if (UWorld* World = GetWorld())
+			{
+				if (UGameInstance* GI = World->GetGameInstance())
+				{
+					if (UItemDataSubsystem* Sub = GI->GetSubsystem<UItemDataSubsystem>())
+					{
+						const FItemData* ItemData = Sub->GetItemData(ItemDataID);
+						if (ItemData && !ItemData->ConsumableEffect.IsNull())
+						{
+							TSubclassOf<UGameplayEffect> GEClass =
+								ItemData->ConsumableEffect.LoadSynchronous();
+							if (GEClass)
+							{
+								FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext();
+								FGameplayEffectSpecHandle Spec =
+									ASC->MakeOutgoingSpec(GEClass, 1.f, Ctx);
+								if (Spec.IsValid())
+								{
+									ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+									UE_LOG(LogTemp, Log,
+										TEXT("ConsumeItemByID: '%s' ConsumableEffect 적용"),
+										*ItemDataID.ToString());
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. 인벤토리에서 아이템 소비
 	ConsumeItemByID(ItemDataID, Count);
+}
+
+bool UInventoryComponent::Server_DropItem_Validate(FGuid ItemInstanceID)
+{
+	return ItemInstanceID.IsValid();
+}
+
+void UInventoryComponent::Server_DropItem_Implementation(FGuid ItemInstanceID)
+{
+	// 1. 아이템 조회
+	const FInventoryItemInstance* Item = FindItemByInstanceID(ItemInstanceID);
+	if (!Item) return;
+
+	// 드롭 정보 캐싱 (스택 조작 전에)
+	const FName DropItemDataID = Item->ItemDataID;
+	const int32 CurrentStack   = Item->StackCount;
+
+	// 2. 스택이 2 이상이면 1만 감소, 1이면 슬롯 전체 제거
+	if (CurrentStack > 1)
+	{
+		DecrementStack(ItemInstanceID);
+	}
+	else
+	{
+		RemoveItem(ItemInstanceID);
+	}
+
+	// 3. 캐릭터 전방에 AWorldItem 스폰 (항상 1개)
+	AActor* Owner = GetOwner();
+	if (!Owner) return;
+
+	const FVector SpawnLocation =
+		Owner->GetActorLocation()
+		+ Owner->GetActorForwardVector() * 100.f
+		+ FVector(0.f, 0.f, 50.f); // 바닥 관통 방지
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = Owner;
+	SpawnParams.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	AWorldItem* DroppedItem = GetWorld()->SpawnActor<AWorldItem>(
+		AWorldItem::StaticClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+
+	if (DroppedItem)
+	{
+		DroppedItem->InitializeItem(DropItemDataID, 1); // 항상 1개 드롭
+		UE_LOG(LogTemp, Log, TEXT("Server_DropItem: '%s' 드롭 (남은 스택: %d)"),
+			*DropItemDataID.ToString(), CurrentStack - 1);
+	}
 }
 
 // ========== 초기화 ==========

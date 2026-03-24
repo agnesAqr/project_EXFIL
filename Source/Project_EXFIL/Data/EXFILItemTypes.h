@@ -68,6 +68,10 @@ struct PROJECT_EXFIL_API FItemData : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|Equipment")
     FName EquipmentSlotTag;
 
+    /** 월드 드롭 시 표시할 스태틱 메시 — nullptr이면 기본 큐브 폴백 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "World")
+    TObjectPtr<UStaticMesh> WorldMesh = nullptr;
+
     /** FItemSize 변환 헬퍼 */
     FItemSize GetItemSize() const
     {

@@ -8,6 +8,7 @@
 
 class UImage;
 class UTextBlock;
+class USurvivalViewModel;
 
 /**
  * 표시할 스탯 종류
@@ -53,6 +54,14 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Stat|UI")
     void UpdateStat(float Current, float Maximum);
 
+    /**
+     * SurvivalViewModel에 구독 등록 + 초기값 즉시 반영.
+     * InventoryPanelWidget::BindStatsToViewModel에서 호출.
+     * @param ViewModel  바인딩할 ViewModel
+     * @param InStatName 추적할 속성 이름 (예: "Health")
+     */
+    void BindToViewModel(USurvivalViewModel* ViewModel, FName InStatName);
+
 protected:
     virtual void NativeOnInitialized() override;
 
@@ -74,6 +83,13 @@ protected:
 private:
     float CachedCurrent = 100.f;
     float CachedMaximum = 100.f;
+
+    /** ViewModel 구독 시 추적할 속성 이름 */
+    FName TrackedStatName;
+
+    /** OnStatChanged 델리게이트 콜백 */
+    UFUNCTION()
+    void OnStatUpdated(FName StatName, float NewValue);
 
     /** StatType별 기본 Fill 색상 */
     FLinearColor GetNormalFillColor() const;

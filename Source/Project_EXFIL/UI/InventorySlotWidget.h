@@ -25,19 +25,6 @@ public:
     void SetParentPanel(UInventoryPanelWidget* InPanel);
 
 protected:
-    virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry,
-        const FPointerEvent& InMouseEvent) override;
-    virtual void NativeOnDragDetected(const FGeometry& InGeometry,
-        const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
-    virtual bool NativeOnDrop(const FGeometry& InGeometry,
-        const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
-    virtual void NativeOnDragEnter(const FGeometry& InGeometry,
-        const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
-    virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent,
-        UDragDropOperation* InOperation) override;
-    virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent,
-        UDragDropOperation* InOperation) override;
-
     /** 슬롯 테두리 — 하이라이트 색상 변경용 (WBP에서 BindWidget) */
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UBorder> SlotBorder;
@@ -45,10 +32,6 @@ protected:
 public:
     /** 드래그 진입/이탈 시 테두리 하이라이트 — PanelWidget에서도 호출 */
     void SetHighlight(bool bHighlighted, bool bIsValid = true);
-
-    /** 슬롯 1칸의 픽셀 크기 — WBP에서 실제 슬롯 크기에 맞춰 설정 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|UI")
-    float CellPixelSize = 60.f;
 
 protected:
 

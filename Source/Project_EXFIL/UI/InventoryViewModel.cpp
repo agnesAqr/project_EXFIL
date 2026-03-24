@@ -112,6 +112,7 @@ bool UInventoryViewModel::RequestRemoveItem(FGuid ItemInstanceID)
 
 void UInventoryViewModel::OnInventoryUpdated()
 {
+    UE_LOG(LogTemp, Warning, TEXT("InventoryViewModel::OnInventoryUpdated — RefreshAllSlots 호출"));
     RefreshAllSlots();
 }
 
@@ -200,6 +201,8 @@ void UInventoryViewModel::RefreshAllSlots()
     }
 
     // 아이콘 오버레이 갱신 알림
+    UE_LOG(LogTemp, Warning, TEXT("OnViewModelRefreshed.Broadcast — Listeners bound: %d"),
+        OnViewModelRefreshed.IsBound() ? 1 : 0);
     OnViewModelRefreshed.Broadcast();
 }
 

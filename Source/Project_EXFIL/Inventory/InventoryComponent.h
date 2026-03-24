@@ -122,6 +122,10 @@ public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_ConsumeItemByID(FName ItemDataID, int32 Count);
 
+	/** 인벤토리 아이템을 월드에 드롭 — 아이템 제거 + AWorldItem 스폰 */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_DropItem(FGuid ItemInstanceID);
+
 	// ========== 델리게이트 ==========
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnInventoryUpdated OnInventoryUpdated;

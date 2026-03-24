@@ -11,6 +11,8 @@
 #include "UI/InventorySlotWidget.h"
 #include "UI/InventoryIconOverlay.h"
 #include "UI/CraftingPanelWidget.h"
+#include "UI/StatEntryWidget.h"
+#include "GAS/SurvivalViewModel.h"
 #include "Input/CommonUIInputTypes.h"
 
 void UInventoryPanelWidget::NativeOnInitialized()
@@ -78,6 +80,17 @@ bool UInventoryPanelWidget::NativeOnHandleBackAction()
     return false;
 }
 
+FReply UInventoryPanelWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
+    const FPointerEvent& InMouseEvent)
+{
+    // 패널 아무 곳이나 클릭하면 열려있는 컨텍스트 메뉴 닫기
+    if (IconOverlay)
+    {
+        IconOverlay->CloseContextMenuIfOpen();
+    }
+    return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
 FReply UInventoryPanelWidget::NativeOnKeyDown(const FGeometry& InGeometry,
     const FKeyEvent& InKeyEvent)
 {
@@ -142,6 +155,12 @@ void UInventoryPanelWidget::BuildGrid()
         }
     }
 
+    // IconOverlay에 ParentPanel 주입 — 드롭 라우팅 및 하이라이트용
+    if (IconOverlay)
+    {
+        IconOverlay->SetParentPanel(this);
+    }
+
     // 초기 아이콘 오버레이 갱신
     RefreshIconOverlay();
 }
@@ -196,11 +215,32 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
 
 void UInventoryPanelWidget::RefreshIconOverlay()
 {
-    if (IconOverlay && ViewModel && GridPanel)
+    if (!IconOverlay || !ViewModel || !GridPanel)
     {
-        IconOverlay->RefreshIcons(ViewModel, GridPanel,
-            ViewModel->GetGridWidth(), ViewModel->GetGridHeight());
+        return;
     }
+
+    // GridPanel geometry가 아직 0이면 (패널이 닫혀있거나 첫 프레임)
+    // → 타이머로 재시도해서 유효한 geometry 확보 후 아이콘 배치
+    const float CellWidth = GridPanel->GetCachedGeometry().GetLocalSize().X;
+    if (CellWidth <= 1.f)
+    {
+        GetWorld()->GetTimerManager().SetTimer(
+            IconRefreshTimerHandle,
+            [this]()
+            {
+                if (IsValid(this))
+                {
+                    RefreshIconOverlay();
+                }
+            },
+            0.15f, false);
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("RefreshIconOverlay: 실행 (CellWidth=%.1f)"), CellWidth);
+    IconOverlay->RefreshIcons(ViewModel, GridPanel,
+        ViewModel->GetGridWidth(), ViewModel->GetGridHeight());
 }
 
 int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
@@ -251,6 +291,20 @@ void UInventoryPanelWidget::ClearAreaHighlights()
             SlotWidget->SetHighlight(false);
         }
     }
+}
+
+void UInventoryPanelWidget::BindStatsToViewModel(USurvivalViewModel* InSurvivalViewModel)
+{
+    UE_LOG(LogTemp, Warning, TEXT("[STAT-3] BindStats: HP=%s, HU=%s, TH=%s, ST=%s"),
+        StatEntry_HP ? TEXT("valid") : TEXT("null"),
+        StatEntry_HU ? TEXT("valid") : TEXT("null"),
+        StatEntry_TH ? TEXT("valid") : TEXT("null"),
+        StatEntry_ST ? TEXT("valid") : TEXT("null"));
+
+    if (StatEntry_HP) StatEntry_HP->BindToViewModel(InSurvivalViewModel, FName("Health"));
+    if (StatEntry_HU) StatEntry_HU->BindToViewModel(InSurvivalViewModel, FName("Hunger"));
+    if (StatEntry_TH) StatEntry_TH->BindToViewModel(InSurvivalViewModel, FName("Thirst"));
+    if (StatEntry_ST) StatEntry_ST->BindToViewModel(InSurvivalViewModel, FName("Stamina"));
 }
 
 // ─── 탭 전환 ──────────────────────────────────────────────────────────────────
