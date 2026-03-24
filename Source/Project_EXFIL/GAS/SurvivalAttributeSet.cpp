@@ -7,14 +7,14 @@
 
 USurvivalAttributeSet::USurvivalAttributeSet()
 {
-    // 초기값 설정 — GE_DefaultAttributes로 덮어쓸 예정
-    InitHealth(100.f);
+    // 초기값 설정 — 소비 아이템 효과 테스트를 위해 현재값 50으로 시작
+    InitHealth(50.f);
     InitMaxHealth(100.f);
-    InitHunger(100.f);
+    InitHunger(50.f);
     InitMaxHunger(100.f);
-    InitThirst(100.f);
+    InitThirst(50.f);
     InitMaxThirst(100.f);
-    InitStamina(100.f);
+    InitStamina(50.f);
     InitMaxStamina(100.f);
 }
 

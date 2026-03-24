@@ -65,7 +65,18 @@ public:
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_UnequipToInventory(EEquipmentSlot Slot);
 
-    /** EquipmentSlotTag(FName) → EEquipmentSlot 매핑 헬퍼 */
+    /** 장비 해제 + 월드 드롭 (원자적 서버 연산) */
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_DropEquippedItem(EEquipmentSlot InSlot);
+
+    /**
+     * EquipmentSlotTag → 빈 슬롯 자동 탐색.
+     * 태그 하나에 복수 슬롯(예: Weapon→Weapon1,Weapon2)이 대응될 수 있으며,
+     * 빈 슬롯을 우선 반환하고 없으면 첫 번째 후보(스왑 대상)를 반환.
+     */
+    EEquipmentSlot FindTargetSlot(const FName& EquipmentSlotTag) const;
+
+    /** @deprecated SlotTagToEnum은 Weapon 등 1:N 태그를 지원하지 않음. FindTargetSlot 사용 권장. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     static EEquipmentSlot SlotTagToEnum(FName SlotTag);
 
