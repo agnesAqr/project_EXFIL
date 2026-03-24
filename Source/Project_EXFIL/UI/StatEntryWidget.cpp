@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "GAS/SurvivalViewModel.h"
 
 void UStatEntryWidget::NativeOnInitialized()
 {
@@ -97,6 +98,32 @@ void UStatEntryWidget::UpdateStat(float Current, float Maximum)
         const FString ValueStr = FString::Printf(
             TEXT("%d/%d"), FMath::RoundToInt(Current), FMath::RoundToInt(Maximum));
         TextBlock_Value->SetText(FText::FromString(ValueStr));
+    }
+}
+
+void UStatEntryWidget::BindToViewModel(USurvivalViewModel* ViewModel, FName InStatName)
+{
+    TrackedStatName = InStatName;
+    if (!ViewModel)
+    {
+        return;
+    }
+
+    // 초기값 즉시 반영
+    UpdateStat(ViewModel->GetStatValue(InStatName), ViewModel->GetMaxStatValue(InStatName));
+
+    // 이후 변경 구독
+    ViewModel->OnStatChanged.AddDynamic(this, &UStatEntryWidget::OnStatUpdated);
+}
+
+void UStatEntryWidget::OnStatUpdated(FName StatName, float NewValue)
+{
+    UE_LOG(LogTemp, Warning, TEXT("[STAT-5] StatEntry: %s = %.1f, tracked=%s"),
+        *StatName.ToString(), NewValue, *TrackedStatName.ToString());
+
+    if (StatName == TrackedStatName)
+    {
+        UpdateStat(NewValue, CachedMaximum);
     }
 }
 

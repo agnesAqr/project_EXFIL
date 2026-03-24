@@ -10,6 +10,7 @@
 #include "Data/EXFILItemTypes.h"
 #include "Data/ItemDataSubsystem.h"
 #include "Inventory/InventoryComponent.h"
+#include "World/WorldItem.h"
 
 UEquipmentComponent::UEquipmentComponent()
 {
@@ -271,7 +272,8 @@ UAbilitySystemComponent* UEquipmentComponent::GetASC() const
 bool UEquipmentComponent::Server_EquipFromInventory_Validate(
     EEquipmentSlot Slot, FGuid ItemInstanceID)
 {
-    return Slot != EEquipmentSlot::None && ItemInstanceID.IsValid();
+    // Slot == None 허용 — 서버 측 FindTargetSlot이 슬롯을 결정
+    return ItemInstanceID.IsValid();
 }
 
 void UEquipmentComponent::Server_EquipFromInventory_Implementation(
@@ -298,7 +300,7 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
         return;
     }
 
-    // DataTable에서 슬롯 타입 검증
+    // DataTable에서 EquipmentSlotTag 조회 → FindTargetSlot으로 실제 슬롯 결정
     UItemDataSubsystem* Sub = nullptr;
     if (UWorld* World = Owner->GetWorld())
     {
@@ -308,20 +310,48 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
         }
     }
 
+    EEquipmentSlot TargetSlot = EEquipmentSlot::None;
     if (Sub)
     {
         const FItemData* ItemData = Sub->GetItemData(ItemInstance.ItemDataID);
-        if (ItemData)
+        if (!ItemData || ItemData->ItemType != EItemType::Equipment)
         {
-            const EEquipmentSlot RequiredSlot = SlotTagToEnum(ItemData->EquipmentSlotTag);
-            if (RequiredSlot != EEquipmentSlot::None && RequiredSlot != Slot)
-            {
-                UE_LOG(LogTemp, Warning,
-                    TEXT("Server_EquipFromInventory: Slot mismatch — item wants %d, target is %d"),
-                    static_cast<int32>(RequiredSlot), static_cast<int32>(Slot));
-                return;
-            }
+            UE_LOG(LogTemp, Warning,
+                TEXT("Server_EquipFromInventory: '%s' 는 Equipment 타입이 아님"),
+                *ItemInstance.ItemDataID.ToString());
+            return;
         }
+        TargetSlot = FindTargetSlot(ItemData->EquipmentSlotTag);
+    }
+
+    if (TargetSlot == EEquipmentSlot::None)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("Server_EquipFromInventory: FindTargetSlot 결과 None — EquipmentSlotTag 확인 필요"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("Server_EquipFromInventory: '%s' → Slot[%d]"),
+        *ItemInstance.ItemDataID.ToString(), static_cast<int32>(TargetSlot));
+
+    // ── Day 7: 스왑 로직 ──
+    // 슬롯이 이미 점유된 경우 기존 장비를 인벤토리에 먼저 복귀 (실패 시 거부)
+    FEquipmentSlotData* SlotData = FindSlotData(TargetSlot);
+    if (SlotData && !SlotData->IsEmpty())
+    {
+        const FName OldItemDataID = SlotData->ItemInstance.ItemDataID;
+        const bool bCanReturn = InvComp->TryAddItemByID(OldItemDataID, 1);
+        if (!bCanReturn)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("Server_EquipFromInventory: 스왑 거부 — 인벤토리 가득 참 (기존 장비: '%s')"),
+                *OldItemDataID.ToString());
+            return;
+        }
+        // 기존 GE 제거 + 슬롯 비우기
+        RemoveEquipmentEffect(*SlotData);
+        SlotData->EquippedItemID.Invalidate();
+        SlotData->ItemInstance = FInventoryItemInstance();
     }
 
     // 원자적 실행: 인벤토리에서 1개 차감 → 장비 장착
@@ -332,7 +362,7 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
     FInventoryItemInstance EquipInstance = ItemInstance;
     EquipInstance.StackCount = 1;
     EquipInstance.InstanceID = FGuid::NewGuid(); // 장비용 새 인스턴스 ID
-    EquipItem(Slot, EquipInstance);
+    EquipItem(TargetSlot, EquipInstance);
 }
 
 bool UEquipmentComponent::Server_UnequipToInventory_Validate(EEquipmentSlot Slot)
@@ -366,7 +396,103 @@ void UEquipmentComponent::Server_UnequipToInventory_Implementation(EEquipmentSlo
     InvComp->TryAddItemByID(EquippedItem.ItemDataID, EquippedItem.StackCount);
 }
 
-// ========== SlotTag → Enum 매핑 ==========
+// ========== Server_DropEquippedItem ==========
+
+bool UEquipmentComponent::Server_DropEquippedItem_Validate(EEquipmentSlot InSlot)
+{
+    return InSlot != EEquipmentSlot::None;
+}
+
+void UEquipmentComponent::Server_DropEquippedItem_Implementation(EEquipmentSlot InSlot)
+{
+    FEquipmentSlotData* SlotData = FindSlotData(InSlot);
+    if (!SlotData || SlotData->IsEmpty()) return;
+
+    // 장착 아이템 정보 캐싱 (슬롯 비우기 전에)
+    const FName DropItemDataID = SlotData->ItemInstance.ItemDataID;
+
+    // GE 제거
+    RemoveEquipmentEffect(*SlotData);
+
+    // 슬롯 비우기
+    SlotData->EquippedItemID.Invalidate();
+    SlotData->ItemInstance = FInventoryItemInstance();
+
+    // OnItemUnequipped 브로드캐스트
+    OnItemUnequipped.Broadcast(InSlot, FInventoryItemInstance());
+
+    // 월드에 AWorldItem 스폰
+    AActor* Owner = GetOwner();
+    if (!Owner) return;
+
+    const FVector SpawnLocation =
+        Owner->GetActorLocation()
+        + Owner->GetActorForwardVector() * 100.f
+        + FVector(0.f, 0.f, 50.f);
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = Owner;
+    SpawnParams.SpawnCollisionHandlingOverride =
+        ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    AWorldItem* DroppedItem = GetWorld()->SpawnActor<AWorldItem>(
+        AWorldItem::StaticClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+
+    if (DroppedItem)
+    {
+        DroppedItem->InitializeItem(DropItemDataID, 1); // 장비는 항상 1개
+        UE_LOG(LogTemp, Log, TEXT("Server_DropEquippedItem: '%s' 드롭"), *DropItemDataID.ToString());
+    }
+}
+
+// ========== FindTargetSlot (빈 슬롯 자동 탐색) ==========
+
+EEquipmentSlot UEquipmentComponent::FindTargetSlot(const FName& EquipmentSlotTag) const
+{
+    // 태그 → 후보 슬롯 목록 매핑
+    TArray<EEquipmentSlot> Candidates;
+
+    if (EquipmentSlotTag == FName("Weapon"))
+    {
+        Candidates = { EEquipmentSlot::Weapon1, EEquipmentSlot::Weapon2 };
+    }
+    else if (EquipmentSlotTag == FName("Head"))
+    {
+        Candidates = { EEquipmentSlot::Head };
+    }
+    else if (EquipmentSlotTag == FName("Face"))
+    {
+        Candidates = { EEquipmentSlot::Face };
+    }
+    else if (EquipmentSlotTag == FName("Eyewear"))
+    {
+        Candidates = { EEquipmentSlot::Eyewear };
+    }
+    else if (EquipmentSlotTag == FName("Body"))
+    {
+        Candidates = { EEquipmentSlot::Body };
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("FindTargetSlot: 알 수 없는 태그 '%s'"), *EquipmentSlotTag.ToString());
+        return EEquipmentSlot::None;
+    }
+
+    // 빈 슬롯 우선 탐색
+    for (EEquipmentSlot CandidateSlot : Candidates)
+    {
+        const FEquipmentSlotData* SlotData = FindSlotData(CandidateSlot);
+        if (SlotData && SlotData->IsEmpty())
+        {
+            return CandidateSlot;
+        }
+    }
+
+    // 빈 슬롯 없으면 첫 번째 후보에 스왑
+    return Candidates[0];
+}
+
+// ========== SlotTag → Enum 매핑 (deprecated — FindTargetSlot 사용 권장) ==========
 
 EEquipmentSlot UEquipmentComponent::SlotTagToEnum(FName SlotTag)
 {
