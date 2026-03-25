@@ -8,6 +8,7 @@
 #include "Data/EXFILItemTypes.h"
 #include "Data/ItemDataSubsystem.h"
 #include "Inventory/InventoryComponent.h"
+#include "Core/EXFILLog.h"
 
 UGA_UseItem::UGA_UseItem()
 {
@@ -44,7 +45,7 @@ void UGA_UseItem::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
 
     if (!ItemSub)
     {
-        UE_LOG(LogTemp, Warning, TEXT("GA_UseItem: ItemDataSubsystem 없음"));
+        UE_LOG(LogEXFIL, Warning, TEXT("GA_UseItem: ItemDataSubsystem 없음"));
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
@@ -52,7 +53,7 @@ void UGA_UseItem::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     const FItemData* ItemData = ItemSub->GetItemData(ItemDataID);
     if (!ItemData)
     {
-        UE_LOG(LogTemp, Warning, TEXT("GA_UseItem: ItemDataID '%s' 조회 실패"), *ItemDataID.ToString());
+        UE_LOG(LogEXFIL, Warning, TEXT("GA_UseItem: ItemDataID '%s' 조회 실패"), *ItemDataID.ToString());
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
@@ -68,7 +69,6 @@ void UGA_UseItem::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
             if (SpecHandle.IsValid())
             {
                 ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-                UE_LOG(LogTemp, Log, TEXT("GA_UseItem: '%s' GE 적용 완료"), *ItemDataID.ToString());
             }
         }
     }

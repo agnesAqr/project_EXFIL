@@ -47,6 +47,10 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     bool IsSlotOccupied(EEquipmentSlot Slot) const;
 
+    /** Weapon1 또는 Weapon2에 무기가 장착되어 있는지 확인 */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
+    bool HasWeaponEquipped() const;
+
     // ========== Server RPCs (Day 6) ==========
 
     UFUNCTION(Server, Reliable, WithValidation)

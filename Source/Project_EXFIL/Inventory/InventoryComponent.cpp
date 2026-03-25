@@ -36,12 +36,17 @@ void UInventoryComponent::GetLifetimeReplicatedProps(
 	// 인벤토리는 소유자 클라이언트에게만 전파
 	DOREPLIFETIME_CONDITION(UInventoryComponent, Items, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UInventoryComponent, GridSlots, COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(UInventoryComponent, GridHeight, COND_OwnerOnly);
 }
 
 void UInventoryComponent::OnRep_Items()
 {
-	UE_LOG(LogTemp, Warning, TEXT("OnRep_Items called — Items count: %d, Listeners: %d"),
-		Items.Num(), OnInventoryUpdated.IsBound() ? 1 : 0);
+	OnInventoryUpdated.Broadcast();
+}
+
+void UInventoryComponent::OnRep_GridHeight()
+{
+	OnGridExpanded.Broadcast(GridHeight);
 	OnInventoryUpdated.Broadcast();
 }
 
@@ -114,9 +119,6 @@ void UInventoryComponent::Server_ConsumeItemByID_Implementation(
 								if (Spec.IsValid())
 								{
 									ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-									UE_LOG(LogTemp, Log,
-										TEXT("ConsumeItemByID: '%s' ConsumableEffect 적용"),
-										*ItemDataID.ToString());
 								}
 							}
 						}
@@ -161,8 +163,8 @@ void UInventoryComponent::Server_DropItem_Implementation(FGuid ItemInstanceID)
 
 	const FVector SpawnLocation =
 		Owner->GetActorLocation()
-		+ Owner->GetActorForwardVector() * 100.f
-		+ FVector(0.f, 0.f, 50.f); // 바닥 관통 방지
+		+ Owner->GetActorForwardVector() * DropForwardOffset
+		+ FVector(0.f, 0.f, DropUpwardOffset);
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.Owner = Owner;
@@ -175,8 +177,6 @@ void UInventoryComponent::Server_DropItem_Implementation(FGuid ItemInstanceID)
 	if (DroppedItem)
 	{
 		DroppedItem->InitializeItem(DropItemDataID, 1); // 항상 1개 드롭
-		UE_LOG(LogTemp, Log, TEXT("Server_DropItem: '%s' 드롭 (남은 스택: %d)"),
-			*DropItemDataID.ToString(), CurrentStack - 1);
 	}
 }
 
@@ -203,6 +203,41 @@ void UInventoryComponent::InitializeGrid()
 	       GridWidth, GridHeight, GridSlots.Num());
 }
 
+// ========== 그리드 동적 확장 ==========
+
+bool UInventoryComponent::ExpandGridForItem(FItemSize Size)
+{
+	// 아이템 높이만큼 행 추가 (최소 확장)
+	const int32 RowsNeeded = Size.Height;
+	const int32 NewHeight = GridHeight + RowsNeeded;
+
+	if (NewHeight > MaxGridHeight)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+		       TEXT("ExpandGridForItem: MaxGridHeight(%d) 초과 — 확장 불가"), MaxGridHeight);
+		return false;
+	}
+
+	// 새 행의 슬롯을 GridSlots 끝에 추가
+	const int32 OldSlotCount = GridSlots.Num();
+	const int32 NewSlotCount = NewHeight * GridWidth;
+	GridSlots.SetNum(NewSlotCount);
+
+	for (int32 i = OldSlotCount; i < NewSlotCount; ++i)
+	{
+		GridSlots[i].Clear();
+	}
+
+	GridHeight = NewHeight;
+
+	UE_LOG(LogProject_EXFIL, Log,
+	       TEXT("ExpandGridForItem: Grid expanded to %dx%d (+%d rows)"),
+	       GridWidth, GridHeight, RowsNeeded);
+
+	OnGridExpanded.Broadcast(GridHeight);
+	return true;
+}
+
 // ========== 핵심 API ==========
 
 bool UInventoryComponent::TryAddItem(FName ItemDataID, FItemSize Size,
@@ -218,9 +253,19 @@ bool UInventoryComponent::TryAddItem(FName ItemDataID, FItemSize Size,
 	FIntPoint FoundPosition;
 	if (!FindFirstAvailableSlot(Size, FoundPosition))
 	{
-		UE_LOG(LogProject_EXFIL, Warning, TEXT("TryAddItem: No available slot for item '%s' (Size: %dx%d)"),
-		       *ItemDataID.ToString(), Size.Width, Size.Height);
-		return false;
+		// 빈 슬롯 없음 → 그리드 확장 시도
+		if (!ExpandGridForItem(Size))
+		{
+			UE_LOG(LogProject_EXFIL, Warning, TEXT("TryAddItem: No available slot for item '%s' (Size: %dx%d)"),
+			       *ItemDataID.ToString(), Size.Width, Size.Height);
+			return false;
+		}
+
+		// 확장 후 재탐색
+		if (!FindFirstAvailableSlot(Size, FoundPosition))
+		{
+			return false;
+		}
 	}
 
 	return TryAddItemAt(ItemDataID, Size, FoundPosition, false, StackCount, MaxStack);

@@ -17,6 +17,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Core/EXFILLog.h"
 
 void UInventoryIconOverlay::NativeOnInitialized()
 {
@@ -56,7 +57,7 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
     UWidget* FirstSlot = InGridPanel->GetChildAt(0);
     if (!FirstSlot)
     {
-        UE_LOG(LogTemp, Error, TEXT("RefreshIcons: FirstSlot null — GridPanel 자식 없음"));
+        UE_LOG(LogEXFIL, Error, TEXT("RefreshIcons: FirstSlot null — GridPanel 자식 없음"));
         return;
     }
 
@@ -64,11 +65,8 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
     const FVector2D GridLocalSize = InGridPanel->GetCachedGeometry().GetLocalSize();
     const FVector2D CellStride(GridLocalSize.X / InGridWidth, GridLocalSize.Y / InGridHeight);
 
-    UE_LOG(LogTemp, Warning, TEXT("RefreshIcons: GridLocalSize=%s CellStride=%s"),
-        *GridLocalSize.ToString(), *CellStride.ToString());
-
     // geometry가 아직 0이면 배치 의미 없음 (RefreshIconOverlay 타이머가 재호출함)
-    if (GridLocalSize.IsNearlyZero())
+    if (GridLocalSize.IsNearlyZero() || CellStride.X < 1.f || CellStride.Y < 1.f)
     {
         return;
     }
@@ -194,9 +192,6 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
         FGuid HitInstanceID;
         FName HitItemDataID;
         const bool bHit = FindItemAtPosition(LocalPos, HitInstanceID, HitItemDataID);
-        UE_LOG(LogTemp, Warning, TEXT("IconOverlay LClick: LocalPos=%s bHit=%d InstanceID=%s"),
-            *LocalPos.ToString(), bHit ? 1 : 0, *HitInstanceID.ToString());
-
         if (bHit)
         {
             PendingDragInstanceID    = HitInstanceID;
@@ -213,12 +208,9 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
 void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
     const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
-    UE_LOG(LogTemp, Warning, TEXT("IconOverlay NativeOnDragDetected: PendingID=%s"),
-        *PendingDragInstanceID.ToString());
-
     if (!PendingDragInstanceID.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("IconOverlay NativeOnDragDetected: PendingDragInstanceID 무효 — 드래그 취소"));
+        UE_LOG(LogEXFIL, Error, TEXT("IconOverlay NativeOnDragDetected: PendingDragInstanceID 무효 — 드래그 취소"));
         return;
     }
 
@@ -272,24 +264,11 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
         }
     }
 
-    // 드래그 비주얼 — 아이템 크기에 맞는 그리드 프리뷰 (PC는 위에서 이미 선언됨)
-    if (PC)
-    {
-        UInventoryDragPreviewWidget* DragVisual =
-            CreateWidget<UInventoryDragPreviewWidget>(PC, UInventoryDragPreviewWidget::StaticClass());
-        if (DragVisual)
-        {
-            DragVisual->BuildPreview(DragOp->DragItemSize.Width, DragOp->DragItemSize.Height);
-        }
-        DragOp->DefaultDragVisual = DragVisual;
-    }
+    // 드래그 비주얼 없음 — 초록색 배치 가능 표시만 사용
+    DragOp->DefaultDragVisual = nullptr;
 
     OutOperation = DragOp;
     PendingDragInstanceID.Invalidate();
-
-    UE_LOG(LogTemp, Warning, TEXT("IconOverlay DragOp 생성: '%s' DragOffset=(%d,%d)"),
-        *ItemInstance.ItemDataID.ToString(),
-        DragOp->DragOffset.X, DragOp->DragOffset.Y);
 }
 
 bool UInventoryIconOverlay::FindItemAtPosition(const FVector2D& LocalPos,
@@ -356,6 +335,7 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     if (ParentPanel.IsValid())
     {
         ParentPanel->ClearAreaHighlights();
+        ParentPanel->StopDragAutoScroll();
     }
 
     // ── 장비슬롯에서 온 드래그 → 해제 + 인벤토리 복귀 ──
@@ -389,9 +369,6 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     {
         return false; // 같은 위치 드롭 무시
     }
-
-    UE_LOG(LogTemp, Warning, TEXT("IconOverlay NativeOnDrop: NewRoot=(%d,%d)"),
-        NewRootPos.X, NewRootPos.Y);
 
     return ParentPanel->ForwardMoveRequest(
         DragOp->DraggedItemInstanceID, NewRootPos, DragOp->bWasRotated);
@@ -447,6 +424,10 @@ bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,
     }
 
     ParentPanel->HighlightArea(RootPos, DragOp->DragItemSize, bCanPlace);
+
+    // 드래그 중 ScrollBox 가장자리 자동 스크롤
+    ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
+
     return true;
 }
 
@@ -456,6 +437,7 @@ void UInventoryIconOverlay::NativeOnDragLeave(const FDragDropEvent& InDragDropEv
     if (ParentPanel.IsValid())
     {
         ParentPanel->ClearAreaHighlights();
+        ParentPanel->StopDragAutoScroll();
     }
 }
 

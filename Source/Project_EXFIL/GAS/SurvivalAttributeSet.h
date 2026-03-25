@@ -62,6 +62,31 @@ public:
     FGameplayAttributeData MaxStamina;
     ATTRIBUTE_ACCESSORS(USurvivalAttributeSet, MaxStamina)
 
+    // ─── 초기값 설정 (에디터에서 조절 가능) ──────────────────────
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialHealth = 50.f;
+
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialMaxHealth = 100.f;
+
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialHunger = 50.f;
+
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialMaxHunger = 100.f;
+
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialThirst = 50.f;
+
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialMaxThirst = 100.f;
+
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialStamina = 50.f;
+
+    UPROPERTY(EditAnywhere, Category = "Attributes|Defaults")
+    float InitialMaxStamina = 100.f;
+
     // ─── Replication ──────────────────────────────────────────────
     virtual void GetLifetimeReplicatedProps(
         TArray<FLifetimeProperty>& OutLifetimeProps) const override;

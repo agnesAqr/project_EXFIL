@@ -3,19 +3,20 @@
 #include "GAS/SurvivalViewModel.h"
 #include "CoreMinimal.h"
 #include "GAS/SurvivalAttributeSet.h"
+#include "Core/EXFILLog.h"
 
 void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
 {
     if (!ASC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SurvivalViewModel::InitializeWithASC — ASC NULL"));
+        UE_LOG(LogEXFIL, Warning, TEXT("SurvivalViewModel::InitializeWithASC — ASC NULL"));
         return;
     }
 
     const USurvivalAttributeSet* AttrSet = ASC->GetSet<USurvivalAttributeSet>();
     if (!AttrSet)
     {
-        UE_LOG(LogTemp, Warning, TEXT("SurvivalViewModel::InitializeWithASC — AttributeSet NULL"));
+        UE_LOG(LogEXFIL, Warning, TEXT("SurvivalViewModel::InitializeWithASC — AttributeSet NULL"));
         return;
     }
 
@@ -41,17 +42,12 @@ void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
             USurvivalAttributeSet::GetStaminaAttribute())
         .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
 
-    UE_LOG(LogTemp, Warning, TEXT("SurvivalViewModel: bound to ASC, %d attributes"),
-        BoundDelegates.Num());
 }
 
 void USurvivalViewModel::OnAttributeChanged(const FOnAttributeChangeData& Data)
 {
     const FName StatName = FName(*Data.Attribute.GetName());
     const float NewValue = Data.NewValue;
-
-    UE_LOG(LogTemp, Warning, TEXT("[STAT-4] ViewModel: %s = %.1f"),
-        *StatName.ToString(), NewValue);
 
     OnStatChanged.Broadcast(StatName, NewValue);
 }
