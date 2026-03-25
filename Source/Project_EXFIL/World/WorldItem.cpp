@@ -9,6 +9,7 @@
 #include "Engine/GameInstance.h"
 #include "Data/ItemDataSubsystem.h"
 #include "Data/EXFILItemTypes.h"
+#include "Core/EXFILLog.h"
 
 AWorldItem::AWorldItem()
 {
@@ -38,20 +39,20 @@ AWorldItem::AWorldItem()
     // 인터랙션 스피어 — Pawn Overlap 전용
     InteractionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("InteractionSphere"));
     InteractionSphere->SetupAttachment(RootComponent);
-    InteractionSphere->SetSphereRadius(150.f);
+    InteractionSphere->SetSphereRadius(InteractionSphereRadius);
     InteractionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
     InteractionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
     InteractionSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 
-    // 아이템 이름 텍스트 (월드 공간에 표시)
-    // Tick에서 카메라를 향해 빌보드 회전 (SetWorldRotation)
+    // 아이템 이름 텍스트 — 디버그용으로 기본 비활성화
     ItemNameText = CreateDefaultSubobject<UTextRenderComponent>(TEXT("ItemNameText"));
     ItemNameText->SetupAttachment(RootComponent);
-    ItemNameText->SetRelativeLocation(FVector(0.f, 0.f, 70.f));
+    ItemNameText->SetRelativeLocation(FVector(0.f, 0.f, ItemNameTextHeight));
     ItemNameText->SetHorizontalAlignment(EHTA_Center);
     ItemNameText->SetVerticalAlignment(EVRTA_TextCenter);
-    ItemNameText->SetWorldSize(35.f);
+    ItemNameText->SetWorldSize(ItemNameTextSize);
     ItemNameText->SetTextRenderColor(FColor::Yellow);
+    ItemNameText->SetVisibility(false);
 }
 
 void AWorldItem::GetLifetimeReplicatedProps(
@@ -87,23 +88,15 @@ void AWorldItem::BeginPlay()
         if (FallbackMesh)
         {
             MeshComponent->SetStaticMesh(FallbackMesh);
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogEXFIL, Warning,
                 TEXT("AWorldItem: ConstructorHelpers 실패 → 런타임 큐브 폴백 로드"));
         }
         else
         {
-            UE_LOG(LogTemp, Error,
+            UE_LOG(LogEXFIL, Error,
                 TEXT("AWorldItem: 큐브 메시 로드 실패! 경로를 확인하세요."));
         }
     }
-
-    UE_LOG(LogTemp, Log,
-        TEXT("AWorldItem BeginPlay ─ 위치=%s | 메시=%s | Authority=%d"),
-        *GetActorLocation().ToString(),
-        MeshComponent->GetStaticMesh()
-            ? *MeshComponent->GetStaticMesh()->GetName()
-            : TEXT("NULL"),
-        HasAuthority() ? 1 : 0);
 
     UpdateVisual();
 }
@@ -128,7 +121,6 @@ void AWorldItem::Tick(float DeltaTime)
 
 void AWorldItem::OnRep_ItemData()
 {
-    UE_LOG(LogTemp, Log, TEXT("AWorldItem::OnRep_ItemData — ItemDataID=%s"), *ItemDataID.ToString());
     UpdateVisual();
 }
 

@@ -10,6 +10,7 @@
 #include "Data/ItemDataSubsystem.h"
 #include "Inventory/InventoryComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
+#include "Core/EXFILLog.h"
 
 void UItemContextMenuWidget::NativeConstruct()
 {
@@ -39,12 +40,6 @@ void UItemContextMenuWidget::ShowForInventoryItem(FGuid InItemInstanceID, FName 
 
     const bool bIsConsumable = Data && Data->ItemType == EItemType::Consumable;
     const bool bIsEquipable  = Data && Data->ItemType == EItemType::Equipment;
-
-    UE_LOG(LogTemp, Warning, TEXT("ShowForInventoryItem: ItemDataID='%s' Type=%d bConsumable=%d bEquipable=%d"),
-        *InItemDataID.ToString(),
-        Data ? static_cast<int32>(Data->ItemType) : -1,
-        bIsConsumable ? 1 : 0,
-        bIsEquipable  ? 1 : 0);
 
     if (Button_Use)     Button_Use->SetVisibility(bIsConsumable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     if (Button_Equip)   Button_Equip->SetVisibility(bIsEquipable  ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -79,19 +74,14 @@ void UItemContextMenuWidget::OnUseClicked()
 
 void UItemContextMenuWidget::OnEquipClicked()
 {
-    UE_LOG(LogTemp, Warning, TEXT("OnEquipClicked: CachedItemDataID='%s' InstanceID=%s"),
-        *CachedItemDataID.ToString(), *CachedItemInstanceID.ToString());
-
     // 슬롯 결정은 서버의 FindTargetSlot이 전담 → 클라이언트는 None 전달
     if (UEquipmentComponent* Equip = GetEquipmentComponent())
     {
-        UE_LOG(LogTemp, Warning, TEXT("OnEquipClicked: '%s' 장착 요청 (서버 슬롯 자동 결정)"),
-            *CachedItemDataID.ToString());
         Equip->Server_EquipFromInventory(EEquipmentSlot::None, CachedItemInstanceID);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("OnEquipClicked: EquipmentComponent NULL"));
+        UE_LOG(LogEXFIL, Error, TEXT("OnEquipClicked: EquipmentComponent NULL"));
     }
     CloseMenu();
 }

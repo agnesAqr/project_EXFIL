@@ -12,6 +12,7 @@
 #include "Data/EXFILItemTypes.h"
 #include "Data/ItemDataSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "Core/EXFILLog.h"
 
 void UEquipmentSlotWidget::NativeOnInitialized()
 {
@@ -211,7 +212,7 @@ void UEquipmentSlotWidget::ApplyEquippedStyle()
         return;
     }
     // Background: (0.05, 0.25, 0.15, 1.0)
-    Border_Slot->SetBrushColor(FLinearColor(0.05f, 0.25f, 0.15f, 1.0f));
+    Border_Slot->SetBrushColor(FLinearColor(0.18f, 0.22f, 0.15f, 0.9f));
 }
 
 void UEquipmentSlotWidget::ApplyDragHoverStyle(bool bIsValid)
@@ -335,7 +336,7 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
         const FItemData* ItemData = Sub->GetItemData(DragOp->ItemDataID);
         if (!ItemData || ItemData->ItemType != EItemType::Equipment)
         {
-            UE_LOG(LogTemp, Warning, TEXT("EquipmentSlotWidget: Item '%s' is not equipment"),
+            UE_LOG(LogEXFIL, Warning, TEXT("EquipmentSlotWidget: Item '%s' is not equipment"),
                 *DragOp->ItemDataID.ToString());
             return false;
         }
@@ -355,7 +356,7 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
 
             if (ValidSlots.Num() > 0 && !ValidSlots.Contains(SlotType))
             {
-                UE_LOG(LogTemp, Warning, TEXT("EquipmentSlotWidget: '%s'(Tag=%s)는 이 슬롯[%d]에 장착 불가"),
+                UE_LOG(LogEXFIL, Warning, TEXT("EquipmentSlotWidget: '%s'(Tag=%s)는 이 슬롯[%d]에 장착 불가"),
                     *DragOp->ItemDataID.ToString(), *Tag.ToString(), static_cast<int32>(SlotType));
                 return false;
             }

@@ -58,6 +58,9 @@ public:
     /** 인벤토리 갱신 시 브로드캐스트 — IconOverlay 갱신용 */
     FOnInventoryViewModelRefreshed OnViewModelRefreshed;
 
+    /** 그리드 확장 시 브로드캐스트 — PanelWidget에서 BuildGrid 재호출용 */
+    FOnInventoryViewModelRefreshed OnGridRebuildNeeded;
+
 private:
     UPROPERTY()
     TWeakObjectPtr<UInventoryComponent> InventoryComp;
@@ -82,6 +85,9 @@ private:
 
     UFUNCTION()
     void OnItemRemoved(const FGuid& RemovedItemID);
+
+    UFUNCTION()
+    void OnGridExpanded(int32 NewGridHeight);
 
     /** 전체 그리드 상태를 SlotViewModels에 동기화 */
     void RefreshAllSlots();

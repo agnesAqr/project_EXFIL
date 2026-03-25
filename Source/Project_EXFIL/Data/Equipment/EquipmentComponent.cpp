@@ -11,6 +11,7 @@
 #include "Data/ItemDataSubsystem.h"
 #include "Inventory/InventoryComponent.h"
 #include "World/WorldItem.h"
+#include "Core/EXFILLog.h"
 
 UEquipmentComponent::UEquipmentComponent()
 {
@@ -126,8 +127,6 @@ bool UEquipmentComponent::EquipItem(EEquipmentSlot Slot, const FInventoryItemIns
     ApplyEquipmentEffect(*SlotData, ItemInstance);
 
     OnItemEquipped.Broadcast(Slot, ItemInstance);
-    UE_LOG(LogTemp, Log, TEXT("EquipmentComponent: Slot[%d] — '%s' 장착"),
-        static_cast<int32>(Slot), *ItemInstance.ItemDataID.ToString());
     return true;
 }
 
@@ -153,8 +152,6 @@ bool UEquipmentComponent::UnequipItem(EEquipmentSlot Slot)
     SlotData->ItemInstance = FInventoryItemInstance();
 
     OnItemUnequipped.Broadcast(Slot, Item);
-    UE_LOG(LogTemp, Log, TEXT("EquipmentComponent: Slot[%d] — '%s' 해제"),
-        static_cast<int32>(Slot), *Item.ItemDataID.ToString());
     return true;
 }
 
@@ -173,6 +170,20 @@ bool UEquipmentComponent::IsSlotOccupied(EEquipmentSlot Slot) const
 {
     const FEquipmentSlotData* SlotData = FindSlotData(Slot);
     return SlotData && !SlotData->IsEmpty();
+}
+
+bool UEquipmentComponent::HasWeaponEquipped() const
+{
+    for (const FEquipmentSlotData& SlotData : ReplicatedSlots)
+    {
+        if ((SlotData.SlotType == EEquipmentSlot::Weapon1 ||
+             SlotData.SlotType == EEquipmentSlot::Weapon2) &&
+            !SlotData.IsEmpty())
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 // ========== 내부 헬퍼 ==========
@@ -235,8 +246,6 @@ void UEquipmentComponent::ApplyEquipmentEffect(FEquipmentSlotData& SlotData,
         const FActiveGameplayEffectHandle ActiveHandle =
             ASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
         SlotData.ActiveGEHandle = ActiveHandle;
-        UE_LOG(LogTemp, Log, TEXT("EquipmentComponent: '%s' EquipmentEffect 적용"),
-            *Item.ItemDataID.ToString());
     }
 }
 
@@ -295,7 +304,7 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
     FInventoryItemInstance ItemInstance;
     if (!InvComp->GetItemByID(ItemInstanceID, ItemInstance))
     {
-        UE_LOG(LogTemp, Warning, TEXT("Server_EquipFromInventory: Item %s not found in inventory"),
+        UE_LOG(LogEXFIL, Warning, TEXT("Server_EquipFromInventory: Item %s not found in inventory"),
             *ItemInstanceID.ToString());
         return;
     }
@@ -316,7 +325,7 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
         const FItemData* ItemData = Sub->GetItemData(ItemInstance.ItemDataID);
         if (!ItemData || ItemData->ItemType != EItemType::Equipment)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogEXFIL, Warning,
                 TEXT("Server_EquipFromInventory: '%s' 는 Equipment 타입이 아님"),
                 *ItemInstance.ItemDataID.ToString());
             return;
@@ -326,13 +335,10 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
 
     if (TargetSlot == EEquipmentSlot::None)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogEXFIL, Warning,
             TEXT("Server_EquipFromInventory: FindTargetSlot 결과 None — EquipmentSlotTag 확인 필요"));
         return;
     }
-
-    UE_LOG(LogTemp, Log, TEXT("Server_EquipFromInventory: '%s' → Slot[%d]"),
-        *ItemInstance.ItemDataID.ToString(), static_cast<int32>(TargetSlot));
 
     // ── Day 7: 스왑 로직 ──
     // 슬롯이 이미 점유된 경우 기존 장비를 인벤토리에 먼저 복귀 (실패 시 거부)
@@ -343,7 +349,7 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
         const bool bCanReturn = InvComp->TryAddItemByID(OldItemDataID, 1);
         if (!bCanReturn)
         {
-            UE_LOG(LogTemp, Warning,
+            UE_LOG(LogEXFIL, Warning,
                 TEXT("Server_EquipFromInventory: 스왑 거부 — 인벤토리 가득 참 (기존 장비: '%s')"),
                 *OldItemDataID.ToString());
             return;
@@ -441,7 +447,6 @@ void UEquipmentComponent::Server_DropEquippedItem_Implementation(EEquipmentSlot 
     if (DroppedItem)
     {
         DroppedItem->InitializeItem(DropItemDataID, 1); // 장비는 항상 1개
-        UE_LOG(LogTemp, Log, TEXT("Server_DropEquippedItem: '%s' 드롭"), *DropItemDataID.ToString());
     }
 }
 
@@ -474,7 +479,7 @@ EEquipmentSlot UEquipmentComponent::FindTargetSlot(const FName& EquipmentSlotTag
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("FindTargetSlot: 알 수 없는 태그 '%s'"), *EquipmentSlotTag.ToString());
+        UE_LOG(LogEXFIL, Warning, TEXT("FindTargetSlot: 알 수 없는 태그 '%s'"), *EquipmentSlotTag.ToString());
         return EEquipmentSlot::None;
     }
 

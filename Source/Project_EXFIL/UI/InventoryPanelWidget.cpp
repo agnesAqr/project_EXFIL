@@ -14,6 +14,7 @@
 #include "UI/StatEntryWidget.h"
 #include "GAS/SurvivalViewModel.h"
 #include "Input/CommonUIInputTypes.h"
+#include "Components/ScrollBox.h"
 
 void UInventoryPanelWidget::NativeOnInitialized()
 {
@@ -43,6 +44,8 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
     {
         ViewModel->OnViewModelRefreshed.Remove(ViewModelRefreshedHandle);
         ViewModelRefreshedHandle.Reset();
+        ViewModel->OnGridRebuildNeeded.Remove(GridRebuildHandle);
+        GridRebuildHandle.Reset();
     }
 
     ViewModel = InViewModel;
@@ -51,6 +54,8 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
     {
         ViewModelRefreshedHandle = ViewModel->OnViewModelRefreshed.AddUObject(
             this, &UInventoryPanelWidget::RefreshIconOverlay);
+        GridRebuildHandle = ViewModel->OnGridRebuildNeeded.AddUObject(
+            this, &UInventoryPanelWidget::BuildGrid);
         BuildGrid();
     }
 }
@@ -225,7 +230,10 @@ void UInventoryPanelWidget::RefreshIconOverlay()
     const float CellWidth = GridPanel->GetCachedGeometry().GetLocalSize().X;
     if (CellWidth <= 1.f)
     {
-        GetWorld()->GetTimerManager().SetTimer(
+        UWorld* World = GetWorld();
+        if (!World) return;
+
+        World->GetTimerManager().SetTimer(
             IconRefreshTimerHandle,
             [this]()
             {
@@ -238,7 +246,6 @@ void UInventoryPanelWidget::RefreshIconOverlay()
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("RefreshIconOverlay: 실행 (CellWidth=%.1f)"), CellWidth);
     IconOverlay->RefreshIcons(ViewModel, GridPanel,
         ViewModel->GetGridWidth(), ViewModel->GetGridHeight());
 }
@@ -266,7 +273,9 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
             MutableThis->GridPanel->SetMinDesiredSlotWidth(0.f);
 
             // 0.1초 후 아이콘 배치 — 레이아웃이 완전히 끝난 후
-            MutableThis->GetWorld()->GetTimerManager().SetTimer(
+            UWorld* World = MutableThis->GetWorld();
+            if (!World) return Result;
+            World->GetTimerManager().SetTimer(
                 MutableThis->IconRefreshTimerHandle,
                 [MutableThis]()
                 {
@@ -295,12 +304,6 @@ void UInventoryPanelWidget::ClearAreaHighlights()
 
 void UInventoryPanelWidget::BindStatsToViewModel(USurvivalViewModel* InSurvivalViewModel)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[STAT-3] BindStats: HP=%s, HU=%s, TH=%s, ST=%s"),
-        StatEntry_HP ? TEXT("valid") : TEXT("null"),
-        StatEntry_HU ? TEXT("valid") : TEXT("null"),
-        StatEntry_TH ? TEXT("valid") : TEXT("null"),
-        StatEntry_ST ? TEXT("valid") : TEXT("null"));
-
     if (StatEntry_HP) StatEntry_HP->BindToViewModel(InSurvivalViewModel, FName("Health"));
     if (StatEntry_HU) StatEntry_HU->BindToViewModel(InSurvivalViewModel, FName("Hunger"));
     if (StatEntry_TH) StatEntry_TH->BindToViewModel(InSurvivalViewModel, FName("Thirst"));
@@ -357,4 +360,64 @@ void UInventoryPanelWidget::UpdateTabStyles(int32 ActiveIndex)
         ActiveIndex == 0 ? FLinearColor(1.f, 1.f, 1.f, 0.8f) : FLinearColor(1.f, 1.f, 1.f, 0.35f));
     ApplyTabColor(Button_CraftingTab,
         ActiveIndex == 1 ? FLinearColor(1.f, 1.f, 1.f, 0.8f) : FLinearColor(1.f, 1.f, 1.f, 0.35f));
+}
+
+// ─── 드래그 자동 스크롤 ──────────────────────────────────────────────────────
+
+void UInventoryPanelWidget::UpdateDragAutoScroll(const FVector2D& ScreenSpacePosition)
+{
+    if (!InventoryScrollBox) return;
+
+    const FGeometry& ScrollGeo = InventoryScrollBox->GetCachedGeometry();
+    const FVector2D LocalPos = ScrollGeo.AbsoluteToLocal(ScreenSpacePosition);
+    const FVector2D ScrollSize = ScrollGeo.GetLocalSize();
+
+    // 상단 가장자리
+    if (LocalPos.Y < ScrollEdgeZone)
+    {
+        AutoScrollSpeed = -ScrollRate;
+    }
+    // 하단 가장자리
+    else if (LocalPos.Y > ScrollSize.Y - ScrollEdgeZone)
+    {
+        AutoScrollSpeed = ScrollRate;
+    }
+    else
+    {
+        AutoScrollSpeed = 0.f;
+    }
+
+    // 타이머 시작 (이미 돌고 있으면 무시)
+    if (AutoScrollSpeed != 0.f && !GetWorld()->GetTimerManager().IsTimerActive(AutoScrollTimerHandle))
+    {
+        GetWorld()->GetTimerManager().SetTimer(
+            AutoScrollTimerHandle, this,
+            &UInventoryPanelWidget::TickAutoScroll,
+            0.016f, true); // ~60fps
+    }
+    else if (AutoScrollSpeed == 0.f)
+    {
+        GetWorld()->GetTimerManager().ClearTimer(AutoScrollTimerHandle);
+    }
+}
+
+void UInventoryPanelWidget::StopDragAutoScroll()
+{
+    AutoScrollSpeed = 0.f;
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(AutoScrollTimerHandle);
+    }
+}
+
+void UInventoryPanelWidget::TickAutoScroll()
+{
+    if (!InventoryScrollBox || AutoScrollSpeed == 0.f)
+    {
+        StopDragAutoScroll();
+        return;
+    }
+
+    const float CurrentOffset = InventoryScrollBox->GetScrollOffset();
+    InventoryScrollBox->SetScrollOffset(CurrentOffset + AutoScrollSpeed);
 }

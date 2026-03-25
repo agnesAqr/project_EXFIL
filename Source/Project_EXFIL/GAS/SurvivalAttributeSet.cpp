@@ -4,18 +4,19 @@
 #include "CoreMinimal.h"
 #include "GameplayEffectExtension.h"
 #include "Net/UnrealNetwork.h"
+#include "Core/EXFILCharacter.h"
 
 USurvivalAttributeSet::USurvivalAttributeSet()
 {
-    // 초기값 설정 — 소비 아이템 효과 테스트를 위해 현재값 50으로 시작
-    InitHealth(50.f);
-    InitMaxHealth(100.f);
-    InitHunger(50.f);
-    InitMaxHunger(100.f);
-    InitThirst(50.f);
-    InitMaxThirst(100.f);
-    InitStamina(50.f);
-    InitMaxStamina(100.f);
+    // 초기값 설정 — UPROPERTY 기본값 사용 (에디터에서 조절 가능)
+    InitHealth(InitialHealth);
+    InitMaxHealth(InitialMaxHealth);
+    InitHunger(InitialHunger);
+    InitMaxHunger(InitialMaxHunger);
+    InitThirst(InitialThirst);
+    InitMaxThirst(InitialMaxThirst);
+    InitStamina(InitialStamina);
+    InitMaxStamina(InitialMaxStamina);
 }
 
 void USurvivalAttributeSet::GetLifetimeReplicatedProps(
@@ -67,7 +68,11 @@ void USurvivalAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCa
 
         if (GetHealth() <= 0.f)
         {
-            UE_LOG(LogTemp, Warning, TEXT("SurvivalAttributeSet: Health <= 0 — 사망 이벤트 (Day 6에서 구현)"));
+            AActor* OwnerActor = GetOwningAbilitySystemComponent()->GetAvatarActor();
+            if (AEXFILCharacter* Character = Cast<AEXFILCharacter>(OwnerActor))
+            {
+                Character->OnDeath();
+            }
         }
     }
     else if (Data.EvaluatedData.Attribute == GetHungerAttribute())

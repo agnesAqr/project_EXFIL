@@ -118,9 +118,6 @@ void UStatEntryWidget::BindToViewModel(USurvivalViewModel* ViewModel, FName InSt
 
 void UStatEntryWidget::OnStatUpdated(FName StatName, float NewValue)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[STAT-5] StatEntry: %s = %.1f, tracked=%s"),
-        *StatName.ToString(), NewValue, *TrackedStatName.ToString());
-
     if (StatName == TrackedStatName)
     {
         UpdateStat(NewValue, CachedMaximum);

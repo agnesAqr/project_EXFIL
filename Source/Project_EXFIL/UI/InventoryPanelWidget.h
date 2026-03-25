@@ -12,6 +12,7 @@ class UInventorySlotWidget;
 class UInventoryIconOverlay;
 class UCraftingPanelWidget;
 class UUniformGridPanel;
+class UScrollBox;
 class UWidgetSwitcher;
 class UButton;
 class UStatEntryWidget;
@@ -51,6 +52,12 @@ public:
      */
     void BindStatsToViewModel(USurvivalViewModel* InSurvivalViewModel);
 
+    /** 드래그 중 호출 — 마우스 위치에 따라 ScrollBox 자동 스크롤 시작/정지 */
+    void UpdateDragAutoScroll(const FVector2D& ScreenSpacePosition);
+
+    /** 드래그 종료 시 호출 — 자동 스크롤 정지 */
+    void StopDragAutoScroll();
+
 protected:
     virtual void NativeOnInitialized() override;
     virtual void NativeOnActivated() override;
@@ -75,6 +82,10 @@ protected:
     /** 멀티셀 아이콘 오버레이 — CanvasPanel 기반 (WBP에서 BindWidget으로 연결) */
     UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
     TObjectPtr<UInventoryIconOverlay> IconOverlay;
+
+    /** 인벤토리 그리드를 감싸는 ScrollBox (WBP에서 BindWidget으로 연결) */
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidgetOptional))
+    TObjectPtr<UScrollBox> InventoryScrollBox;
 
     // ─── BindWidget: 탭 + WidgetSwitcher ──────────────────────────────────────
 
@@ -137,6 +148,9 @@ private:
     /** ViewModel RefreshAllSlots 후 콜백 핸들 */
     FDelegateHandle ViewModelRefreshedHandle;
 
+    /** 그리드 확장 시 리빌드 콜백 핸들 */
+    FDelegateHandle GridRebuildHandle;
+
     // ─── 탭 버튼 콜백 ─────────────────────────────────────────────────────────
 
     UFUNCTION()
@@ -147,4 +161,21 @@ private:
 
     /** 탭 인덱스(0=인벤토리, 1=크래프팅)에 따라 버튼 스타일 갱신 */
     void UpdateTabStyles(int32 ActiveIndex);
+
+    // ─── 드래그 자동 스크롤 ───────────────────────────────────────────────────
+
+    /** 자동 스크롤 타이머 */
+    FTimerHandle AutoScrollTimerHandle;
+
+    /** 현재 스크롤 속도 (양수=아래, 음수=위, 0=정지) */
+    float AutoScrollSpeed = 0.f;
+
+    /** 가장자리 감지 영역 크기 (px) */
+    static constexpr float ScrollEdgeZone = 60.f;
+
+    /** 스크롤 속도 (px/tick) */
+    static constexpr float ScrollRate = 15.f;
+
+    /** 타이머 콜백 — ScrollBox 오프셋 갱신 */
+    void TickAutoScroll();
 };

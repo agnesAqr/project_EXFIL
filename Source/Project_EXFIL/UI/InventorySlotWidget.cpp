@@ -48,7 +48,7 @@ void UInventorySlotWidget::RefreshVisuals()
         // 기본 슬롯 배경색: 빈 슬롯 = 어두운 회색, 점유 슬롯 = 파란색
         const FLinearColor DefaultColor = bIsEmpty
             ? FLinearColor(0.1f, 0.1f, 0.1f, 0.8f)
-            : FLinearColor(0.0f, 0.3f, 0.6f, 0.9f);
+            : FLinearColor(0.12f, 0.15f, 0.10f, 1.0f);
         SlotBorder->SetBrushColor(DefaultColor);
     }
 }

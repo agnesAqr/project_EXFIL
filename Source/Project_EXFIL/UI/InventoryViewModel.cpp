@@ -37,6 +37,8 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
         this, &UInventoryViewModel::OnItemAdded);
     InInventoryComponent->OnItemRemoved.AddDynamic(
         this, &UInventoryViewModel::OnItemRemoved);
+    InInventoryComponent->OnGridExpanded.AddDynamic(
+        this, &UInventoryViewModel::OnGridExpanded);
 
     // 초기 상태 동기화
     RefreshAllSlots();
@@ -112,7 +114,6 @@ bool UInventoryViewModel::RequestRemoveItem(FGuid ItemInstanceID)
 
 void UInventoryViewModel::OnInventoryUpdated()
 {
-    UE_LOG(LogTemp, Warning, TEXT("InventoryViewModel::OnInventoryUpdated — RefreshAllSlots 호출"));
     RefreshAllSlots();
 }
 
@@ -124,6 +125,24 @@ void UInventoryViewModel::OnItemAdded(const FInventoryItemInstance& AddedItem)
 void UInventoryViewModel::OnItemRemoved(const FGuid& RemovedItemID)
 {
     // OnInventoryUpdated도 함께 브로드캐스트되므로 RefreshAllSlots는 거기서 처리
+}
+
+void UInventoryViewModel::OnGridExpanded(int32 NewGridHeight)
+{
+    const int32 OldTotal = SlotViewModels.Num();
+    UE_MVVM_SET_PROPERTY_VALUE(GridHeight, NewGridHeight);
+    const int32 NewTotal = GridWidth * NewGridHeight;
+
+    SlotViewModels.SetNum(NewTotal);
+    for (int32 i = OldTotal; i < NewTotal; ++i)
+    {
+        UInventorySlotViewModel* SlotVM = NewObject<UInventorySlotViewModel>(this);
+        SlotVM->SetGridPosition(FIntPoint(i % GridWidth, i / GridWidth));
+        SlotViewModels[i] = SlotVM;
+    }
+
+    // PanelWidget에 그리드 리빌드 요청
+    OnGridRebuildNeeded.Broadcast();
 }
 
 void UInventoryViewModel::RefreshAllSlots()
@@ -201,8 +220,6 @@ void UInventoryViewModel::RefreshAllSlots()
     }
 
     // 아이콘 오버레이 갱신 알림
-    UE_LOG(LogTemp, Warning, TEXT("OnViewModelRefreshed.Broadcast — Listeners bound: %d"),
-        OnViewModelRefreshed.IsBound() ? 1 : 0);
     OnViewModelRefreshed.Broadcast();
 }
 

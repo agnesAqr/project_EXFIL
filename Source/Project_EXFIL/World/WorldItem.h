@@ -42,6 +42,20 @@ protected:
         TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 private:
+    // === 설정 ===
+
+    /** 인터랙션 감지 스피어 반경 (cm) */
+    UPROPERTY(EditAnywhere, Category = "WorldItem|Config")
+    float InteractionSphereRadius = 150.f;
+
+    /** 아이템명 텍스트 표시 높이 — 메시 기준 상대 위치 (cm) */
+    UPROPERTY(EditAnywhere, Category = "WorldItem|Config")
+    float ItemNameTextHeight = 70.f;
+
+    /** 아이템명 텍스트 월드 크기 (pt) */
+    UPROPERTY(EditAnywhere, Category = "WorldItem|Config")
+    float ItemNameTextSize = 35.f;
+
     // === 컴포넌트 ===
     UPROPERTY(VisibleAnywhere, Category = "Components")
     TObjectPtr<UStaticMeshComponent> MeshComponent;

@@ -5,6 +5,7 @@
 #include "World/WorldItem.h"
 #include "GameFramework/PlayerStart.h"
 #include "Kismet/GameplayStatics.h"
+#include "Core/EXFILLog.h"
 
 AEXFILGameMode::AEXFILGameMode()
 {
@@ -28,12 +29,12 @@ void AEXFILGameMode::SpawnTestWorldItems()
     if (PlayerStartActor)
     {
         Origin = PlayerStartActor->GetActorLocation();
-        UE_LOG(LogTemp, Log, TEXT("SpawnTestWorldItems: PlayerStart 기준 = %s"), *Origin.ToString());
+        UE_LOG(LogEXFIL, Log, TEXT("SpawnTestWorldItems: PlayerStart = %s"), *Origin.ToString());
     }
     else
     {
-        UE_LOG(LogTemp, Warning,
-            TEXT("SpawnTestWorldItems: PlayerStart를 찾지 못함 — 월드 원점 기준으로 스폰"));
+        UE_LOG(LogEXFIL, Warning,
+            TEXT("SpawnTestWorldItems: PlayerStart not found — using world origin"));
     }
 
     // Origin으로부터의 상대 오프셋 (cm)
@@ -48,9 +49,9 @@ void AEXFILGameMode::SpawnTestWorldItems()
     const TArray<FTestSpawn> TestItems =
     {
         { FName("Bandage"),     3, FVector( 400.f,  400.f, 250.f) },
-        { FName("WaterBottle"), 1, FVector(-400.f,  400.f, 250.f) },
+        { FName("Helmet"),      1, FVector(-400.f,  400.f, 250.f) },
         { FName("Pistol"),      1, FVector(-400.f, -400.f, 250.f) },
-        { FName("Helmet"),      1, FVector( 400.f, -400.f, 250.f) },
+        { FName("SniperRifle"), 1, FVector( 400.f, -400.f, 250.f) },
     };
 
     for (const FTestSpawn& Spawn : TestItems)
@@ -67,7 +68,7 @@ void AEXFILGameMode::SpawnTestWorldItems()
         if (Item)
         {
             Item->InitializeItem(Spawn.ItemDataID, Spawn.StackCount);
-            UE_LOG(LogTemp, Log, TEXT("SpawnTestWorldItems: '%s' x%d @ %s"),
+            UE_LOG(LogEXFIL, Log, TEXT("SpawnTestWorldItems: '%s' x%d @ %s"),
                 *Spawn.ItemDataID.ToString(), Spawn.StackCount, *SpawnLocation.ToString());
         }
     }
