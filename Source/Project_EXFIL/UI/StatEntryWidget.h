@@ -8,6 +8,7 @@
 
 class UImage;
 class UTextBlock;
+class UTexture2D;
 class USurvivalViewModel;
 
 /**
@@ -45,6 +46,10 @@ public:
     /** BP 디테일 패널에서 스탯 종류 지정 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat")
     EExfilStatType StatType = EExfilStatType::Health;
+
+    /** 에디터에서 각 StatEntry 인스턴스별 아이콘 텍스처 지정 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat")
+    TObjectPtr<UTexture2D> IconTexture;
 
     /**
      * 스탯 값 갱신.

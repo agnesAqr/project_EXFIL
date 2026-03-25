@@ -16,6 +16,12 @@ void UStatEntryWidget::NativeOnInitialized()
         Image_TrackBg->SetColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, 0.08f));
     }
 
+    // 에디터에서 지정한 아이콘 텍스처 적용
+    if (Image_Icon && IconTexture)
+    {
+        Image_Icon->SetBrushFromTexture(IconTexture);
+    }
+
     // 초기 Fill 색상 적용
     if (Image_TrackFill)
     {
