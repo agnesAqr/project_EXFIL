@@ -13,6 +13,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FOnItemAdded, const FInventoryItemInstance&, AddedItem);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FOnItemRemoved, const FGuid&, RemovedItemID);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
+	FOnGridExpanded, int32, NewGridHeight);
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UInventoryComponent : public UActorComponent
@@ -26,8 +28,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridWidth = 10;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing = OnRep_GridHeight, Category = "Inventory|Config")
+	int32 GridHeight = 13;
+
+	/** 그리드 확장 불가 상한 (행 수) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
-	int32 GridHeight = 6;
+	int32 MaxGridHeight = 100;
+
+	/** 아이템 드롭 시 캐릭터 전방 오프셋 (cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
+	float DropForwardOffset = 100.f;
+
+	/** 아이템 드롭 시 상방 오프셋 — 바닥 관통 방지 (cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
+	float DropUpwardOffset = 50.f;
 
 	// ========== 핵심 API ==========
 
@@ -136,6 +150,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnItemRemoved OnItemRemoved;
 
+	/** 그리드 행이 확장되었을 때 (UI 리빌드용) */
+	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
+	FOnGridExpanded OnGridExpanded;
+
 	// ========== Replication (Day 6) ==========
 	virtual void GetLifetimeReplicatedProps(
 		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -157,6 +175,9 @@ private:
 	UFUNCTION()
 	void OnRep_Items();
 
+	UFUNCTION()
+	void OnRep_GridHeight();
+
 	// ========== 내부 헬퍼 ==========
 	bool IsValidGridPosition(FIntPoint Position) const;
 	int32 GridPositionToIndex(FIntPoint Position) const;
@@ -167,6 +188,9 @@ private:
 	                 const FGuid& ItemID);
 	void FreeSlots(const FInventoryItemInstance& Item);
 	void InitializeGrid();
+
+	/** 아이템을 넣을 수 있을 만큼 행을 확장. 성공 시 true 반환 */
+	bool ExpandGridForItem(FItemSize Size);
 
 	/** TArray에서 InstanceID로 아이템 검색 (TMap→TArray 전환 헬퍼) */
 	FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID);

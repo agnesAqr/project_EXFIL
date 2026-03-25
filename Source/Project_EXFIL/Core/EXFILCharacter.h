@@ -17,6 +17,9 @@ class UEquipmentComponent;
 class USurvivalViewModel;
 class AWorldItem;
 class UInputAction;
+class UGameplayAbility;
+class UGameplayEffect;
+class USpringArmComponent;
 struct FInputActionValue;
 
 /**
@@ -47,6 +50,34 @@ public:
     // === Equipment ===
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+
+    // === Combat (Day 8) ===
+
+    /** 인벤토리 UI가 현재 보이는지 반환 (GA_Fire에서 참조) */
+    bool IsInventoryUIVisible() const;
+
+    /** 서버 히트 확인 — 클라이언트에서 라인 트레이스 히트 결과를 전송 */
+    UFUNCTION(Server, Reliable, WithValidation)
+    void Server_ConfirmHit(AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
+
+    /** 히트 이펙트 — 모든 클라이언트에 표시 */
+    UFUNCTION(NetMulticast, Unreliable)
+    void Multicast_PlayHitEffect(FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
+
+    /** 피격 애니메이션 — 모든 클라이언트에서 재생 */
+    UFUNCTION(NetMulticast, Unreliable)
+    void Multicast_PlayHitReact();
+
+    /** 사망 연출 — 래그돌 + 입력 차단 */
+    UFUNCTION(NetMulticast, Reliable)
+    void Multicast_OnDeath();
+
+    /** 사망 처리 — 서버 전용, 래그돌 → 3초 후 Destroy */
+    void OnDeath();
+
+    /** 인벤토리 풀 등 서버→클라이언트 알림 */
+    UFUNCTION(Client, Reliable)
+    void Client_ShowNotification(const FString& Message);
 
 protected:
     virtual void BeginPlay() override;
@@ -95,11 +126,77 @@ protected:
               meta = (AllowPrivateAccess = "true"))
     TObjectPtr<UEquipmentComponent> EquipmentComponent;
 
+    // === Combat (Day 8) ===
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    TSubclassOf<UGameplayAbility> GA_FireClass;
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    TSubclassOf<UGameplayEffect> DamageEffectClass;
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    float FireRange = 5000.f;
+
+    /** 피격 시 0.2초간 오버레이할 반투명 머티리얼 (에디터에서 M_HitOverlay 할당) */
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    TObjectPtr<UMaterialInterface> HitOverlayMaterial;
+
+    UPROPERTY(EditAnywhere, Category = "Input")
+    TObjectPtr<UInputAction> IA_Fire;
+
+    void OnFirePressed();
+
+    // === 조준 (Day 8) ===
+
+    UPROPERTY(EditAnywhere, Category = "Input")
+    TObjectPtr<UInputAction> IA_Aim;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+    bool bIsAiming = false;
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    float DefaultArmLength = 300.f;
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    float AimArmLength = 15.f;
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    float DefaultFOV = 90.f;
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    float AimFOV = 60.f;
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    FVector DefaultSocketOffset = FVector(0.f, 0.f, 0.f);
+
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    FVector AimSocketOffset = FVector(0.f, 30.f, 70.f);
+
+    void OnAimToggled();
+
+    UPROPERTY(EditAnywhere, Category = "UI")
+    TSubclassOf<UUserWidget> CrosshairWidgetClass;
+
+    UPROPERTY()
+    TObjectPtr<UUserWidget> CrosshairWidget;
+
     // === 인터랙션 ===
 
     /** 라인 트레이스 최대 거리 (cm) */
     UPROPERTY(EditAnywhere, Category = "Interaction")
     float InteractionDistance = 300.f;
+
+    /** 서버 픽업 검증 최대 거리 (cm) — 네트워크 지연 보상 포함 */
+    UPROPERTY(EditAnywhere, Category = "Interaction")
+    float MaxPickupDistance = 400.f;
+
+    /** 피격 오버레이 머티리얼 표시 지속 시간 (초) */
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    float HitOverlayDuration = 0.2f;
+
+    /** 사망 후 액터 제거까지 대기 시간 (초) */
+    UPROPERTY(EditAnywhere, Category = "Combat")
+    float DeathLifeSpan = 3.f;
 
     /** F키 인터랙션 InputAction — 에디터에서 할당 */
     UPROPERTY(EditAnywhere, Category = "Input")
