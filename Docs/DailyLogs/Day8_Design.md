@@ -760,11 +760,18 @@ void AEXFILCharacter::Client_ShowNotification_Implementation(const FString& Mess
 - WorldItem 아이템 이름 텍스트(TextRenderComponent) 기본 비활성화 — 시연용 클린 비주얼
 - Client_ShowNotification RPC로 인벤토리 풀 피드백 화면 메시지 구현
 
+### Phase B-2: 추가 폴리시
+- StatEntryWidget: `IconTexture` UPROPERTY(EditAnywhere) 추가 — 에디터에서 각 StatEntry 인스턴스별 아이콘 텍스처 지정 가능, NativeOnInitialized에서 SetBrushFromTexture 적용
+- WorldItem: Bandage / Helmet / Pistol / SniperRifle 4종 메시 + PBR 텍스처 + 아이콘 에셋 추가
+- Medkit 메시 + PBR 텍스처 에셋 추가
+- DT_ItemData 업데이트 (신규 아이템 반영)
+- Health / Hunger 스탯 아이콘 텍스처 에셋 추가 (Content/Assets/Textures/)
+
 ### Phase C: 시연 준비 (수현 직접 처리)
 - [ ] 시연 영상 촬영
 - [ ] GitHub README.md 작성
 - [ ] ARCHITECTURE.md 최종 업데이트
-- [ ] 최종 커밋 + 태그
+- [x] 최종 커밋 + 태그 (v1.0-portfolio)
 
 ---
 
