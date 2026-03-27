@@ -44,8 +44,6 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
     {
         ViewModel->OnViewModelRefreshed.Remove(ViewModelRefreshedHandle);
         ViewModelRefreshedHandle.Reset();
-        ViewModel->OnGridRebuildNeeded.Remove(GridRebuildHandle);
-        GridRebuildHandle.Reset();
     }
 
     ViewModel = InViewModel;
@@ -54,8 +52,6 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
     {
         ViewModelRefreshedHandle = ViewModel->OnViewModelRefreshed.AddUObject(
             this, &UInventoryPanelWidget::RefreshIconOverlay);
-        GridRebuildHandle = ViewModel->OnGridRebuildNeeded.AddUObject(
-            this, &UInventoryPanelWidget::BuildGrid);
         BuildGrid();
     }
 }

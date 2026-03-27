@@ -63,7 +63,6 @@ void USurvivalAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCa
 
     if (Data.EvaluatedData.Attribute == GetHealthAttribute())
     {
-        // Final clamp
         SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
 
         if (GetHealth() <= 0.f)

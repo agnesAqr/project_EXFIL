@@ -92,6 +92,18 @@ void UEquipmentComponent::InitializeSlots()
     ReplicatedSlots.Add(FEquipmentSlotData(EEquipmentSlot::Body));
     ReplicatedSlots.Add(FEquipmentSlotData(EEquipmentSlot::Weapon1));
     ReplicatedSlots.Add(FEquipmentSlotData(EEquipmentSlot::Weapon2));
+
+    InitializeSlotMapping();
+}
+
+void UEquipmentComponent::InitializeSlotMapping()
+{
+    SlotTagToCandidates.Empty();
+    SlotTagToCandidates.Add(FName("Weapon"),  { EEquipmentSlot::Weapon1, EEquipmentSlot::Weapon2 });
+    SlotTagToCandidates.Add(FName("Head"),    { EEquipmentSlot::Head });
+    SlotTagToCandidates.Add(FName("Face"),    { EEquipmentSlot::Face });
+    SlotTagToCandidates.Add(FName("Eyewear"), { EEquipmentSlot::Eyewear });
+    SlotTagToCandidates.Add(FName("Body"),    { EEquipmentSlot::Body });
 }
 
 // ========== 핵심 API ==========
@@ -454,37 +466,15 @@ void UEquipmentComponent::Server_DropEquippedItem_Implementation(EEquipmentSlot 
 
 EEquipmentSlot UEquipmentComponent::FindTargetSlot(const FName& EquipmentSlotTag) const
 {
-    // 태그 → 후보 슬롯 목록 매핑
-    TArray<EEquipmentSlot> Candidates;
-
-    if (EquipmentSlotTag == FName("Weapon"))
-    {
-        Candidates = { EEquipmentSlot::Weapon1, EEquipmentSlot::Weapon2 };
-    }
-    else if (EquipmentSlotTag == FName("Head"))
-    {
-        Candidates = { EEquipmentSlot::Head };
-    }
-    else if (EquipmentSlotTag == FName("Face"))
-    {
-        Candidates = { EEquipmentSlot::Face };
-    }
-    else if (EquipmentSlotTag == FName("Eyewear"))
-    {
-        Candidates = { EEquipmentSlot::Eyewear };
-    }
-    else if (EquipmentSlotTag == FName("Body"))
-    {
-        Candidates = { EEquipmentSlot::Body };
-    }
-    else
+    const TArray<EEquipmentSlot>* Candidates = SlotTagToCandidates.Find(EquipmentSlotTag);
+    if (!Candidates || Candidates->IsEmpty())
     {
         UE_LOG(LogEXFIL, Warning, TEXT("FindTargetSlot: 알 수 없는 태그 '%s'"), *EquipmentSlotTag.ToString());
         return EEquipmentSlot::None;
     }
 
     // 빈 슬롯 우선 탐색
-    for (EEquipmentSlot CandidateSlot : Candidates)
+    for (EEquipmentSlot CandidateSlot : *Candidates)
     {
         const FEquipmentSlotData* SlotData = FindSlotData(CandidateSlot);
         if (SlotData && SlotData->IsEmpty())
@@ -494,7 +484,7 @@ EEquipmentSlot UEquipmentComponent::FindTargetSlot(const FName& EquipmentSlotTag
     }
 
     // 빈 슬롯 없으면 첫 번째 후보에 스왑
-    return Candidates[0];
+    return (*Candidates)[0];
 }
 
 // ========== SlotTag → Enum 매핑 (deprecated — FindTargetSlot 사용 권장) ==========
