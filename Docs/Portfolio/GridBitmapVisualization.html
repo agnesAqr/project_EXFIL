@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Grid Inventory + Bitmap Visualization</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0e17; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Consolas', 'Courier New', monospace; }
+  .container { width: 1000px; padding: 40px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <svg width="1000" height="520" viewBox="0 0 1000 520" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
+
+    <text x="0" y="20" fill="#00e5ff" font-size="12" letter-spacing="3" font-weight="400">— GRID INVENTORY + BITMAP VISUALIZATION</text>
+
+    <!-- LEFT: Grid -->
+    <text x="30" y="55" fill="#58a6ff" font-size="11" letter-spacing="2" font-weight="600">2D GRID (10 × 7)</text>
+    <text x="30" y="70" fill="#8b949e" font-size="9">1D TArray — Index = Row × Width + Col</text>
+
+    <rect x="30" y="82" width="400" height="280" rx="4" fill="#0d1117" stroke="#30363d"/>
+
+    <!-- Row 0 -->
+    <rect x="30" y="82" width="40" height="40" fill="#1a3a2a" stroke="#30363d88" stroke-width="0.5"/>
+    <text x="50" y="107" fill="#3fb950" font-size="8" text-anchor="middle">BDG</text>
+    <rect x="70" y="82" width="80" height="40" fill="#1a2a3a" stroke="#58a6ff44" stroke-width="1" rx="2"/>
+    <text x="110" y="100" fill="#58a6ff" font-size="8" text-anchor="middle">PISTOL (2×1)</text>
+    <rect x="150" y="82" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="190" y="82" width="40" height="40" fill="#2a1a1a" stroke="#30363d88" stroke-width="0.5"/>
+    <text x="210" y="107" fill="#f85149" font-size="8" text-anchor="middle">MED</text>
+    <rect x="230" y="82" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="270" y="82" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="310" y="82" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="350" y="82" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="390" y="82" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+
+    <!-- Row 1-3: BodyArmor -->
+    <rect x="30" y="122" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="70" y="122" width="40" height="40" fill="#161b2200" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="110" y="122" width="80" height="120" fill="#2a2a1a" stroke="#d2992244" stroke-width="1" rx="2"/>
+    <text x="150" y="178" fill="#d29922" font-size="8" text-anchor="middle">BODY</text>
+    <text x="150" y="190" fill="#d29922" font-size="8" text-anchor="middle">ARMOR</text>
+    <text x="150" y="202" fill="#d29922" font-size="7" text-anchor="middle">(2×3)</text>
+    <rect x="190" y="122" width="240" height="40" fill="none" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="30" y="162" width="80" height="40" fill="none" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="190" y="162" width="240" height="40" fill="none" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="30" y="202" width="80" height="40" fill="none" stroke="#30363d44" stroke-width="0.5"/>
+    <rect x="190" y="202" width="240" height="40" fill="none" stroke="#30363d44" stroke-width="0.5"/>
+
+    <!-- Vertical lines for partial rows -->
+    <line x1="70" y1="122" x2="70" y2="242" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="230" y1="122" x2="230" y2="242" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="270" y1="122" x2="270" y2="242" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="310" y1="122" x2="310" y2="242" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="350" y1="122" x2="350" y2="242" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="390" y1="122" x2="390" y2="242" stroke="#30363d44" stroke-width="0.5"/>
+
+    <!-- Row 4-6: empty -->
+    <rect x="30" y="242" width="400" height="120" fill="none" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="30" y1="282" x2="430" y2="282" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="30" y1="322" x2="430" y2="322" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="70" y1="242" x2="70" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="110" y1="242" x2="110" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="150" y1="242" x2="150" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="190" y1="242" x2="190" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="230" y1="242" x2="230" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="270" y1="242" x2="270" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="310" y1="242" x2="310" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="350" y1="242" x2="350" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+    <line x1="390" y1="242" x2="390" y2="362" stroke="#30363d44" stroke-width="0.5"/>
+
+    <!-- Row/Col labels -->
+    <text x="22" y="107" fill="#8b949e" font-size="8" text-anchor="end">0</text>
+    <text x="22" y="147" fill="#8b949e" font-size="8" text-anchor="end">1</text>
+    <text x="22" y="187" fill="#8b949e" font-size="8" text-anchor="end">2</text>
+    <text x="22" y="227" fill="#8b949e" font-size="8" text-anchor="end">3</text>
+    <text x="22" y="267" fill="#8b949e" font-size="8" text-anchor="end">4</text>
+    <text x="22" y="307" fill="#8b949e" font-size="8" text-anchor="end">5</text>
+    <text x="22" y="347" fill="#8b949e" font-size="8" text-anchor="end">6</text>
+
+    <!-- Arrows -->
+    <text x="448" y="140" fill="#58a6ff" font-size="14">→</text>
+    <text x="448" y="200" fill="#58a6ff" font-size="14">→</text>
+    <text x="448" y="260" fill="#58a6ff" font-size="14">→</text>
+
+    <!-- RIGHT: Bitmap -->
+    <text x="480" y="55" fill="#d29922" font-size="11" letter-spacing="2" font-weight="600">ROW BITMAP (uint16)</text>
+    <text x="480" y="70" fill="#8b949e" font-size="9">행별 점유 비트마스크 — 1=점유, 0=빈칸</text>
+
+    <rect x="480" y="82" width="500" height="280" rx="4" fill="#0d1117" stroke="#30363d"/>
+
+    <!-- Header -->
+    <rect x="480" y="82" width="500" height="22" rx="4" fill="#161b22"/>
+    <text x="500" y="97" fill="#8b949e" font-size="9" font-weight="600">Row</text>
+    <text x="550" y="97" fill="#8b949e" font-size="9" font-weight="600">bit9  8  7  6  5  4  3  2  1  0</text>
+    <text x="830" y="97" fill="#8b949e" font-size="9" font-weight="600">Hex</text>
+    <text x="900" y="97" fill="#8b949e" font-size="9" font-weight="600">상태</text>
+
+    <!-- Row 0: bits 0,1,2,4 set -->
+    <text x="508" y="126" fill="#e6edf3" font-size="10">0</text>
+    <text x="554" y="126" fill="#3fb950" font-size="11">0</text>
+    <text x="580" y="126" fill="#3fb950" font-size="11">0</text>
+    <text x="606" y="126" fill="#3fb950" font-size="11">0</text>
+    <text x="632" y="126" fill="#3fb950" font-size="11">0</text>
+    <text x="658" y="126" fill="#3fb950" font-size="11">0</text>
+    <text x="684" y="126" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="710" y="126" fill="#3fb950" font-size="11">0</text>
+    <text x="736" y="126" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="762" y="126" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="788" y="126" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="838" y="126" fill="#d29922" font-size="10">0x17</text>
+    <text x="900" y="126" fill="#8b949e" font-size="9">4칸 점유</text>
+
+    <!-- Row 1: bits 2,3 set -->
+    <text x="508" y="162" fill="#e6edf3" font-size="10">1</text>
+    <text x="554" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="580" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="606" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="632" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="658" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="684" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="736" y="162" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="762" y="162" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="788" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="838" y="162" fill="#d29922" font-size="10">0x0C</text>
+    <text x="900" y="162" fill="#8b949e" font-size="9">2칸 점유</text>
+
+    <!-- Row 2: same -->
+    <text x="508" y="198" fill="#e6edf3" font-size="10">2</text>
+    <text x="554" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="580" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="606" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="632" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="658" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="684" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="736" y="198" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="762" y="198" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="788" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="838" y="198" fill="#d29922" font-size="10">0x0C</text>
+    <text x="900" y="198" fill="#8b949e" font-size="9">2칸 점유</text>
+
+    <!-- Row 3: same -->
+    <text x="508" y="234" fill="#e6edf3" font-size="10">3</text>
+    <text x="554" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="580" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="606" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="632" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="658" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="684" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="736" y="234" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="762" y="234" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="788" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="838" y="234" fill="#d29922" font-size="10">0x0C</text>
+    <text x="900" y="234" fill="#8b949e" font-size="9">2칸 점유</text>
+
+    <!-- Row 4-6: empty -->
+    <text x="508" y="270" fill="#e6edf3" font-size="10">4</text>
+    <text x="554" y="270" fill="#3fb950" font-size="11">0  0  0  0  0  0  0  0  0  0</text>
+    <text x="838" y="270" fill="#d29922" font-size="10">0x00</text>
+    <text x="900" y="270" fill="#3fb950" font-size="9">빈 행 ✓</text>
+
+    <text x="508" y="306" fill="#e6edf3" font-size="10">5</text>
+    <text x="554" y="306" fill="#3fb950" font-size="11">0  0  0  0  0  0  0  0  0  0</text>
+    <text x="838" y="306" fill="#d29922" font-size="10">0x00</text>
+    <text x="900" y="306" fill="#3fb950" font-size="9">빈 행 ✓</text>
+
+    <text x="508" y="342" fill="#e6edf3" font-size="10">6</text>
+    <text x="554" y="342" fill="#3fb950" font-size="11">0  0  0  0  0  0  0  0  0  0</text>
+    <text x="838" y="342" fill="#d29922" font-size="10">0x00</text>
+    <text x="900" y="342" fill="#3fb950" font-size="9">빈 행 ✓</text>
+
+    <!-- Bottom: Check example -->
+    <rect x="30" y="385" width="950" height="125" rx="6" fill="#161b22" stroke="#30363d"/>
+    <text x="50" y="408" fill="#d29922" font-size="11" font-weight="600">AreSlotsFree(Col=5, Row=0, W=3, H=2)  — "3×2 아이템을 (5,0)에 배치 가능한가?"</text>
+
+    <text x="50" y="435" fill="#8b949e" font-size="10">Mask = ((1 &lt;&lt; 3) - 1) &lt;&lt; 5  =  0b 00000 </text>
+    <text x="363" y="435" fill="#3fb950" font-size="10" font-weight="700">111</text>
+    <text x="390" y="435" fill="#8b949e" font-size="10"> 00000</text>
+    <text x="460" y="435" fill="#58a6ff" font-size="10">→ col 5, 6, 7 마스크</text>
+
+    <text x="50" y="460" fill="#8b949e" font-size="10">Row[0] &amp; Mask  =  0x17 &amp; 0xE0  =  </text>
+    <text x="345" y="460" fill="#3fb950" font-size="10" font-weight="700">0x00  →  빈칸 ✓</text>
+    <text x="530" y="460" fill="#8b949e" font-size="9">(비트 AND 연산 1회)</text>
+
+    <text x="50" y="483" fill="#8b949e" font-size="10">Row[1] &amp; Mask  =  0x0C &amp; 0xE0  =  </text>
+    <text x="345" y="483" fill="#3fb950" font-size="10" font-weight="700">0x00  →  빈칸 ✓</text>
+    <text x="530" y="483" fill="#8b949e" font-size="9">(비트 AND 연산 1회)</text>
+
+    <text x="50" y="502" fill="#3fb950" font-size="11" font-weight="600">→ return true  —  비트 AND 2회로 검증 완료 (O(H), H=아이템 높이)</text>
+
+  </svg>
+</div>
+</body>
+</html>

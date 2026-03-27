@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>GAS Integration Pipeline</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0e17; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Consolas', 'Courier New', monospace; }
+  .container { width: 1020px; padding: 40px 20px; }
+  h2 { color: #00e5ff; font-size: 14px; letter-spacing: 3px; margin-bottom: 24px; font-weight: 400; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>— GAS INTEGRATION PIPELINE</h2>
+  
+  <svg width="980" height="740" viewBox="0 0 980 740" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
+    
+    <defs>
+      <marker id="ab" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/></marker>
+      <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3fb950"/></marker>
+      <marker id="ao" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#d29922"/></marker>
+      <marker id="ar" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f85149"/></marker>
+      <marker id="ap" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#bc8cff"/></marker>
+      <marker id="ac" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#00e5ff"/></marker>
+    </defs>
+
+
+    <!-- ============================================ -->
+    <!-- LAYER 1: 모든 배경 패널 먼저 그림 (가장 아래)   -->
+    <!-- ============================================ -->
+    <rect x="5" y="0" width="970" height="84" rx="6" fill="#0d1520" stroke="#30363d55"/>
+    <rect x="5" y="120" width="970" height="64" rx="6" fill="#0d1520" stroke="#30363d55"/>
+    <rect x="5" y="220" width="970" height="80" rx="6" fill="#0d1520" stroke="#30363d55"/>
+    <rect x="250" y="370" width="480" height="94" rx="6" fill="#0d1520" stroke="#30363d55"/>
+    <rect x="250" y="500" width="480" height="88" rx="6" fill="#0d1520" stroke="#30363d55"/>
+    <rect x="5" y="638" width="970" height="62" rx="6" fill="#0d1520" stroke="#30363d55"/>
+
+
+    <!-- ============================================ -->
+    <!-- LAYER 2: 모든 화살표 (배경 위, 박스 아래)       -->
+    <!-- ============================================ -->
+
+    <!-- ROW1 → ROW2 수직 화살표 (배경 패널 y=120 상단으로) -->
+    <line x1="126" y1="84" x2="126" y2="118" stroke="#58a6ff" stroke-width="1" marker-end="url(#ab)"/>
+    <line x1="358" y1="84" x2="358" y2="118" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+    <line x1="590" y1="84" x2="590" y2="118" stroke="#d29922" stroke-width="1" marker-end="url(#ao)"/>
+    <line x1="838" y1="84" x2="838" y2="118" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
+
+    <!-- ROW2 → ROW3 수직 화살표 (배경 패널 y=220 상단으로) -->
+    <line x1="126" y1="184" x2="126" y2="218" stroke="#58a6ff" stroke-width="1" marker-end="url(#ab)"/>
+    <line x1="358" y1="184" x2="358" y2="218" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+    <line x1="590" y1="184" x2="590" y2="218" stroke="#d29922" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#ao)"/>
+    <line x1="838" y1="184" x2="838" y2="218" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
+
+    <!-- ROW3 → ROW4 대각선 합류 화살표 (배경 패널 y=370 상단으로) -->
+    <line x1="126" y1="300" x2="388" y2="368" stroke="#58a6ff" stroke-width="1" marker-end="url(#ab)"/>
+    <line x1="358" y1="300" x2="408" y2="368" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+    <line x1="838" y1="300" x2="592" y2="368" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
+    <text x="490" y="335" fill="#00e5ff" font-size="9" text-anchor="middle">Modify Attribute</text>
+
+    <!-- ROW4 → ROW5 수직 화살표 (배경 패널 y=500 상단으로) -->
+    <line x1="490" y1="464" x2="490" y2="498" stroke="#00e5ff" stroke-width="1" marker-end="url(#ac)"/>
+
+    <!-- ROW5 → ROW6 대각선 화살표 (배경 패널 y=638 상단으로) -->
+    <!-- 텍스트를 선 시작점 옆 위쪽에 배치 -->
+    <text x="335" y="600" fill="#bc8cff" font-size="9">HP > 0</text>
+    <text x="610" y="600" fill="#f85149" font-size="9">HP ≤ 0</text>
+    <line x1="380" y1="605" x2="198" y2="636" stroke="#bc8cff" stroke-width="1" marker-end="url(#ap)"/>
+    <line x1="600" y1="605" x2="778" y2="636" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
+
+
+    <!-- ============================================ -->
+    <!-- LAYER 3: 모든 내부 박스 + 텍스트 (가장 위)      -->
+    <!-- ============================================ -->
+
+    <!-- === ROW 1: TRIGGER SYSTEMS === -->
+    <text x="17" y="14" fill="#58a6ff" font-size="9" letter-spacing="2" font-weight="600">TRIGGER SYSTEMS</text>
+
+    <rect x="17" y="24" width="218" height="54" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="29" y="40" fill="#58a6ff" font-size="10" font-weight="600">소비 아이템 사용</text>
+    <text x="29" y="54" fill="#8b949e" font-size="9">우클릭 → Use</text>
+    <text x="29" y="68" fill="#8b949e" font-size="9">Bandage, Medkit, WaterBottle</text>
+
+    <rect x="249" y="24" width="218" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="261" y="40" fill="#3fb950" font-size="10" font-weight="600">장비 장착 / 해제</text>
+    <text x="261" y="54" fill="#8b949e" font-size="9">우클릭 → Equip / Unequip</text>
+    <text x="261" y="68" fill="#8b949e" font-size="9">Pistol, Helmet, BodyArmor</text>
+
+    <rect x="481" y="24" width="218" height="54" rx="5" fill="#161b22" stroke="#d2992244"/>
+    <text x="493" y="40" fill="#d29922" font-size="10" font-weight="600">크래프팅</text>
+    <text x="493" y="54" fill="#8b949e" font-size="9">CRAFTING 탭 → 레시피 선택</text>
+    <text x="493" y="68" fill="#8b949e" font-size="9">재료 소비 → 결과물 생성</text>
+
+    <rect x="713" y="24" width="250" height="54" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="725" y="40" fill="#f85149" font-size="10" font-weight="600">슈팅 (Server 검증)</text>
+    <text x="725" y="54" fill="#8b949e" font-size="9">R키 조준 → 좌클릭 발사</text>
+    <text x="725" y="68" fill="#8b949e" font-size="9">Server_ConfirmHit 재검증</text>
+
+
+    <!-- === ROW 2: GAMEPLAY ABILITIES === -->
+    <text x="17" y="134" fill="#3fb950" font-size="9" letter-spacing="2" font-weight="600">GAMEPLAY ABILITIES</text>
+
+    <rect x="17" y="140" width="218" height="40" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="29" y="156" fill="#58a6ff" font-size="10" font-weight="600">GA_UseItem</text>
+    <text x="29" y="170" fill="#8b949e" font-size="9">DecrementStack → Apply GE</text>
+
+    <rect x="249" y="140" width="218" height="40" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="261" y="156" fill="#3fb950" font-size="10" font-weight="600">EquipmentComponent</text>
+    <text x="261" y="170" fill="#8b949e" font-size="9">EquipItem → Apply/Remove GE</text>
+
+    <rect x="481" y="140" width="218" height="40" rx="5" fill="#161b22" stroke="#d2992244"/>
+    <text x="493" y="156" fill="#d29922" font-size="10" font-weight="600">GA_Craft</text>
+    <text x="493" y="170" fill="#8b949e" font-size="9">ConsumeItems → Timer → AddResult</text>
+
+    <rect x="713" y="140" width="250" height="40" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="725" y="156" fill="#f85149" font-size="10" font-weight="600">GA_Fire (LocalPredicted)</text>
+    <text x="725" y="170" fill="#8b949e" font-size="9">LineTrace → Server_ConfirmHit</text>
+
+
+    <!-- === ROW 3: GAMEPLAY EFFECTS === -->
+    <text x="17" y="234" fill="#d29922" font-size="9" letter-spacing="2" font-weight="600">GAMEPLAY EFFECTS</text>
+
+    <rect x="17" y="240" width="218" height="54" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="29" y="256" fill="#58a6ff" font-size="10" font-weight="600">GE_Consumable</text>
+    <text x="29" y="270" fill="#d29922" font-size="9">Duration: Instant</text>
+    <text x="29" y="284" fill="#8b949e" font-size="9">HP +30, Hunger +20 등</text>
+
+    <rect x="249" y="240" width="218" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="261" y="256" fill="#3fb950" font-size="10" font-weight="600">GE_Equipment</text>
+    <text x="261" y="270" fill="#d29922" font-size="9">Duration: Infinite</text>
+    <text x="261" y="284" fill="#8b949e" font-size="9">MaxHP +50 등 (해제 시 Remove)</text>
+
+    <rect x="481" y="240" width="218" height="54" rx="5" fill="#161b22" stroke="#d2992244"/>
+    <text x="493" y="256" fill="#d29922" font-size="10" font-weight="600">결과물 생성</text>
+    <text x="493" y="270" fill="#8b949e" font-size="9">TryAddItemByID(ResultItemID)</text>
+    <text x="493" y="284" fill="#8b949e" font-size="9">GE 미사용 — 인벤토리 직접 추가</text>
+
+    <rect x="713" y="240" width="250" height="54" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="725" y="256" fill="#f85149" font-size="10" font-weight="600">GE_Damage</text>
+    <text x="725" y="270" fill="#d29922" font-size="9">Duration: Instant</text>
+    <text x="725" y="284" fill="#8b949e" font-size="9">Health −20</text>
+
+
+    <!-- === ROW 4: SURVIVAL ATTRIBUTE SET === -->
+    <text x="262" y="384" fill="#00e5ff" font-size="9" letter-spacing="2" font-weight="600">SURVIVAL ATTRIBUTE SET</text>
+
+    <rect x="262" y="390" width="456" height="68" rx="5" fill="#161b22" stroke="#00e5ff44"/>
+    <text x="274" y="406" fill="#00e5ff" font-size="10" font-weight="600">USurvivalAttributeSet (8속성)</text>
+    <text x="274" y="420" fill="#e6edf3" font-size="9">Health / MaxHealth    Hunger / MaxHunger</text>
+    <text x="274" y="434" fill="#e6edf3" font-size="9">Thirst / MaxThirst    Stamina / MaxStamina</text>
+    <text x="274" y="448" fill="#8b949e" font-size="9">Replicated (GAMEPLAYATTRIBUTE_REPNOTIFY)</text>
+
+
+    <!-- === ROW 5: POST-PROCESSING === -->
+    <text x="262" y="514" fill="#bc8cff" font-size="9" letter-spacing="2" font-weight="600">POST-PROCESSING</text>
+
+    <rect x="262" y="520" width="456" height="62" rx="5" fill="#161b22" stroke="#bc8cff44"/>
+    <text x="274" y="536" fill="#bc8cff" font-size="10" font-weight="600">PostGameplayEffectExecute</text>
+    <text x="274" y="550" fill="#e6edf3" font-size="9">Health → Clamp(0, MaxHealth)</text>
+    <text x="274" y="564" fill="#e6edf3" font-size="9">Hunger / Thirst / Stamina → Clamp(0, Max)</text>
+    <text x="274" y="578" fill="#f85149" font-size="9" font-weight="600">Health ≤ 0 → Character→OnDeath()</text>
+
+
+    <!-- === ROW 6: RESULT === -->
+    <text x="17" y="652" fill="#8b949e" font-size="9" letter-spacing="2" font-weight="600">RESULT</text>
+
+    <rect x="17" y="658" width="290" height="36" rx="5" fill="#161b22" stroke="#bc8cff44"/>
+    <text x="29" y="674" fill="#bc8cff" font-size="10" font-weight="600">UI 갱신 (OnRep → ViewModel)</text>
+    <text x="29" y="688" fill="#8b949e" font-size="9">SurvivalViewModel → StatEntryWidget</text>
+
+    <rect x="321" y="658" width="318" height="36" rx="5" fill="#161b22" stroke="#d2992244"/>
+    <text x="333" y="674" fill="#d29922" font-size="10" font-weight="600">ASC Replication Mode: Mixed</text>
+    <text x="333" y="688" fill="#8b949e" font-size="9">GE→Owner만, Cue→전체 전파</text>
+
+    <rect x="653" y="658" width="310" height="36" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="665" y="674" fill="#f85149" font-size="10" font-weight="600">OnDeath()</text>
+    <text x="665" y="688" fill="#8b949e" font-size="9">래그돌 → 6초 후 Respawn → 부활</text>
+
+
+    <!-- ============================================ -->
+    <!-- LEGEND y=710, h=26                            -->
+    <!-- ============================================ -->
+    <rect x="5" y="710" width="970" height="26" rx="5" fill="#161b2244" stroke="#30363d"/>
+    
+    <rect x="20" y="718" width="10" height="10" rx="2" fill="#58a6ff33" stroke="#58a6ff66"/>
+    <text x="36" y="728" fill="#8b949e" font-size="9">소비 (Instant)</text>
+
+    <rect x="155" y="718" width="10" height="10" rx="2" fill="#3fb95033" stroke="#3fb95066"/>
+    <text x="171" y="728" fill="#8b949e" font-size="9">장비 (Infinite)</text>
+
+    <rect x="290" y="718" width="10" height="10" rx="2" fill="#d2992233" stroke="#d2992266"/>
+    <text x="306" y="728" fill="#8b949e" font-size="9">크래프팅</text>
+
+    <rect x="390" y="718" width="10" height="10" rx="2" fill="#f8514933" stroke="#f8514966"/>
+    <text x="406" y="728" fill="#8b949e" font-size="9">데미지 (Instant)</text>
+
+    <rect x="530" y="718" width="10" height="10" rx="2" fill="#00e5ff33" stroke="#00e5ff66"/>
+    <text x="546" y="728" fill="#8b949e" font-size="9">AttributeSet</text>
+
+    <rect x="645" y="718" width="10" height="10" rx="2" fill="#bc8cff33" stroke="#bc8cff66"/>
+    <text x="661" y="728" fill="#8b949e" font-size="9">PostExecute</text>
+
+    <text x="780" y="728" fill="#8b949e" font-size="9">GA 3종 + GE 3종 + AttributeSet 8속성</text>
+
+  </svg>
+</div>
+</body>
+</html>

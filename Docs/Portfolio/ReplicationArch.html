@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Dedicated Server Replication Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0e17; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Consolas', 'Courier New', monospace; }
+  .container { width: 1020px; padding: 40px 20px; }
+  h2 { color: #00e5ff; font-size: 14px; letter-spacing: 3px; margin-bottom: 24px; font-weight: 400; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>— DEDICATED SERVER REPLICATION ARCHITECTURE</h2>
+  
+  <svg width="980" height="730" viewBox="0 0 980 730" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
+    
+    <defs>
+      <marker id="ab" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/></marker>
+      <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3fb950"/></marker>
+    </defs>
+
+
+    <!-- ============================================ -->
+    <!-- TOP: Server Authority 흐름                    -->
+    <!-- label y=18, box y=28, h=68, bottom=96        -->
+    <!-- ============================================ -->
+    <text x="15" y="18" fill="#8b949e" font-size="9" letter-spacing="2">SERVER AUTHORITY MODEL</text>
+
+    <rect x="15" y="28" width="240" height="68" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="27" y="44" fill="#58a6ff" font-size="10" font-weight="600">CLIENT (Autonomous Proxy)</text>
+    <text x="27" y="58" fill="#e6edf3" font-size="9">입력 수집 + UI 표시</text>
+    <text x="27" y="72" fill="#8b949e" font-size="9">Server RPC로 요청만 전달</text>
+    <text x="27" y="86" fill="#8b949e" font-size="9">게임 로직 직접 실행 금지</text>
+
+    <rect x="350" y="28" width="280" height="68" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="362" y="44" fill="#f85149" font-size="10" font-weight="600">DEDICATED SERVER (Authority)</text>
+    <text x="362" y="58" fill="#e6edf3" font-size="9">WithValidation 파라미터 검증</text>
+    <text x="362" y="72" fill="#e6edf3" font-size="9">게임 로직 실행 (유일한 실행 지점)</text>
+    <text x="362" y="86" fill="#8b949e" font-size="9">Replicated Properties로 결과 전파</text>
+
+    <rect x="725" y="28" width="240" height="68" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="737" y="44" fill="#3fb950" font-size="10" font-weight="600">CLIENT (결과 수신)</text>
+    <text x="737" y="58" fill="#e6edf3" font-size="9">OnRep 콜백으로 상태 동기화</text>
+    <text x="737" y="72" fill="#8b949e" font-size="9">ViewModel → UI 갱신</text>
+    <text x="737" y="86" fill="#8b949e" font-size="9">Multicast → 이펙트 재생</text>
+
+    <!-- 화살표: Client → Server -->
+    <text x="302" y="52" fill="#58a6ff" font-size="8" text-anchor="middle">Server RPC (Reliable)</text>
+    <line x1="255" y1="62" x2="348" y2="62" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ab)"/>
+
+    <!-- 화살표: Server → Client -->
+    <text x="677" y="52" fill="#3fb950" font-size="8" text-anchor="middle">OnRep + Multicast</text>
+    <line x1="630" y1="62" x2="723" y2="62" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ag)"/>
+
+
+    <!-- ============================================ -->
+    <!-- MID: 리플리케이션 조건 분리                     -->
+    <!-- label y=118, box y=128, h=148, bottom=276    -->
+    <!-- ============================================ -->
+    <text x="15" y="116" fill="#8b949e" font-size="9" letter-spacing="2">REPLICATION CONDITION 전략 분리</text>
+
+    <!-- COND_OwnerOnly -->
+    <rect x="15" y="126" width="460" height="158" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="27" y="142" fill="#58a6ff" font-size="10" font-weight="600">COND_OwnerOnly — 본인에게만 전파</text>
+    <text x="27" y="156" fill="#d29922" font-size="9">4인 기준 대역폭 75% 절감</text>
+
+    <rect x="30" y="168" width="130" height="40" rx="4" fill="#0a0e17" stroke="#58a6ff33"/>
+    <text x="42" y="184" fill="#58a6ff" font-size="9" font-weight="600">Inventory</text>
+    <text x="42" y="198" fill="#8b949e" font-size="8">Items + GridSlots</text>
+
+    <rect x="170" y="168" width="130" height="40" rx="4" fill="#0a0e17" stroke="#58a6ff33"/>
+    <text x="182" y="184" fill="#58a6ff" font-size="9" font-weight="600">Equipment</text>
+    <text x="182" y="198" fill="#8b949e" font-size="8">ReplicatedSlots</text>
+
+    <rect x="310" y="168" width="150" height="40" rx="4" fill="#0a0e17" stroke="#58a6ff33"/>
+    <text x="322" y="184" fill="#58a6ff" font-size="9" font-weight="600">Crafting</text>
+    <text x="322" y="198" fill="#8b949e" font-size="8">bIsCrafting + RecipeID</text>
+
+    <text x="27" y="226" fill="#8b949e" font-size="9">근거: 인벤토리/장비/크래프팅은 본인만 조회. 전파 불필요.</text>
+    <text x="27" y="240" fill="#8b949e" font-size="9">거래 필요 시 별도 Server RPC로 요청하는 구조가 효율적.</text>
+    <text x="27" y="254" fill="#d29922" font-size="9" font-weight="600">전송량: 4명(4N) → 1명(N) = 75% 절감</text>
+
+    <!-- COND_None -->
+    <rect x="505" y="126" width="460" height="158" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="517" y="142" fill="#3fb950" font-size="10" font-weight="600">COND_None — 모든 클라이언트에 전파</text>
+    <text x="517" y="156" fill="#8b949e" font-size="9">전체 가시성 필요 데이터</text>
+
+    <rect x="520" y="168" width="160" height="40" rx="4" fill="#0a0e17" stroke="#3fb95033"/>
+    <text x="532" y="184" fill="#3fb950" font-size="9" font-weight="600">WorldItem</text>
+    <text x="532" y="198" fill="#8b949e" font-size="8">ItemDataID + StackCount</text>
+
+    <rect x="690" y="168" width="160" height="40" rx="4" fill="#0a0e17" stroke="#3fb95033"/>
+    <text x="702" y="184" fill="#3fb950" font-size="9" font-weight="600">GAS (Mixed)</text>
+    <text x="702" y="198" fill="#8b949e" font-size="8">GE→Owner, Cue→전체</text>
+
+    <text x="517" y="226" fill="#8b949e" font-size="9">근거: 바닥 아이템은 모든 플레이어가 봐야 함 (선착순 픽업).</text>
+    <text x="517" y="240" fill="#8b949e" font-size="9">GAS Mixed: GE는 Owner만, GameplayCue는 전체 전파.</text>
+
+    <rect x="520" y="254" width="130" height="14" rx="3" fill="#d2992222" stroke="#d2992244"/>
+    <text x="585" y="264" fill="#d29922" font-size="8" text-anchor="middle">Reliable (사망)</text>
+    <rect x="660" y="254" width="130" height="14" rx="3" fill="#3fb95022" stroke="#3fb95044"/>
+    <text x="725" y="264" fill="#3fb950" font-size="8" text-anchor="middle">Unreliable (이펙트)</text>
+
+
+    <!-- ============================================ -->
+    <!-- MID: Server RPC 목록                          -->
+    <!-- label y=298, table y=308                     -->
+    <!-- ============================================ -->
+    <text x="15" y="304" fill="#8b949e" font-size="9" letter-spacing="2">SERVER RPC — 14개 전수 WithValidation</text>
+
+    <!-- 테이블 헤더 -->
+    <rect x="15" y="314" width="950" height="22" rx="3" fill="#161b22" stroke="#30363d"/>
+    <text x="27" y="329" fill="#00e5ff" font-size="9" font-weight="600">RPC 함수명</text>
+    <text x="340" y="329" fill="#00e5ff" font-size="9" font-weight="600">Component</text>
+    <text x="530" y="329" fill="#00e5ff" font-size="9" font-weight="600">용도</text>
+    <text x="830" y="329" fill="#00e5ff" font-size="9" font-weight="600">Validate</text>
+
+    <!-- Inventory RPCs -->
+    <rect x="15" y="338" width="950" height="16" rx="0" fill="#58a6ff08"/>
+    <text x="27" y="350" fill="#58a6ff" font-size="8">Server_TryAddItemByID</text>
+    <text x="340" y="350" fill="#8b949e" font-size="8">Inventory</text>
+    <text x="530" y="350" fill="#8b949e" font-size="8">아이템 추가</text>
+    <text x="830" y="350" fill="#3fb950" font-size="8">!IsNone &amp;&amp; Count>0</text>
+
+    <rect x="15" y="356" width="950" height="16" rx="0" fill="transparent"/>
+    <text x="27" y="368" fill="#58a6ff" font-size="8">Server_RemoveItem</text>
+    <text x="340" y="368" fill="#8b949e" font-size="8">Inventory</text>
+    <text x="530" y="368" fill="#8b949e" font-size="8">아이템 제거</text>
+    <text x="830" y="368" fill="#3fb950" font-size="8">ID Valid</text>
+
+    <rect x="15" y="374" width="950" height="16" rx="0" fill="#58a6ff08"/>
+    <text x="27" y="386" fill="#58a6ff" font-size="8">Server_MoveItem</text>
+    <text x="340" y="386" fill="#8b949e" font-size="8">Inventory</text>
+    <text x="530" y="386" fill="#8b949e" font-size="8">그리드 내 이동</text>
+    <text x="830" y="386" fill="#3fb950" font-size="8">ID Valid + Index</text>
+
+    <rect x="15" y="392" width="950" height="16" rx="0" fill="transparent"/>
+    <text x="27" y="404" fill="#58a6ff" font-size="8">Server_DropItem</text>
+    <text x="340" y="404" fill="#8b949e" font-size="8">Inventory</text>
+    <text x="530" y="404" fill="#8b949e" font-size="8">월드에 드롭</text>
+    <text x="830" y="404" fill="#3fb950" font-size="8">ID Valid</text>
+
+    <!-- Equipment RPCs -->
+    <rect x="15" y="410" width="950" height="16" rx="0" fill="#3fb95008"/>
+    <text x="27" y="422" fill="#3fb950" font-size="8">Server_EquipFromInventory</text>
+    <text x="340" y="422" fill="#8b949e" font-size="8">Equipment</text>
+    <text x="530" y="422" fill="#8b949e" font-size="8">인벤→장비 (스왑 포함)</text>
+    <text x="830" y="422" fill="#3fb950" font-size="8">ID Valid</text>
+
+    <rect x="15" y="428" width="950" height="16" rx="0" fill="transparent"/>
+    <text x="27" y="440" fill="#3fb950" font-size="8">Server_UnequipToInventory</text>
+    <text x="340" y="440" fill="#8b949e" font-size="8">Equipment</text>
+    <text x="530" y="440" fill="#8b949e" font-size="8">장비→인벤</text>
+    <text x="830" y="440" fill="#3fb950" font-size="8">Slot Valid</text>
+
+    <rect x="15" y="446" width="950" height="16" rx="0" fill="#3fb95008"/>
+    <text x="27" y="458" fill="#3fb950" font-size="8">Server_DropEquippedItem</text>
+    <text x="340" y="458" fill="#8b949e" font-size="8">Equipment</text>
+    <text x="530" y="458" fill="#8b949e" font-size="8">장비 해제 + 월드 드롭</text>
+    <text x="830" y="458" fill="#3fb950" font-size="8">Slot Valid</text>
+
+    <!-- Crafting RPCs -->
+    <rect x="15" y="464" width="950" height="16" rx="0" fill="#d2992208"/>
+    <text x="27" y="476" fill="#d29922" font-size="8">Server_StartCraft</text>
+    <text x="340" y="476" fill="#8b949e" font-size="8">Crafting</text>
+    <text x="530" y="476" fill="#8b949e" font-size="8">크래프팅 시작</text>
+    <text x="830" y="476" fill="#3fb950" font-size="8">RecipeID Valid</text>
+
+    <rect x="15" y="482" width="950" height="16" rx="0" fill="transparent"/>
+    <text x="27" y="494" fill="#d29922" font-size="8">Server_CancelCraft</text>
+    <text x="340" y="494" fill="#8b949e" font-size="8">Crafting</text>
+    <text x="530" y="494" fill="#8b949e" font-size="8">크래프팅 취소</text>
+    <text x="830" y="494" fill="#3fb950" font-size="8">true</text>
+
+    <!-- Character RPCs -->
+    <rect x="15" y="500" width="950" height="16" rx="0" fill="#f8514908"/>
+    <text x="27" y="512" fill="#f85149" font-size="8">Server_RequestPickupItem</text>
+    <text x="340" y="512" fill="#8b949e" font-size="8">Character</text>
+    <text x="530" y="512" fill="#8b949e" font-size="8">월드 아이템 픽업</text>
+    <text x="830" y="512" fill="#3fb950" font-size="8">Actor != null</text>
+
+    <rect x="15" y="518" width="950" height="16" rx="0" fill="transparent"/>
+    <text x="27" y="530" fill="#f85149" font-size="8">Server_ConfirmHit</text>
+    <text x="340" y="530" fill="#8b949e" font-size="8">Character</text>
+    <text x="530" y="530" fill="#8b949e" font-size="8">슈팅 히트 검증</text>
+    <text x="830" y="530" fill="#3fb950" font-size="8">HitActor != null</text>
+
+    <line x1="15" y1="536" x2="965" y2="536" stroke="#30363d" stroke-width="1"/>
+
+
+    <!-- ============================================ -->
+    <!-- BOTTOM: 치트 방어 계층                         -->
+    <!-- label y=550, boxes y=560                     -->
+    <!-- ============================================ -->
+    <text x="15" y="556" fill="#8b949e" font-size="9" letter-spacing="2">CHEAT DEFENSE LAYERS</text>
+
+    <rect x="15" y="566" width="950" height="30" rx="4" fill="#161b22" stroke="#3fb95044"/>
+    <text x="27" y="586" fill="#3fb950" font-size="9" font-weight="600">1차 — WithValidation</text>
+    <text x="320" y="586" fill="#8b949e" font-size="9">null 파라미터, 유효하지 않은 요청 → 즉시 킥</text>
+    <text x="730" y="586" fill="#3fb950" font-size="9">14개 RPC 전수 적용</text>
+
+    <rect x="15" y="604" width="950" height="30" rx="4" fill="#161b22" stroke="#d2992244"/>
+    <text x="27" y="624" fill="#d29922" font-size="9" font-weight="600">2차 — 서버 라인 트레이스 재검증</text>
+    <text x="320" y="624" fill="#8b949e" font-size="9">에임봇, 월핵 (클라이언트 조작) 차단</text>
+    <text x="730" y="624" fill="#d29922" font-size="9">Server_ConfirmHit에 적용</text>
+
+    <rect x="15" y="642" width="950" height="30" rx="4" fill="#161b22" stroke="#f8514944"/>
+    <text x="27" y="662" fill="#f85149" font-size="9" font-weight="600">3차 — HasAuthority 가드</text>
+    <text x="320" y="662" fill="#8b949e" font-size="9">클라이언트 직접 데이터 변경 시도 차단</text>
+    <text x="730" y="662" fill="#f85149" font-size="9">모든 게임 로직 함수에 적용</text>
+
+
+    <!-- ============================================ -->
+    <!-- LEGEND (y=680)                                -->
+    <!-- ============================================ -->
+    <rect x="15" y="691" width="950" height="30" rx="5" fill="#161b2244" stroke="#30363d"/>
+    
+    <rect x="30" y="701" width="10" height="10" rx="2" fill="#58a6ff33" stroke="#58a6ff66"/>
+    <text x="46" y="711" fill="#8b949e" font-size="9">COND_OwnerOnly (−75%)</text>
+
+    <rect x="230" y="701" width="10" height="10" rx="2" fill="#3fb95033" stroke="#3fb95066"/>
+    <text x="246" y="711" fill="#8b949e" font-size="9">COND_None (전체)</text>
+
+    <rect x="400" y="701" width="10" height="10" rx="2" fill="#3fb95033" stroke="#3fb95066"/>
+    <text x="416" y="711" fill="#8b949e" font-size="9">WithValidation (전수)</text>
+
+    <rect x="570" y="701" width="10" height="10" rx="2" fill="#d2992233" stroke="#d2992266"/>
+    <text x="586" y="711" fill="#8b949e" font-size="9">Reliable (사망/리스폰)</text>
+
+    <rect x="740" y="701" width="10" height="10" rx="2" fill="#f8514933" stroke="#f8514966"/>
+    <text x="756" y="711" fill="#8b949e" font-size="9">Unreliable (이펙트)</text>
+
+    <text x="890" y="711" fill="#8b949e" font-size="9">RPC 14개</text>
+
+  </svg>
+</div>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Shooting Network Flow V3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0e17; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Consolas', 'Courier New', monospace; }
+  .container { width: 1020px; padding: 40px 20px; }
+  h2 { color: #00e5ff; font-size: 14px; letter-spacing: 3px; margin-bottom: 24px; font-weight: 400; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>— SHOOTING NETWORK FLOW</h2>
+  
+  <svg width="980" height="830" viewBox="0 0 980 830" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
+    
+    <defs>
+      <marker id="ab" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/></marker>
+      <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3fb950"/></marker>
+      <marker id="ao" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#d29922"/></marker>
+      <marker id="ap" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#bc8cff"/></marker>
+    </defs>
+    
+    <!-- ===== Column headers ===== -->
+    <text x="130" y="20" fill="#58a6ff" font-size="11" letter-spacing="2" text-anchor="middle" font-weight="600">CLIENT (SHOOTER)</text>
+    <line x1="15" y1="30" x2="245" y2="30" stroke="#58a6ff33" stroke-width="2"/>
+    <text x="500" y="20" fill="#f85149" font-size="11" letter-spacing="2" text-anchor="middle" font-weight="600">DEDICATED SERVER</text>
+    <line x1="370" y1="30" x2="630" y2="30" stroke="#f8514933" stroke-width="2"/>
+    <text x="870" y="20" fill="#3fb950" font-size="11" letter-spacing="2" text-anchor="middle" font-weight="600">CLIENT (TARGET)</text>
+    <line x1="770" y1="30" x2="970" y2="30" stroke="#3fb95033" stroke-width="2"/>
+    
+    <!-- Vertical timeline -->
+    <line x1="130" y1="40" x2="130" y2="785" stroke="#ffffff10" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="500" y1="40" x2="500" y2="785" stroke="#ffffff10" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="870" y1="40" x2="870" y2="785" stroke="#ffffff10" stroke-width="1" stroke-dasharray="4,4"/>
+
+
+    <!-- ============================================ -->
+    <!-- STEP 01 (4줄, h=68) y=50                     -->
+    <!-- pad: left=12, top=16, line=14, bottom=10     -->
+    <!-- ============================================ -->
+    <rect x="15" y="50" width="230" height="68" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="27" y="66" fill="#8b949e" font-size="9" letter-spacing="1">STEP 01 — OnFirePressed</text>
+    <text x="27" y="80" fill="#e6edf3" font-size="11" font-weight="600">R키 조준 → 좌클릭 발사</text>
+    <text x="27" y="94" fill="#d29922" font-size="10">GA_Fire (LocalPredicted)</text>
+    <text x="27" y="108" fill="#8b949e" font-size="9">카메라 기준 라인 트레이스 (ECC_Pawn)</text>
+
+
+    <!-- ===== Arrow: Client → Server ===== -->
+    <text x="262" y="136" fill="#58a6ff" font-size="9">Server_ConfirmHit</text>
+    <text x="262" y="148" fill="#8b949e" font-size="8">Server, Reliable, WithValidation</text>
+    <line x1="245" y1="156" x2="368" y2="178" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ab)"/>
+
+
+    <!-- ============================================ -->
+    <!-- STEP 02 (4줄, h=68) y=180                    -->
+    <!-- ============================================ -->
+    <rect x="370" y="180" width="260" height="68" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="382" y="196" fill="#8b949e" font-size="9" letter-spacing="1">STEP 02 — SERVER VERIFY</text>
+    <text x="382" y="210" fill="#e6edf3" font-size="11" font-weight="600">서버 라인 트레이스 재실행</text>
+    <text x="382" y="224" fill="#c9d1d9" font-size="10">동일 카메라 위치에서 ECC_Pawn 트레이스</text>
+    <text x="382" y="238" fill="#c9d1d9" font-size="10">VerifyHit.GetActor() != HitActor →</text>
+    <rect x="586" y="229" width="36" height="14" rx="3" fill="#f8514922" stroke="#f8514944"/>
+    <text x="604" y="239" fill="#f85149" font-size="9" text-anchor="middle" font-weight="600">거부</text>
+
+
+    <!-- ============================================ -->
+    <!-- STEP 03 (3줄, h=54) y=262                    -->
+    <!-- ============================================ -->
+    <rect x="370" y="262" width="260" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="382" y="278" fill="#8b949e" font-size="9" letter-spacing="1">STEP 03 — DAMAGE (GAS Pipeline)</text>
+    <text x="382" y="292" fill="#e6edf3" font-size="11" font-weight="600">GE_Damage → Target ASC</text>
+    <text x="382" y="306" fill="#d29922" font-size="10">ApplyGameplayEffectSpecToTarget(−20 HP)</text>
+
+
+    <!-- ===== HitReact arrow + box (y=330) ===== -->
+    <text x="637" y="332" fill="#3fb950" font-size="9">Multicast_PlayHitReact</text>
+    <text x="637" y="344" fill="#8b949e" font-size="8">Unreliable</text>
+    <line x1="632" y1="352" x2="768" y2="358" stroke="#3fb950" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#ag)"/>
+
+    <!-- Target: HitReact (3줄, h=54) y=330 -->
+    <rect x="770" y="330" width="200" height="54" rx="5" fill="#161b22" stroke="#3fb95033"/>
+    <text x="782" y="346" fill="#3fb950" font-size="10" font-weight="600">피격 Overlay 플래시</text>
+    <text x="782" y="360" fill="#d29922" font-size="10">SetOverlayMaterial(M_HitOverlay)</text>
+    <text x="782" y="374" fill="#8b949e" font-size="9">0.2초 후 Material 해제</text>
+
+
+    <!-- ===== OnRep arrow + StatsBar box (y=400) ===== -->
+    <text x="637" y="402" fill="#bc8cff" font-size="9">OnRep (GAS Mixed)</text>
+    <text x="637" y="414" fill="#8b949e" font-size="8">GE → Owner Client만 전파</text>
+    <line x1="632" y1="422" x2="768" y2="428" stroke="#bc8cff" stroke-width="1" marker-end="url(#ap)"/>
+
+    <!-- Target: StatsBar (2줄, h=40) y=400 -->
+    <rect x="770" y="400" width="200" height="40" rx="5" fill="#161b22" stroke="#bc8cff33"/>
+    <text x="782" y="416" fill="#bc8cff" font-size="10" font-weight="600">StatsBar HP 바 감소</text>
+    <text x="782" y="430" fill="#8b949e" font-size="9">SurvivalViewModel → StatEntry</text>
+
+
+    <!-- ============================================ -->
+    <!-- STEP 04 (2줄, h=40) y=460                    -->
+    <!-- ============================================ -->
+    <rect x="370" y="460" width="260" height="40" rx="5" fill="#161b22" stroke="#d2992244"/>
+    <text x="382" y="476" fill="#8b949e" font-size="9" letter-spacing="1">STEP 04 — PostGameplayEffectExecute</text>
+    <text x="382" y="490" fill="#e6edf3" font-size="11" font-weight="600">HP ≤ 0 → OnDeath()</text>
+
+
+    <!-- ===== Multicast_OnDeath arrows (y=515) ===== -->
+    <text x="500" y="516" fill="#d29922" font-size="9" text-anchor="middle">Multicast_OnDeath</text>
+    <text x="500" y="528" fill="#8b949e" font-size="8" text-anchor="middle">NetMulticast, Reliable — 즉시</text>
+    <line x1="370" y1="536" x2="232" y2="548" stroke="#d29922" stroke-width="1.5" marker-end="url(#ao)"/>
+    <line x1="630" y1="536" x2="768" y2="548" stroke="#d29922" stroke-width="1.5" marker-end="url(#ao)"/>
+
+    <!-- Shooter: death (2줄, h=40) y=550 -->
+    <rect x="15" y="550" width="230" height="40" rx="5" fill="#161b22" stroke="#d2992233"/>
+    <text x="27" y="566" fill="#d29922" font-size="10">래그돌 표시</text>
+    <text x="27" y="580" fill="#8b949e" font-size="9">상대 사망 확인</text>
+
+    <!-- Target: death (3줄, h=54) y=550 -->
+    <rect x="770" y="550" width="200" height="54" rx="5" fill="#161b22" stroke="#d2992233"/>
+    <text x="782" y="566" fill="#d29922" font-size="10" font-weight="600">래그돌 + 입력 차단</text>
+    <text x="782" y="580" fill="#8b949e" font-size="9">SimulatePhysics(true)</text>
+    <text x="782" y="594" fill="#8b949e" font-size="9">DisableMovement + DisableInput</text>
+
+
+    <!-- ============================================ -->
+    <!-- STEP 05 (2줄, h=40) y=625                    -->
+    <!-- ============================================ -->
+    <rect x="370" y="625" width="260" height="40" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="382" y="641" fill="#8b949e" font-size="9" letter-spacing="1">STEP 05 — RESPAWN (6초 후)</text>
+    <text x="382" y="655" fill="#e6edf3" font-size="11" font-weight="600">HP 회복 → 스폰 지점 텔레포트</text>
+
+
+    <!-- ===== Multicast_Respawn arrows (y=680) ===== -->
+    <text x="500" y="681" fill="#3fb950" font-size="9" text-anchor="middle">Multicast_Respawn</text>
+    <text x="500" y="693" fill="#8b949e" font-size="8" text-anchor="middle">NetMulticast, Reliable</text>
+    <line x1="370" y1="701" x2="232" y2="711" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ag)"/>
+    <line x1="630" y1="701" x2="768" y2="711" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ag)"/>
+
+    <!-- Shooter: respawn (2줄, h=40) y=713 -->
+    <rect x="15" y="713" width="230" height="40" rx="5" fill="#161b22" stroke="#3fb95033"/>
+    <text x="27" y="729" fill="#3fb950" font-size="10">래그돌 해제 + 캐릭터 복구</text>
+    <text x="27" y="743" fill="#8b949e" font-size="9">상대 부활 확인</text>
+
+    <!-- Target: respawn (3줄, h=54) y=713 -->
+    <rect x="770" y="713" width="200" height="54" rx="5" fill="#161b22" stroke="#3fb95033"/>
+    <text x="782" y="729" fill="#3fb950" font-size="10" font-weight="600">HP 회복 + 스폰 지점 이동</text>
+    <text x="782" y="743" fill="#8b949e" font-size="9">래그돌 해제 + EnableInput</text>
+    <text x="782" y="757" fill="#8b949e" font-size="9">1초 후 SetActorHidden(false)</text>
+
+
+    <!-- ============================================ -->
+    <!-- LEGEND (h=30) y=785                          -->
+    <!-- 선 y=800, 텍스트 y=804 — 수직 정렬           -->
+    <!-- ============================================ -->
+    <rect x="15" y="785" width="950" height="30" rx="5" fill="#161b2244" stroke="#30363d"/>
+    
+    <line x1="30" y1="800" x2="54" y2="800" stroke="#58a6ff" stroke-width="2"/>
+    <text x="60" y="804" fill="#8b949e" font-size="9">Server RPC</text>
+
+    <line x1="175" y1="800" x2="199" y2="800" stroke="#3fb950" stroke-width="2" stroke-dasharray="4,2"/>
+    <text x="205" y="804" fill="#8b949e" font-size="9">Multicast (Unreliable)</text>
+
+    <line x1="380" y1="800" x2="404" y2="800" stroke="#d29922" stroke-width="2"/>
+    <text x="410" y="804" fill="#8b949e" font-size="9">Multicast (Reliable)</text>
+
+    <line x1="575" y1="800" x2="599" y2="800" stroke="#bc8cff" stroke-width="2"/>
+    <text x="605" y="804" fill="#8b949e" font-size="9">OnRep (GAS Mixed)</text>
+
+    <rect x="775" y="794" width="36" height="14" rx="3" fill="#f8514922" stroke="#f8514944"/>
+    <text x="793" y="804" fill="#f85149" font-size="9" text-anchor="middle" font-weight="600">거부</text>
+    <text x="817" y="804" fill="#8b949e" font-size="9">치트 방지</text>
+
+  </svg>
+</div>
+</body>
+</html>
