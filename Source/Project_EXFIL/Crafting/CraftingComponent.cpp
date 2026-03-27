@@ -92,7 +92,7 @@ bool UCraftingComponent::CanCraft(FName RecipeID) const
 
     for (const FCraftingIngredient& Ing : Recipe->Ingredients)
     {
-        if (InvComp->GetItemCountByID(Ing.ItemDataID) < Ing.RequiredCount)
+        if (InvComp->GetItemCountByID_Cached(Ing.ItemDataID) < Ing.RequiredCount)
         {
             return false;
         }

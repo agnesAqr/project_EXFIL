@@ -53,6 +53,7 @@ AWorldItem::AWorldItem()
     ItemNameText->SetWorldSize(ItemNameTextSize);
     ItemNameText->SetTextRenderColor(FColor::Yellow);
     ItemNameText->SetVisibility(false);
+
 }
 
 void AWorldItem::GetLifetimeReplicatedProps(

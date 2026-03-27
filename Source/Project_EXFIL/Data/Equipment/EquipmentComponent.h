@@ -110,6 +110,12 @@ private:
     /** 슬롯 초기화 */
     void InitializeSlots();
 
+    /** EquipmentSlotTag → 후보 슬롯 매핑 초기화 */
+    void InitializeSlotMapping();
+
+    /** 태그→슬롯 데이터 매핑 테이블 */
+    TMap<FName, TArray<EEquipmentSlot>> SlotTagToCandidates;
+
     /** TArray에서 슬롯 검색 헬퍼 */
     FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType);
     const FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType) const;

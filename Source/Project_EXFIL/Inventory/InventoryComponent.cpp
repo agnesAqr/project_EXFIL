@@ -28,8 +28,7 @@ void UInventoryComponent::BeginPlay()
 
 // ========== Replication ==========
 
-void UInventoryComponent::GetLifetimeReplicatedProps(
-	TArray<FLifetimeProperty>& OutLifetimeProps) const
+void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
@@ -41,13 +40,11 @@ void UInventoryComponent::GetLifetimeReplicatedProps(
 
 void UInventoryComponent::OnRep_Items()
 {
-	OnInventoryUpdated.Broadcast();
-}
-
-void UInventoryComponent::OnRep_GridHeight()
-{
-	OnGridExpanded.Broadcast(GridHeight);
-	OnInventoryUpdated.Broadcast();
+	// 클라이언트: 전체 갱신 (서버 DirtySlotIndices는 리플리케이트되지 않음)
+	RebuildItemIndexMap();
+	RebuildRowBitmap();
+	MarkAllSlotsDirty();
+	BroadcastDirtySlots();
 }
 
 // ========== Server RPCs ==========
@@ -180,6 +177,36 @@ void UInventoryComponent::Server_DropItem_Implementation(FGuid ItemInstanceID)
 	}
 }
 
+// ========== Dirty Flag ==========
+
+void UInventoryComponent::MarkSlotsDirty(FIntPoint Position, FItemSize Size)
+{
+	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; ++Y)
+	{
+		for (int32 X = Position.X; X < Position.X + Size.Width; ++X)
+		{
+			DirtySlotIndices.Add(Y * GridWidth + X);
+		}
+	}
+}
+
+void UInventoryComponent::MarkAllSlotsDirty()
+{
+	const int32 TotalSlots = GridWidth * GridHeight;
+	for (int32 i = 0; i < TotalSlots; ++i)
+	{
+		DirtySlotIndices.Add(i);
+	}
+}
+
+void UInventoryComponent::BroadcastDirtySlots()
+{
+	RebuildItemIndexMap();
+	RebuildItemCountCache();
+	OnInventoryUpdated.Broadcast(DirtySlotIndices);
+	DirtySlotIndices.Empty();
+}
+
 // ========== 초기화 ==========
 
 void UInventoryComponent::InitializeGrid()
@@ -198,44 +225,11 @@ void UInventoryComponent::InitializeGrid()
 	}
 
 	Items.Empty();
+	RebuildItemCountCache();
+	RebuildRowBitmap();
 
 	UE_LOG(LogProject_EXFIL, Log, TEXT("Inventory grid initialized: %dx%d (%d slots)"),
 	       GridWidth, GridHeight, GridSlots.Num());
-}
-
-// ========== 그리드 동적 확장 ==========
-
-bool UInventoryComponent::ExpandGridForItem(FItemSize Size)
-{
-	// 아이템 높이만큼 행 추가 (최소 확장)
-	const int32 RowsNeeded = Size.Height;
-	const int32 NewHeight = GridHeight + RowsNeeded;
-
-	if (NewHeight > MaxGridHeight)
-	{
-		UE_LOG(LogProject_EXFIL, Warning,
-		       TEXT("ExpandGridForItem: MaxGridHeight(%d) 초과 — 확장 불가"), MaxGridHeight);
-		return false;
-	}
-
-	// 새 행의 슬롯을 GridSlots 끝에 추가
-	const int32 OldSlotCount = GridSlots.Num();
-	const int32 NewSlotCount = NewHeight * GridWidth;
-	GridSlots.SetNum(NewSlotCount);
-
-	for (int32 i = OldSlotCount; i < NewSlotCount; ++i)
-	{
-		GridSlots[i].Clear();
-	}
-
-	GridHeight = NewHeight;
-
-	UE_LOG(LogProject_EXFIL, Log,
-	       TEXT("ExpandGridForItem: Grid expanded to %dx%d (+%d rows)"),
-	       GridWidth, GridHeight, RowsNeeded);
-
-	OnGridExpanded.Broadcast(GridHeight);
-	return true;
 }
 
 // ========== 핵심 API ==========
@@ -253,19 +247,7 @@ bool UInventoryComponent::TryAddItem(FName ItemDataID, FItemSize Size,
 	FIntPoint FoundPosition;
 	if (!FindFirstAvailableSlot(Size, FoundPosition))
 	{
-		// 빈 슬롯 없음 → 그리드 확장 시도
-		if (!ExpandGridForItem(Size))
-		{
-			UE_LOG(LogProject_EXFIL, Warning, TEXT("TryAddItem: No available slot for item '%s' (Size: %dx%d)"),
-			       *ItemDataID.ToString(), Size.Width, Size.Height);
-			return false;
-		}
-
-		// 확장 후 재탐색
-		if (!FindFirstAvailableSlot(Size, FoundPosition))
-		{
-			return false;
-		}
+		return false;
 	}
 
 	return TryAddItemAt(ItemDataID, Size, FoundPosition, false, StackCount, MaxStack);
@@ -327,6 +309,9 @@ bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
 			Existing.StackCount += ToMerge;
 			Remaining -= ToMerge;
 
+			// 병합된 슬롯 dirty 마킹
+			MarkSlotsDirty(Existing.RootPosition, Existing.GetEffectiveSize());
+
 			UE_LOG(LogProject_EXFIL, Log,
 			       TEXT("TryAddItemByID: Merged %d into existing stack of '%s' (now %d/%d)"),
 			       ToMerge, *ItemDataID.ToString(), Existing.StackCount, Existing.MaxStackCount);
@@ -335,7 +320,7 @@ bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
 		if (Remaining <= 0)
 		{
 			// 전량 기존 스택에 병합 완료
-			OnInventoryUpdated.Broadcast();
+			BroadcastDirtySlots();
 			return true;
 		}
 	}
@@ -386,8 +371,9 @@ bool UInventoryComponent::TryAddItemAt(FName ItemDataID, FItemSize Size,
 	       bRotated ? TEXT("Yes") : TEXT("No"));
 
 	// 6. 델리게이트 브로드캐스트
+	MarkSlotsDirty(Position, EffectiveSize);
 	OnItemAdded.Broadcast(NewItem);
-	OnInventoryUpdated.Broadcast();
+	BroadcastDirtySlots();
 
 	return true;
 }
@@ -409,6 +395,9 @@ bool UInventoryComponent::RemoveItem(const FGuid& InstanceID)
 		return false;
 	}
 
+	// dirty 마킹 (해제 전 위치 캡처)
+	MarkSlotsDirty(Items[Index].RootPosition, Items[Index].GetEffectiveSize());
+
 	// 슬롯 해제
 	FreeSlots(Items[Index]);
 
@@ -419,7 +408,7 @@ bool UInventoryComponent::RemoveItem(const FGuid& InstanceID)
 
 	// 델리게이트 브로드캐스트
 	OnItemRemoved.Broadcast(InstanceID);
-	OnInventoryUpdated.Broadcast();
+	BroadcastDirtySlots();
 
 	return true;
 }
@@ -480,8 +469,10 @@ bool UInventoryComponent::MoveItem(const FGuid& InstanceID, FIntPoint NewPositio
 	       OldPosition.X, OldPosition.Y,
 	       NewPosition.X, NewPosition.Y);
 
-	// 델리게이트 브로드캐스트
-	OnInventoryUpdated.Broadcast();
+	// 이전 위치 + 새 위치 모두 dirty
+	MarkSlotsDirty(OldPosition, OldEffectiveSize);
+	MarkSlotsDirty(NewPosition, NewEffectiveSize);
+	BroadcastDirtySlots();
 
 	return true;
 }
@@ -496,18 +487,29 @@ bool UInventoryComponent::CanPlaceItemAt(FIntPoint Position, FItemSize Size) con
 bool UInventoryComponent::FindFirstAvailableSlot(FItemSize Size,
                                                   FIntPoint& OutPosition) const
 {
-	for (int32 Y = 0; Y <= GridHeight - Size.Height; Y++)
+	const int32 W = Size.Width;
+	const int32 H = Size.Height;
+	const uint16 BaseMask = static_cast<uint16>((1 << W) - 1);
+
+	for (int32 Y = 0; Y <= GridHeight - H; ++Y)
 	{
-		for (int32 X = 0; X <= GridWidth - Size.Width; X++)
+		// H개 행 OR 합산 — 하나라도 점유된 열은 1
+		uint16 Merged = 0;
+		for (int32 DY = 0; DY < H; ++DY)
 		{
-			if (AreSlotsFree(FIntPoint(X, Y), Size))
+			Merged |= RowBitmap[Y + DY];
+		}
+
+		// W비트 슬라이딩 마스크로 빈칸 탐색
+		for (int32 X = 0; X <= GridWidth - W; ++X)
+		{
+			if ((Merged & static_cast<uint16>(BaseMask << X)) == 0)
 			{
 				OutPosition = FIntPoint(X, Y);
 				return true;
 			}
 		}
 	}
-
 	return false;
 }
 
@@ -616,6 +618,7 @@ bool UInventoryComponent::ConsumeItemByID(FName ItemDataID, int32 Count)
 		else
 		{
 			Items[i].StackCount -= Remaining;
+			MarkSlotsDirty(Items[i].RootPosition, Items[i].GetEffectiveSize());
 			Remaining = 0;
 		}
 	}
@@ -624,13 +627,14 @@ bool UInventoryComponent::ConsumeItemByID(FName ItemDataID, int32 Count)
 	for (int32 i = IndicesToRemove.Num() - 1; i >= 0; --i)
 	{
 		const int32 RemoveIdx = IndicesToRemove[i];
+		MarkSlotsDirty(Items[RemoveIdx].RootPosition, Items[RemoveIdx].GetEffectiveSize());
 		FreeSlots(Items[RemoveIdx]);
 		const FGuid RemovedID = Items[RemoveIdx].InstanceID;
 		Items.RemoveAt(RemoveIdx);
 		OnItemRemoved.Broadcast(RemovedID);
 	}
 
-	OnInventoryUpdated.Broadcast();
+	BroadcastDirtySlots();
 
 	UE_LOG(LogProject_EXFIL, Log,
 	       TEXT("ConsumeItemByID: '%s' x%d consumed"), *ItemDataID.ToString(), Count);
@@ -648,6 +652,62 @@ int32 UInventoryComponent::GetItemCountByID(FName ItemDataID) const
 		}
 	}
 	return Total;
+}
+
+int32 UInventoryComponent::GetItemCountByID_Cached(FName ItemDataID) const
+{
+	const int32* Count = ItemCountCache.Find(ItemDataID);
+	return Count ? *Count : 0;
+}
+
+void UInventoryComponent::RebuildItemCountCache()
+{
+	ItemCountCache.Empty();
+	for (const FInventoryItemInstance& Item : Items)
+	{
+		ItemCountCache.FindOrAdd(Item.ItemDataID) += Item.StackCount;
+	}
+}
+
+void UInventoryComponent::RebuildItemIndexMap()
+{
+	ItemIndexMap.Empty(Items.Num());
+	for (int32 i = 0; i < Items.Num(); ++i)
+	{
+		ItemIndexMap.Add(Items[i].InstanceID, i);
+	}
+}
+
+// ========== Bitmap 기반 그리드 탐색 ==========
+
+void UInventoryComponent::RebuildRowBitmap()
+{
+	RowBitmap.SetNumZeroed(GridHeight);
+	for (int32 Y = 0; Y < GridHeight; ++Y)
+	{
+		uint16 Mask = 0;
+		for (int32 X = 0; X < GridWidth; ++X)
+		{
+			const int32 Index = Y * GridWidth + X;
+			if (!GridSlots[Index].IsEmpty())
+			{
+				Mask |= (1 << X);
+			}
+		}
+		RowBitmap[Y] = Mask;
+	}
+}
+
+void UInventoryComponent::SetBit(int32 Col, int32 Row, bool bOccupied)
+{
+	if (bOccupied)
+	{
+		RowBitmap[Row] |= (1 << Col);
+	}
+	else
+	{
+		RowBitmap[Row] &= ~(1 << Col);
+	}
 }
 
 // ========== 스택 조작 ==========
@@ -669,7 +729,8 @@ int32 UInventoryComponent::DecrementStack(const FGuid& InstanceID)
 	}
 
 	// 스택만 감소 — 그리드 점유 유지, 리플리케이션 트리거
-	OnInventoryUpdated.Broadcast();
+	MarkSlotsDirty(Item->RootPosition, Item->GetEffectiveSize());
+	BroadcastDirtySlots();
 
 	UE_LOG(LogProject_EXFIL, Log, TEXT("DecrementStack: '%s' now %d"),
 	       *Item->ItemDataID.ToString(), Item->StackCount);
@@ -727,30 +788,21 @@ FIntPoint UInventoryComponent::IndexToGridPosition(int32 Index) const
 
 bool UInventoryComponent::AreSlotsFree(FIntPoint Position, FItemSize Size) const
 {
-	// 경계 체크를 루프 밖에서 먼저 수행
-	if (Position.X < 0 || Position.Y < 0)
+	if (Position.X < 0 || Position.Y < 0
+		|| Position.X + Size.Width > GridWidth
+		|| Position.Y + Size.Height > GridHeight)
 	{
 		return false;
 	}
 
-	if (Position.X + Size.Width > GridWidth || Position.Y + Size.Height > GridHeight)
+	const uint16 Mask = static_cast<uint16>(((1 << Size.Width) - 1) << Position.X);
+	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; ++Y)
 	{
-		return false;
-	}
-
-	// 영역 내 모든 슬롯 검증
-	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; Y++)
-	{
-		for (int32 X = Position.X; X < Position.X + Size.Width; X++)
+		if ((RowBitmap[Y] & Mask) != 0)
 		{
-			const int32 Index = Y * GridWidth + X;
-			if (!GridSlots[Index].IsEmpty())
-			{
-				return false;
-			}
+			return false;
 		}
 	}
-
 	return true;
 }
 
@@ -764,6 +816,7 @@ void UInventoryComponent::OccupySlots(FIntPoint Position, FItemSize Size,
 			const int32 Index = Y * GridWidth + X;
 			const bool bIsRoot = (X == Position.X && Y == Position.Y);
 			GridSlots[Index].Occupy(ItemID, bIsRoot);
+			SetBit(X, Y, true);
 		}
 	}
 }
@@ -781,6 +834,7 @@ void UInventoryComponent::FreeSlots(const FInventoryItemInstance& Item)
 			if (Index >= 0 && Index < GridSlots.Num())
 			{
 				GridSlots[Index].Clear();
+				SetBit(X, Y, false);
 			}
 		}
 	}
@@ -790,27 +844,36 @@ void UInventoryComponent::FreeSlots(const FInventoryItemInstance& Item)
 
 FInventoryItemInstance* UInventoryComponent::FindItemByInstanceID(const FGuid& InstanceID)
 {
-	return Items.FindByPredicate(
-		[&InstanceID](const FInventoryItemInstance& Item)
+	if (const int32* Index = ItemIndexMap.Find(InstanceID))
+	{
+		if (Items.IsValidIndex(*Index))
 		{
-			return Item.InstanceID == InstanceID;
-		});
+			return &Items[*Index];
+		}
+	}
+	return nullptr;
 }
 
 const FInventoryItemInstance* UInventoryComponent::FindItemByInstanceID(const FGuid& InstanceID) const
 {
-	return Items.FindByPredicate(
-		[&InstanceID](const FInventoryItemInstance& Item)
+	if (const int32* Index = ItemIndexMap.Find(InstanceID))
+	{
+		if (Items.IsValidIndex(*Index))
 		{
-			return Item.InstanceID == InstanceID;
-		});
+			return &Items[*Index];
+		}
+	}
+	return nullptr;
 }
 
 int32 UInventoryComponent::FindItemIndexByInstanceID(const FGuid& InstanceID) const
 {
-	return Items.IndexOfByPredicate(
-		[&InstanceID](const FInventoryItemInstance& Item)
+	if (const int32* Index = ItemIndexMap.Find(InstanceID))
+	{
+		if (Items.IsValidIndex(*Index))
 		{
-			return Item.InstanceID == InstanceID;
-		});
+			return *Index;
+		}
+	}
+	return INDEX_NONE;
 }

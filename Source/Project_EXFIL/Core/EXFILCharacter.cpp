@@ -21,6 +21,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
+#include "GameFramework/GameModeBase.h"
 #include "Core/EXFILLog.h"
 #include "Components/CapsuleComponent.h"
 #include "Animation/AnimInstance.h"
@@ -37,6 +38,7 @@ AEXFILCharacter::AEXFILCharacter()
     // GAS — AttributeSet은 반드시 생성자에서 CreateDefaultSubobject
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
     AbilitySystemComponent->SetIsReplicated(true);
+    
     AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
     SurvivalAttributes = CreateDefaultSubobject<USurvivalAttributeSet>(TEXT("SurvivalAttributes"));
@@ -94,11 +96,12 @@ void AEXFILCharacter::BeginPlay()
     {
         if (InventoryComponent)
         {
-            InventoryComponent->TryAddItemByID(FName("Bandage"),    3);  // 1x1, 스택 3
-            InventoryComponent->TryAddItemByID(FName("Pistol"), 2);         // 2x1
-            InventoryComponent->TryAddItemByID(FName("BodyArmor"));      // 2x3
-            InventoryComponent->TryAddItemByID(FName("Painkillers"), 5);  // 1x1, 스택 5
-            InventoryComponent->TryAddItemByID(FName("Medkit"));         // 1x2
+            InventoryComponent->TryAddItemByID(FName("Bandage"),    3);
+            InventoryComponent->TryAddItemByID(FName("Pistol"), 2);
+            InventoryComponent->TryAddItemByID(FName("BodyArmor"));
+            InventoryComponent->TryAddItemByID(FName("Painkillers"), 5);
+            InventoryComponent->TryAddItemByID(FName("Medkit"));
+
         }
     }
 
@@ -373,7 +376,6 @@ bool AEXFILCharacter::Server_ConfirmHit_Validate(
 void AEXFILCharacter::Server_ConfirmHit_Implementation(
     AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal)
 {
-    // 서버 라인 트레이스 재검증
     APlayerController* PC = Cast<APlayerController>(GetController());
     if (!PC) return;
 
@@ -393,12 +395,8 @@ void AEXFILCharacter::Server_ConfirmHit_Implementation(
         return;
     }
 
-    // 데미지 GE 적용
     AEXFILCharacter* TargetChar = Cast<AEXFILCharacter>(HitActor);
-    if (!TargetChar || !TargetChar->GetAbilitySystemComponent())
-    {
-        return;
-    }
+    if (!TargetChar || !TargetChar->GetAbilitySystemComponent()) return;
 
     if (DamageEffectClass && AbilitySystemComponent)
     {
@@ -453,7 +451,42 @@ void AEXFILCharacter::OnDeath()
     if (!HasAuthority()) return;
 
     Multicast_OnDeath();
-    SetLifeSpan(DeathLifeSpan);
+
+    FTimerHandle RespawnTimer;
+    GetWorldTimerManager().SetTimer(RespawnTimer, [WeakThis = TWeakObjectPtr<AEXFILCharacter>(this)]()
+    {
+        AEXFILCharacter* Self = WeakThis.Get();
+        if (!Self) return;
+
+        // HP 풀 회복
+        if (Self->AbilitySystemComponent)
+        {
+            USurvivalAttributeSet* AttrSet = const_cast<USurvivalAttributeSet*>(
+                Self->AbilitySystemComponent->GetSet<USurvivalAttributeSet>());
+            if (AttrSet)
+            {
+                AttrSet->SetHealth(AttrSet->GetMaxHealth());
+            }
+        }
+
+        // 텔레포트 전 숨기기 (이동하는 모습 안 보이게)
+        Self->SetActorHiddenInGame(true);
+
+        // 스폰 지점으로 텔레포트
+        if (AGameModeBase* GM = Self->GetWorld()->GetAuthGameMode())
+        {
+            AActor* PlayerStart = GM->FindPlayerStart(Self->GetController());
+            if (PlayerStart)
+            {
+                Self->SetActorLocationAndRotation(
+                    PlayerStart->GetActorLocation(),
+                    PlayerStart->GetActorRotation());
+            }
+        }
+
+        Self->Multicast_Respawn();
+
+    }, DeathLifeSpan, false);
 }
 
 void AEXFILCharacter::Multicast_OnDeath_Implementation()
@@ -492,10 +525,56 @@ void AEXFILCharacter::Multicast_OnDeath_Implementation()
     }
 }
 
+void AEXFILCharacter::Multicast_Respawn_Implementation()
+{
+    // 래그돌 해제
+    if (USkeletalMeshComponent* MeshComp = GetMesh())
+    {
+        MeshComp->SetSimulatePhysics(false);
+        MeshComp->SetCollisionProfileName(TEXT("CharacterMesh"));
+        MeshComp->AttachToComponent(GetCapsuleComponent(),
+            FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+        MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
+        MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+        MeshComp->SetOverlayMaterial(nullptr);
+    }
+
+    // 캡슐 콜리전 복구
+    if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+    {
+        Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+    }
+
+    // 이동 복구
+    if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+    {
+        CMC->SetMovementMode(MOVE_Walking);
+    }
+
+    // 입력 복구 (본인만)
+    if (IsLocallyControlled())
+    {
+        if (APlayerController* PC = Cast<APlayerController>(GetController()))
+        {
+            EnableInput(PC);
+        }
+    }
+
+    // 짧은 딜레이 후 다시 보이게
+    FTimerHandle ShowTimer;
+    GetWorldTimerManager().SetTimer(ShowTimer, [WeakThis = TWeakObjectPtr<AEXFILCharacter>(this)]()
+    {
+        if (AEXFILCharacter* Self = WeakThis.Get())
+        {
+            Self->SetActorHiddenInGame(false);
+        }
+    }, 1.f, false);
+}
+
 void AEXFILCharacter::Client_ShowNotification_Implementation(const FString& Message)
 {
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, Message);
+        GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Red, Message, true, FVector2D(2.f, 2.f));
     }
 }

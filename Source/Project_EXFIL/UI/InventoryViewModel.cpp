@@ -30,16 +30,13 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
         SlotViewModels[i] = SlotVM;
     }
 
-    // Model 델리게이트 바인딩
-    InInventoryComponent->OnInventoryUpdated.AddDynamic(
-        this, &UInventoryViewModel::OnInventoryUpdated);
+    // Model 델리게이트 바인딩 (non-dynamic delegate)
+    InInventoryComponent->OnInventoryUpdated.AddUObject(
+        this, &UInventoryViewModel::HandleInventoryUpdated);
     InInventoryComponent->OnItemAdded.AddDynamic(
         this, &UInventoryViewModel::OnItemAdded);
     InInventoryComponent->OnItemRemoved.AddDynamic(
         this, &UInventoryViewModel::OnItemRemoved);
-    InInventoryComponent->OnGridExpanded.AddDynamic(
-        this, &UInventoryViewModel::OnGridExpanded);
-
     // 초기 상태 동기화
     RefreshAllSlots();
 }
@@ -112,9 +109,16 @@ bool UInventoryViewModel::RequestRemoveItem(FGuid ItemInstanceID)
     return InventoryComp->RemoveItem(ItemInstanceID);
 }
 
-void UInventoryViewModel::OnInventoryUpdated()
+void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& DirtyIndices)
 {
-    RefreshAllSlots();
+    if (DirtyIndices.Num() == 0 || DirtyIndices.Num() > GridWidth * GridHeight / 2)
+    {
+        RefreshAllSlots();
+    }
+    else
+    {
+        RefreshDirtySlots(DirtyIndices);
+    }
 }
 
 void UInventoryViewModel::OnItemAdded(const FInventoryItemInstance& AddedItem)
@@ -125,24 +129,6 @@ void UInventoryViewModel::OnItemAdded(const FInventoryItemInstance& AddedItem)
 void UInventoryViewModel::OnItemRemoved(const FGuid& RemovedItemID)
 {
     // OnInventoryUpdated도 함께 브로드캐스트되므로 RefreshAllSlots는 거기서 처리
-}
-
-void UInventoryViewModel::OnGridExpanded(int32 NewGridHeight)
-{
-    const int32 OldTotal = SlotViewModels.Num();
-    UE_MVVM_SET_PROPERTY_VALUE(GridHeight, NewGridHeight);
-    const int32 NewTotal = GridWidth * NewGridHeight;
-
-    SlotViewModels.SetNum(NewTotal);
-    for (int32 i = OldTotal; i < NewTotal; ++i)
-    {
-        UInventorySlotViewModel* SlotVM = NewObject<UInventorySlotViewModel>(this);
-        SlotVM->SetGridPosition(FIntPoint(i % GridWidth, i / GridWidth));
-        SlotViewModels[i] = SlotVM;
-    }
-
-    // PanelWidget에 그리드 리빌드 요청
-    OnGridRebuildNeeded.Broadcast();
 }
 
 void UInventoryViewModel::RefreshAllSlots()
@@ -200,6 +186,86 @@ void UInventoryViewModel::RefreshAllSlots()
             }
 
             // 아이콘 — DataTable에서 조회 (없으면 null Soft Ref 유지)
+            if (ItemSub)
+            {
+                const FItemData* ItemData = ItemSub->GetItemData(ItemInstance.ItemDataID);
+                SlotVM->SetIcon(ItemData ? ItemData->Icon : TSoftObjectPtr<UTexture2D>());
+            }
+        }
+        else
+        {
+            SlotVM->SetEmpty(true);
+            SlotVM->SetItemDataID(NAME_None);
+            SlotVM->SetStackCount(0);
+            SlotVM->SetIsRootSlot(false);
+            SlotVM->SetItemInstanceID(FGuid());
+            SlotVM->SetItemSizeX(1);
+            SlotVM->SetItemSizeY(1);
+            SlotVM->SetIcon(TSoftObjectPtr<UTexture2D>());
+        }
+    }
+
+    // 아이콘 오버레이 갱신 알림
+    OnViewModelRefreshed.Broadcast();
+}
+
+void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
+{
+    if (!InventoryComp.IsValid())
+    {
+        return;
+    }
+
+    // ItemDataSubsystem — 아이콘 조회용
+    UItemDataSubsystem* ItemSub = nullptr;
+    if (UWorld* World = InventoryComp->GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            ItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+        }
+    }
+
+    for (int32 i : DirtyIndices)
+    {
+        if (!SlotViewModels.IsValidIndex(i))
+        {
+            continue;
+        }
+
+        UInventorySlotViewModel* SlotVM = SlotViewModels[i].Get();
+        if (!SlotVM)
+        {
+            continue;
+        }
+
+        const FIntPoint Position(i % GridWidth, i / GridWidth);
+        FInventoryItemInstance ItemInstance;
+        const bool bHasItem = InventoryComp->GetItemAt(Position, ItemInstance);
+
+        if (bHasItem)
+        {
+            const bool bIsRoot = (ItemInstance.RootPosition == Position);
+            SlotVM->SetEmpty(false);
+            SlotVM->SetItemDataID(ItemInstance.ItemDataID);
+            SlotVM->SetStackCount(ItemInstance.StackCount);
+            SlotVM->SetIsRootSlot(bIsRoot);
+            SlotVM->SetItemInstanceID(ItemInstance.InstanceID);
+
+            if (bIsRoot)
+            {
+                const FItemSize EffSize = ItemInstance.bIsRotated
+                    ? ItemInstance.ItemSize.GetRotated()
+                    : ItemInstance.ItemSize;
+                SlotVM->SetItemSizeX(EffSize.Width);
+                SlotVM->SetItemSizeY(EffSize.Height);
+            }
+            else
+            {
+                SlotVM->SetItemSizeX(1);
+                SlotVM->SetItemSizeY(1);
+            }
+
             if (ItemSub)
             {
                 const FItemData* ItemData = ItemSub->GetItemData(ItemInstance.ItemDataID);

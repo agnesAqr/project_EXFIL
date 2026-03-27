@@ -72,7 +72,11 @@ public:
     UFUNCTION(NetMulticast, Reliable)
     void Multicast_OnDeath();
 
-    /** 사망 처리 — 서버 전용, 래그돌 → 3초 후 Destroy */
+    /** 리스폰 연출 — 래그돌 해제 + 입력 복구 */
+    UFUNCTION(NetMulticast, Reliable)
+    void Multicast_Respawn();
+
+    /** 사망 처리 — 서버 전용, 래그돌 → 3초 후 리스폰 */
     void OnDeath();
 
     /** 인벤토리 풀 등 서버→클라이언트 알림 */
@@ -196,7 +200,7 @@ protected:
 
     /** 사망 후 액터 제거까지 대기 시간 (초) */
     UPROPERTY(EditAnywhere, Category = "Combat")
-    float DeathLifeSpan = 3.f;
+    float DeathLifeSpan = 6.f;
 
     /** F키 인터랙션 InputAction — 에디터에서 할당 */
     UPROPERTY(EditAnywhere, Category = "Input")

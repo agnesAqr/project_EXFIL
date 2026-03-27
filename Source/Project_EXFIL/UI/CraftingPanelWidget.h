@@ -85,6 +85,9 @@ private:
     UFUNCTION()
     void OnCraftingCompleted(FName CompletedRecipeID);
 
+    /** non-dynamic OnInventoryUpdated 콜백 → RefreshRecipeList 전달 */
+    void OnInventoryChanged(const TSet<int32>& DirtyIndices);
+
     /** 레시피 버튼 클릭 콜백 */
     void OnRecipeSelected(FName ClickedRecipeID);
 

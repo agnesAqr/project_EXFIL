@@ -8,13 +8,12 @@
 #include "InventoryComponent.generated.h"
 
 // 델리게이트 선언 (Day 2 ViewModel 바인딩용)
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryUpdated);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const TSet<int32>&);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FOnItemAdded, const FInventoryItemInstance&, AddedItem);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FOnItemRemoved, const FGuid&, RemovedItemID);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-	FOnGridExpanded, int32, NewGridHeight);
+
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UInventoryComponent : public UActorComponent
@@ -28,12 +27,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridWidth = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, ReplicatedUsing = OnRep_GridHeight, Category = "Inventory|Config")
-	int32 GridHeight = 13;
-
-	/** 그리드 확장 불가 상한 (행 수) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
-	int32 MaxGridHeight = 100;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = "Inventory|Config")
+	int32 GridHeight = 12;
 
 	/** 아이템 드롭 시 캐릭터 전방 오프셋 (cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
@@ -114,6 +109,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID(FName ItemDataID) const;
 
+	/** 캐시 기반 O(1) 수량 조회 (Items 변경 후 자동 갱신) */
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetItemCountByID_Cached(FName ItemDataID) const;
+
 	/**
 	 * 특정 아이템 인스턴스의 StackCount를 1 감소.
 	 * 0이 되면 자동 RemoveItem. 서버 전용.
@@ -141,7 +140,6 @@ public:
 	void Server_DropItem(FGuid ItemInstanceID);
 
 	// ========== 델리게이트 ==========
-	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnInventoryUpdated OnInventoryUpdated;
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
@@ -149,10 +147,6 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnItemRemoved OnItemRemoved;
-
-	/** 그리드 행이 확장되었을 때 (UI 리빌드용) */
-	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
-	FOnGridExpanded OnGridExpanded;
 
 	// ========== Replication (Day 6) ==========
 	virtual void GetLifetimeReplicatedProps(
@@ -175,9 +169,6 @@ private:
 	UFUNCTION()
 	void OnRep_Items();
 
-	UFUNCTION()
-	void OnRep_GridHeight();
-
 	// ========== 내부 헬퍼 ==========
 	bool IsValidGridPosition(FIntPoint Position) const;
 	int32 GridPositionToIndex(FIntPoint Position) const;
@@ -189,8 +180,41 @@ private:
 	void FreeSlots(const FInventoryItemInstance& Item);
 	void InitializeGrid();
 
-	/** 아이템을 넣을 수 있을 만큼 행을 확장. 성공 시 true 반환 */
-	bool ExpandGridForItem(FItemSize Size);
+	/** ItemDataID → 총 수량 캐시 — 리플리케이션 제외 (UPROPERTY 없음) */
+	TMap<FName, int32> ItemCountCache;
+
+	/** InstanceID → Items 배열 인덱스 캐시 — 리플리케이션 제외 (UPROPERTY 없음) */
+	TMap<FGuid, int32> ItemIndexMap;
+
+	/** ItemIndexMap 재구축 */
+	void RebuildItemIndexMap();
+
+	// ========== Bitmap 기반 그리드 탐색 ==========
+
+	/** 행별 점유 비트마스크 — 리플리케이션 제외 (UPROPERTY 없음) */
+	TArray<uint16> RowBitmap;
+
+	/** GridSlots 기반으로 RowBitmap 전체 재구축 */
+	void RebuildRowBitmap();
+
+	/** RowBitmap 개별 비트 설정/해제 */
+	void SetBit(int32 Col, int32 Row, bool bOccupied);
+
+
+	/** ItemCountCache 재구축 */
+	void RebuildItemCountCache();
+
+	/** 변경된 슬롯 인덱스 추적 — Broadcast 시 전달 후 Empty */
+	TSet<int32> DirtySlotIndices;
+
+	/** 아이템 영역에 해당하는 슬롯들을 Dirty로 마킹 */
+	void MarkSlotsDirty(FIntPoint Position, FItemSize Size);
+
+	/** 전체 그리드를 Dirty로 마킹 */
+	void MarkAllSlotsDirty();
+
+	/** DirtySlotIndices 브로드캐스트 후 비우기 */
+	void BroadcastDirtySlots();
 
 	/** TArray에서 InstanceID로 아이템 검색 (TMap→TArray 전환 헬퍼) */
 	FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID);

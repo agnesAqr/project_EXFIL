@@ -148,9 +148,6 @@ private:
     /** ViewModel RefreshAllSlots 후 콜백 핸들 */
     FDelegateHandle ViewModelRefreshedHandle;
 
-    /** 그리드 확장 시 리빌드 콜백 핸들 */
-    FDelegateHandle GridRebuildHandle;
-
     // ─── 탭 버튼 콜백 ─────────────────────────────────────────────────────────
 
     UFUNCTION()

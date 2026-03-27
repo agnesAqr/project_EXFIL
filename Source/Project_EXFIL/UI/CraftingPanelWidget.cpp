@@ -40,9 +40,14 @@ void UCraftingPanelWidget::SetupCrafting(UCraftingComponent* InCraftingComp,
 
     if (InInventoryComp)
     {
-        InInventoryComp->OnInventoryUpdated.AddDynamic(
-            this, &UCraftingPanelWidget::RefreshRecipeList);
+        InInventoryComp->OnInventoryUpdated.AddUObject(
+            this, &UCraftingPanelWidget::OnInventoryChanged);
     }
+}
+
+void UCraftingPanelWidget::OnInventoryChanged(const TSet<int32>& /*DirtyIndices*/)
+{
+    RefreshRecipeList();
 }
 
 void UCraftingPanelWidget::RefreshRecipeList()
