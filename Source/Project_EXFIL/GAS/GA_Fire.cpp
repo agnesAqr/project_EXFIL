@@ -32,13 +32,14 @@ bool UGA_Fire::CanActivateAbility(
         return false;
     }
 
-    const UEquipmentComponent* Equipment = AvatarActor->FindComponentByClass<UEquipmentComponent>();
-    if (!Equipment)
+    const AEXFILCharacter* Character = Cast<AEXFILCharacter>(AvatarActor);
+    if (!Character)
     {
         return false;
     }
 
-    return Equipment->HasWeaponEquipped();
+    const UEquipmentComponent* Equipment = Character->GetEquipmentComponent();
+    return Equipment && Equipment->HasWeaponEquipped();
 }
 
 void UGA_Fire::ActivateAbility(

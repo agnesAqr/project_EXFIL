@@ -51,15 +51,9 @@ UInventorySlotViewModel* UInventoryViewModel::GetSlotAt(FIntPoint Position) cons
     return nullptr;
 }
 
-TArray<UInventorySlotViewModel*> UInventoryViewModel::GetAllSlots() const
+const TArray<UInventorySlotViewModel*>& UInventoryViewModel::GetAllSlots() const
 {
-    TArray<UInventorySlotViewModel*> Result;
-    Result.Reserve(SlotViewModels.Num());
-    for (const TObjectPtr<UInventorySlotViewModel>& VM : SlotViewModels)
-    {
-        Result.Add(VM.Get());
-    }
-    return Result;
+    return SlotViewModels;
 }
 
 bool UInventoryViewModel::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition,
@@ -150,7 +144,7 @@ void UInventoryViewModel::RefreshAllSlots()
 
     for (int32 i = 0; i < SlotViewModels.Num(); ++i)
     {
-        UInventorySlotViewModel* SlotVM = SlotViewModels[i].Get();
+        UInventorySlotViewModel* SlotVM = SlotViewModels[i];
         if (!SlotVM)
         {
             continue;
@@ -205,8 +199,14 @@ void UInventoryViewModel::RefreshAllSlots()
         }
     }
 
-    // 아이콘 오버레이 갱신 알림
-    OnViewModelRefreshed.Broadcast();
+    // 아이콘 오버레이 갱신 알림 (전체 슬롯 dirty)
+    TSet<int32> AllIndices;
+    AllIndices.Reserve(SlotViewModels.Num());
+    for (int32 i = 0; i < SlotViewModels.Num(); ++i)
+    {
+        AllIndices.Add(i);
+    }
+    OnViewModelRefreshed.Broadcast(AllIndices);
 }
 
 void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
@@ -233,7 +233,7 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
             continue;
         }
 
-        UInventorySlotViewModel* SlotVM = SlotViewModels[i].Get();
+        UInventorySlotViewModel* SlotVM = SlotViewModels[i];
         if (!SlotVM)
         {
             continue;
@@ -285,8 +285,8 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
         }
     }
 
-    // 아이콘 오버레이 갱신 알림
-    OnViewModelRefreshed.Broadcast();
+    // 아이콘 오버레이 갱신 알림 (변경된 슬롯만 전달)
+    OnViewModelRefreshed.Broadcast(DirtyIndices);
 }
 
 int32 UInventoryViewModel::PositionToIndex(FIntPoint Position) const

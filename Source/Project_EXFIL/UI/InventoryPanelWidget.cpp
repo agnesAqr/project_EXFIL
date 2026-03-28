@@ -163,7 +163,7 @@ void UInventoryPanelWidget::BuildGrid()
     }
 
     // 초기 아이콘 오버레이 갱신
-    RefreshIconOverlay();
+    RefreshIconOverlayFull();
 }
 
 bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition,
@@ -214,15 +214,13 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
     }
 }
 
-void UInventoryPanelWidget::RefreshIconOverlay()
+void UInventoryPanelWidget::RefreshIconOverlay(const TSet<int32>& DirtyIndices)
 {
     if (!IconOverlay || !ViewModel || !GridPanel)
     {
         return;
     }
 
-    // GridPanel geometry가 아직 0이면 (패널이 닫혀있거나 첫 프레임)
-    // → 타이머로 재시도해서 유효한 geometry 확보 후 아이콘 배치
     const float CellWidth = GridPanel->GetCachedGeometry().GetLocalSize().X;
     if (CellWidth <= 1.f)
     {
@@ -235,7 +233,7 @@ void UInventoryPanelWidget::RefreshIconOverlay()
             {
                 if (IsValid(this))
                 {
-                    RefreshIconOverlay();
+                    RefreshIconOverlayFull();
                 }
             },
             0.15f, false);
@@ -243,7 +241,21 @@ void UInventoryPanelWidget::RefreshIconOverlay()
     }
 
     IconOverlay->RefreshIcons(ViewModel, GridPanel,
-        ViewModel->GetGridWidth(), ViewModel->GetGridHeight());
+        ViewModel->GetGridWidth(), ViewModel->GetGridHeight(), DirtyIndices);
+}
+
+void UInventoryPanelWidget::RefreshIconOverlayFull()
+{
+    if (!ViewModel) return;
+
+    const int32 Total = ViewModel->GetGridWidth() * ViewModel->GetGridHeight();
+    TSet<int32> AllIndices;
+    AllIndices.Reserve(Total);
+    for (int32 i = 0; i < Total; ++i)
+    {
+        AllIndices.Add(i);
+    }
+    RefreshIconOverlay(AllIndices);
 }
 
 int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
@@ -254,7 +266,9 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
     int32 Result = Super::NativePaint(Args, AllottedGeometry, MyCullingRect,
                                        OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 
-    // 셀 정사각형 보정만 담당 — 아이콘 배치는 타이머로 분리
+    auto* MutableThis = const_cast<UInventoryPanelWidget*>(this);
+
+    // 셀 정사각형 보정 — 레이아웃 첫 유효 시점에 1회 실행
     if (bNeedsCellSquareFix && GridPanel && GridPanel->GetChildrenCount() > 0)
     {
         UWidget* FirstSlot = GridPanel->GetChildAt(0);
@@ -262,7 +276,6 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
 
         if (CellWidth > 1.f)
         {
-            auto* MutableThis = const_cast<UInventoryPanelWidget*>(this);
             MutableThis->bNeedsCellSquareFix = false;
 
             MutableThis->GridPanel->SetMinDesiredSlotHeight(CellWidth);
@@ -277,10 +290,22 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
                 {
                     if (IsValid(MutableThis))
                     {
-                        MutableThis->RefreshIconOverlay();
+                        MutableThis->RefreshIconOverlayFull();
                     }
                 },
                 0.1f, false);
+        }
+    }
+
+    // Geometry 변경 감지 — 창 크기 변경 또는 최초 레이아웃 완료 시 아이콘 재배치
+    const FVector2D NewSize = AllottedGeometry.GetLocalSize();
+    if (!NewSize.Equals(MutableThis->CachedGeometrySize, 1.f))
+    {
+        MutableThis->CachedGeometrySize = NewSize;
+
+        if (IconOverlay && ViewModel && ViewModel->GetAllSlots().Num() > 0)
+        {
+            MutableThis->RefreshIconOverlayFull();
         }
     }
 

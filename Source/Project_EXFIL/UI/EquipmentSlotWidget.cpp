@@ -44,6 +44,12 @@ void UEquipmentSlotWidget::NativeConstruct()
 {
     Super::NativeConstruct();
 
+    // ItemDataSubsystem 캐싱
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+    }
+
     // OwningPlayer → Pawn → EquipmentComponent 자동 바인딩
     APlayerController* PC = GetOwningPlayer();
     APawn* Pawn = PC ? PC->GetPawn() : nullptr;
@@ -124,20 +130,12 @@ void UEquipmentSlotWidget::RefreshSlot(const FEquipmentSlotData& SlotData)
         // 아이콘 텍스처 로드 및 표시
         if (Image_ItemIcon)
         {
-            UItemDataSubsystem* Sub = nullptr;
-            if (UWorld* World = GetWorld())
+            if (CachedItemSub)
             {
-                if (UGameInstance* GI = World->GetGameInstance())
-                {
-                    Sub = GI->GetSubsystem<UItemDataSubsystem>();
-                }
-            }
-            if (Sub)
-            {
-                const FItemData* ItemData = Sub->GetItemData(SlotData.ItemInstance.ItemDataID);
+                const FItemData* ItemData = CachedItemSub->GetItemData(SlotData.ItemInstance.ItemDataID);
                 if (ItemData && !ItemData->Icon.IsNull())
                 {
-                    UTexture2D* IconTexture = ItemData->Icon.LoadSynchronous();
+                    UTexture2D* IconTexture = CachedItemSub->GetCachedTexture(ItemData->Icon);
                     if (IconTexture)
                     {
                         Image_ItemIcon->SetBrushFromTexture(IconTexture, true);
@@ -322,18 +320,9 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
 
     // 인벤토리에서 온 드래그 → 장착 시도
     // 1. DataTable에서 슬롯 타입 검증
-    UItemDataSubsystem* Sub = nullptr;
-    if (UWorld* World = GetWorld())
+    if (CachedItemSub)
     {
-        if (UGameInstance* GI = World->GetGameInstance())
-        {
-            Sub = GI->GetSubsystem<UItemDataSubsystem>();
-        }
-    }
-
-    if (Sub)
-    {
-        const FItemData* ItemData = Sub->GetItemData(DragOp->ItemDataID);
+        const FItemData* ItemData = CachedItemSub->GetItemData(DragOp->ItemDataID);
         if (!ItemData || ItemData->ItemType != EItemType::Equipment)
         {
             UE_LOG(LogEXFIL, Warning, TEXT("EquipmentSlotWidget: Item '%s' is not equipment"),

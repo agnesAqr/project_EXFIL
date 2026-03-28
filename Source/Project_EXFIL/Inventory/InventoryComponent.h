@@ -180,6 +180,10 @@ private:
 	void FreeSlots(const FInventoryItemInstance& Item);
 	void InitializeGrid();
 
+	/** ItemDataSubsystem 캐시 (BeginPlay에서 1회 조회) */
+	UPROPERTY()
+	TObjectPtr<class UItemDataSubsystem> CachedItemSub;
+
 	/** ItemDataID → 총 수량 캐시 — 리플리케이션 제외 (UPROPERTY 없음) */
 	TMap<FName, int32> ItemCountCache;
 
@@ -210,8 +214,8 @@ private:
 	/** 아이템 영역에 해당하는 슬롯들을 Dirty로 마킹 */
 	void MarkSlotsDirty(FIntPoint Position, FItemSize Size);
 
-	/** 전체 그리드를 Dirty로 마킹 */
-	void MarkAllSlotsDirty();
+	/** OnRep_Items diff용 이전 상태 — 리플리케이션 제외 (로컬 전용) */
+	TArray<FInventoryItemInstance> PreviousItems;
 
 	/** DirtySlotIndices 브로드캐스트 후 비우기 */
 	void BroadcastDirtySlots();

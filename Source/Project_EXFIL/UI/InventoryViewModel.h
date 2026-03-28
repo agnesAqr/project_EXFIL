@@ -10,8 +10,8 @@
 
 class UInventoryComponent;
 
-/** PanelWidget이 아이콘 오버레이 갱신 시점을 알기 위한 델리게이트 */
-DECLARE_MULTICAST_DELEGATE(FOnInventoryViewModelRefreshed);
+/** PanelWidget이 아이콘 오버레이 갱신 시점을 알기 위한 델리게이트 (변경된 슬롯 인덱스 전달) */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryViewModelRefreshed, const TSet<int32>&);
 
 UCLASS()
 class PROJECT_EXFIL_API UInventoryViewModel : public UMVVMViewModelBase
@@ -29,7 +29,7 @@ public:
 
     /** 모든 슬롯 ViewModel 반환 */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
-    TArray<UInventorySlotViewModel*> GetAllSlots() const;
+    const TArray<UInventorySlotViewModel*>& GetAllSlots() const;
 
     /** 그리드 너비 */
     UFUNCTION(BlueprintPure, FieldNotify)
@@ -63,7 +63,7 @@ private:
     TWeakObjectPtr<UInventoryComponent> InventoryComp;
 
     UPROPERTY()
-    TArray<TObjectPtr<UInventorySlotViewModel>> SlotViewModels;
+    TArray<UInventorySlotViewModel*> SlotViewModels;
 
     UPROPERTY(BlueprintReadOnly, FieldNotify, Getter,
               meta = (AllowPrivateAccess = true))
@@ -82,10 +82,10 @@ private:
     UFUNCTION()
     void OnItemRemoved(const FGuid& RemovedItemID);
 
-    /** 전체 그리드 상태를 SlotViewModels에 동기화 */
+    /** 전체 그리드 상태를 SlotViewModels에 동기화 (전체 슬롯 dirty로 브로드캐스트) */
     void RefreshAllSlots();
 
-    /** 변경된 슬롯만 갱신 */
+    /** 변경된 슬롯만 갱신 후 해당 DirtyIndices 브로드캐스트 */
     void RefreshDirtySlots(const TSet<int32>& DirtyIndices);
 
     int32 PositionToIndex(FIntPoint Position) const;

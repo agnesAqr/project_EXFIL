@@ -40,6 +40,14 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "ItemData")
     TArray<FName> GetAllRecipeIDs() const;
 
+    // === 에셋 캐시 (LoadSynchronous 반복 호출 방지) ===
+
+    /** 텍스처 캐시 — 최초 호출 시 LoadSynchronous, 이후 캐시 반환 */
+    UTexture2D* GetCachedTexture(const TSoftObjectPtr<UTexture2D>& SoftPtr);
+
+    /** GE 클래스 캐시 — 최초 호출 시 LoadSynchronous, 이후 캐시 반환 */
+    TSubclassOf<UGameplayEffect> GetCachedEffect(const TSoftClassPtr<UGameplayEffect>& SoftPtr);
+
 private:
     UPROPERTY()
     TObjectPtr<UDataTable> ItemDataTable;
@@ -48,4 +56,12 @@ private:
     TObjectPtr<UDataTable> CraftingRecipeTable;
 
     void LoadDataTables();
+
+    // === 에셋 캐시 멤버 ===
+
+    UPROPERTY()
+    TMap<FSoftObjectPath, UTexture2D*> TextureCache;
+
+    UPROPERTY()
+    TMap<FSoftObjectPath, UClass*> EffectClassCache;
 };

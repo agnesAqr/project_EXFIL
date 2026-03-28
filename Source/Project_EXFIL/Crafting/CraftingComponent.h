@@ -104,9 +104,16 @@ private:
 
     void OnCraftTimerComplete();
 
-    /** 소유 Actor에서 InventoryComponent 획득 헬퍼 */
+    /** 소유 Actor에서 InventoryComponent 획득 헬퍼 (캐시) */
     UInventoryComponent* GetInventoryComp() const;
 
-    /** ItemDataSubsystem 획득 헬퍼 */
+    /** ItemDataSubsystem 획득 헬퍼 (캐시) */
     class UItemDataSubsystem* GetItemDataSubsystem() const;
+
+    /** 캐시된 컴포넌트/서브시스템 참조 */
+    UPROPERTY()
+    TObjectPtr<UInventoryComponent> CachedInventoryComp;
+
+    UPROPERTY()
+    TObjectPtr<class UItemDataSubsystem> CachedItemSub;
 };

@@ -17,7 +17,7 @@ AWorldItem::AWorldItem()
     bAlwaysRelevant = false;
     SetReplicatingMovement(true);
 
-    PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bCanEverTick = false;
 
     // 메시 (루트) — QueryAndPhysics: 라인 트레이스 + 물리 동시 사용
     MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
@@ -100,24 +100,6 @@ void AWorldItem::BeginPlay()
     }
 
     UpdateVisual();
-}
-
-void AWorldItem::Tick(float DeltaTime)
-{
-    Super::Tick(DeltaTime);
-
-    if (!ItemNameText) return;
-
-    // 로컬 플레이어 카메라를 향해 텍스트를 회전 (빌보드)
-    APlayerController* PC = GetWorld()->GetFirstPlayerController();
-    if (!PC) return;
-
-    FVector CamLoc;
-    FRotator CamRot;
-    PC->GetPlayerViewPoint(CamLoc, CamRot);
-
-    const FVector Dir = (CamLoc - ItemNameText->GetComponentLocation()).GetSafeNormal();
-    ItemNameText->SetWorldRotation(Dir.Rotation());
 }
 
 void AWorldItem::OnRep_ItemData()

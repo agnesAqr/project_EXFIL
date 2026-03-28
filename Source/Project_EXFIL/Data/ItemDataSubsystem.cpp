@@ -111,3 +111,42 @@ TArray<FName> UItemDataSubsystem::GetAllRecipeIDs() const
     }
     return CraftingRecipeTable->GetRowNames();
 }
+
+// ========== 에셋 캐시 ==========
+
+UTexture2D* UItemDataSubsystem::GetCachedTexture(const TSoftObjectPtr<UTexture2D>& SoftPtr)
+{
+    if (SoftPtr.IsNull()) return nullptr;
+
+    const FSoftObjectPath& Path = SoftPtr.ToSoftObjectPath();
+    if (UTexture2D** Found = TextureCache.Find(Path))
+    {
+        return *Found;
+    }
+
+    UTexture2D* Loaded = SoftPtr.LoadSynchronous();
+    if (Loaded)
+    {
+        TextureCache.Add(Path, Loaded);
+    }
+    return Loaded;
+}
+
+TSubclassOf<UGameplayEffect> UItemDataSubsystem::GetCachedEffect(
+    const TSoftClassPtr<UGameplayEffect>& SoftPtr)
+{
+    if (SoftPtr.IsNull()) return nullptr;
+
+    const FSoftObjectPath& Path = SoftPtr.ToSoftObjectPath();
+    if (UClass** Found = EffectClassCache.Find(Path))
+    {
+        return TSubclassOf<UGameplayEffect>(*Found);
+    }
+
+    TSubclassOf<UGameplayEffect> Loaded = SoftPtr.LoadSynchronous();
+    if (Loaded)
+    {
+        EffectClassCache.Add(Path, Loaded.Get());
+    }
+    return Loaded;
+}

@@ -89,6 +89,10 @@ private:
     float CachedCurrent = 100.f;
     float CachedMaximum = 100.f;
 
+    /** 텍스트 갱신용 캐시 — 정수 반올림값이 동일하면 SetText 스킵 */
+    int32 CachedRoundedCurrent = 100;
+    int32 CachedRoundedMax = 100;
+
     /** ViewModel 구독 시 추적할 속성 이름 */
     FName TrackedStatName;
 

@@ -7,6 +7,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Data/ItemDataSubsystem.h"
 #include "Data/EXFILItemTypes.h"
+#include "World/WorldItem.h"
 #include "Project_EXFIL.h"
 
 UCraftingComponent::UCraftingComponent()
@@ -18,6 +19,19 @@ UCraftingComponent::UCraftingComponent()
 void UCraftingComponent::BeginPlay()
 {
     Super::BeginPlay();
+
+    // 컴포넌트/서브시스템 캐싱
+    if (AActor* Owner = GetOwner())
+    {
+        CachedInventoryComp = Owner->FindComponentByClass<UInventoryComponent>();
+    }
+    if (UWorld* World = GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+        }
+    }
 }
 
 // ========== Replication ==========
@@ -226,9 +240,29 @@ void UCraftingComponent::OnCraftTimerComplete()
         const bool bAdded = InvComp->TryAddItemByID(Recipe->ResultItemID, Recipe->ResultCount);
         if (!bAdded)
         {
+            // 인벤토리 공간 부족 → 발밑에 월드 아이템으로 드롭 (결과물 증발 방지)
             UE_LOG(LogProject_EXFIL, Warning,
-                   TEXT("CraftingComponent: 결과물 '%s' 추가 실패 (인벤토리 공간 부족)"),
+                   TEXT("CraftingComponent: 결과물 '%s' 인벤토리 부족 → 월드 드롭"),
                    *Recipe->ResultItemID.ToString());
+
+            AActor* Owner = GetOwner();
+            UWorld* World = Owner ? Owner->GetWorld() : nullptr;
+            if (World && Owner)
+            {
+                const FVector SpawnLoc = Owner->GetActorLocation()
+                    + Owner->GetActorForwardVector() * 80.f;
+                FActorSpawnParameters SpawnParams;
+                SpawnParams.Owner = Owner;
+                SpawnParams.SpawnCollisionHandlingOverride =
+                    ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+                AWorldItem* DroppedItem = World->SpawnActor<AWorldItem>(
+                    AWorldItem::StaticClass(), SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+                if (DroppedItem)
+                {
+                    DroppedItem->InitializeItem(Recipe->ResultItemID, Recipe->ResultCount);
+                }
+            }
         }
     }
 
@@ -246,21 +280,10 @@ void UCraftingComponent::OnCraftTimerComplete()
 
 UInventoryComponent* UCraftingComponent::GetInventoryComp() const
 {
-    if (AActor* Owner = GetOwner())
-    {
-        return Owner->FindComponentByClass<UInventoryComponent>();
-    }
-    return nullptr;
+    return CachedInventoryComp.Get();
 }
 
 UItemDataSubsystem* UCraftingComponent::GetItemDataSubsystem() const
 {
-    if (UWorld* World = GetWorld())
-    {
-        if (UGameInstance* GI = World->GetGameInstance())
-        {
-            return GI->GetSubsystem<UItemDataSubsystem>();
-        }
-    }
-    return nullptr;
+    return CachedItemSub.Get();
 }

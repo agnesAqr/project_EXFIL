@@ -80,6 +80,10 @@ private:
     /** 현재 장착 상태 캐시 */
     FEquipmentSlotData CachedSlotData;
 
+    /** ItemDataSubsystem 캐시 (NativeConstruct에서 1회 조회) */
+    UPROPERTY()
+    TObjectPtr<class UItemDataSubsystem> CachedItemSub;
+
     /** 지연 생성되는 컨텍스트 메뉴 인스턴스 */
     UPROPERTY()
     TObjectPtr<UItemContextMenuWidget> ContextMenuWidget;

@@ -61,7 +61,7 @@ void UGA_UseItem::ActivateAbility(const FGameplayAbilitySpecHandle Handle,
     // ConsumableEffect 로드 및 적용
     if (!ItemData->ConsumableEffect.IsNull())
     {
-        TSubclassOf<UGameplayEffect> GEClass = ItemData->ConsumableEffect.LoadSynchronous();
+        TSubclassOf<UGameplayEffect> GEClass = ItemSub->GetCachedEffect(ItemData->ConsumableEffect);
         if (GEClass)
         {
             FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
