@@ -19,6 +19,16 @@ UInventoryComponent::UInventoryComponent()
 void UInventoryComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// ItemDataSubsystem 캐싱
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GI = World->GetGameInstance())
+		{
+			CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+		}
+	}
+
 	// 서버에서만 그리드 초기화 (클라이언트는 리플리케이션으로 수신)
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
@@ -40,11 +50,63 @@ void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 
 void UInventoryComponent::OnRep_Items()
 {
-	// 클라이언트: 전체 갱신 (서버 DirtySlotIndices는 리플리케이트되지 않음)
+	// 캐시 재구축
 	RebuildItemIndexMap();
+	RebuildItemCountCache();
 	RebuildRowBitmap();
-	MarkAllSlotsDirty();
-	BroadcastDirtySlots();
+
+	DirtySlotIndices.Empty();
+
+	// 이전 상태를 TMap으로 변환 — O(N) 1회
+	TMap<FGuid, const FInventoryItemInstance*> PrevMap;
+	PrevMap.Reserve(PreviousItems.Num());
+	for (const FInventoryItemInstance& Prev : PreviousItems)
+	{
+		PrevMap.Add(Prev.InstanceID, &Prev);
+	}
+
+	// 현재 Items 순회 — 추가/변경 감지 O(N)
+	for (const FInventoryItemInstance& Item : Items)
+	{
+		const FInventoryItemInstance** PrevPtr = PrevMap.Find(Item.InstanceID);
+
+		if (!PrevPtr || (*PrevPtr)->RootPosition != Item.RootPosition
+			|| (*PrevPtr)->StackCount != Item.StackCount
+			|| (*PrevPtr)->bIsRotated != Item.bIsRotated)
+		{
+			MarkSlotsDirty(Item.RootPosition, Item.GetEffectiveSize());
+
+			// 이동된 경우 이전 위치도 dirty
+			if (PrevPtr && (*PrevPtr)->RootPosition != Item.RootPosition)
+			{
+				MarkSlotsDirty((*PrevPtr)->RootPosition, (*PrevPtr)->GetEffectiveSize());
+			}
+		}
+
+		// 처리 완료 → PrevMap에서 제거 (남은 것 = 제거된 아이템)
+		if (PrevPtr)
+		{
+			PrevMap.Remove(Item.InstanceID);
+		}
+	}
+
+	// PrevMap에 남아있는 것 = 제거된 아이템 O(남은 개수)
+	for (const auto& Pair : PrevMap)
+	{
+		MarkSlotsDirty(Pair.Value->RootPosition, Pair.Value->GetEffectiveSize());
+	}
+
+	// 이전 상태 갱신
+	PreviousItems = Items;
+
+	// 첫 수신 시 diff 결과가 비어있으면 전체 갱신 (초기 동기화)
+	if (DirtySlotIndices.Num() == 0 && Items.Num() > 0)
+	{
+		MarkSlotsDirty(FIntPoint(0, 0), FItemSize(GridWidth, GridHeight));
+	}
+
+	OnInventoryUpdated.Broadcast(DirtySlotIndices);
+	DirtySlotIndices.Empty();
 }
 
 // ========== Server RPCs ==========
@@ -97,27 +159,21 @@ void UInventoryComponent::Server_ConsumeItemByID_Implementation(
 	{
 		if (UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>())
 		{
-			if (UWorld* World = GetWorld())
+			if (CachedItemSub)
 			{
-				if (UGameInstance* GI = World->GetGameInstance())
+				const FItemData* ItemData = CachedItemSub->GetItemData(ItemDataID);
+				if (ItemData && !ItemData->ConsumableEffect.IsNull())
 				{
-					if (UItemDataSubsystem* Sub = GI->GetSubsystem<UItemDataSubsystem>())
+					TSubclassOf<UGameplayEffect> GEClass =
+						CachedItemSub->GetCachedEffect(ItemData->ConsumableEffect);
+					if (GEClass)
 					{
-						const FItemData* ItemData = Sub->GetItemData(ItemDataID);
-						if (ItemData && !ItemData->ConsumableEffect.IsNull())
+						FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext();
+						FGameplayEffectSpecHandle Spec =
+							ASC->MakeOutgoingSpec(GEClass, 1.f, Ctx);
+						if (Spec.IsValid())
 						{
-							TSubclassOf<UGameplayEffect> GEClass =
-								ItemData->ConsumableEffect.LoadSynchronous();
-							if (GEClass)
-							{
-								FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext();
-								FGameplayEffectSpecHandle Spec =
-									ASC->MakeOutgoingSpec(GEClass, 1.f, Ctx);
-								if (Spec.IsValid())
-								{
-									ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-								}
-							}
+							ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 						}
 					}
 				}
@@ -190,14 +246,6 @@ void UInventoryComponent::MarkSlotsDirty(FIntPoint Position, FItemSize Size)
 	}
 }
 
-void UInventoryComponent::MarkAllSlotsDirty()
-{
-	const int32 TotalSlots = GridWidth * GridHeight;
-	for (int32 i = 0; i < TotalSlots; ++i)
-	{
-		DirtySlotIndices.Add(i);
-	}
-}
 
 void UInventoryComponent::BroadcastDirtySlots()
 {
@@ -263,17 +311,14 @@ bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
 	}
 
 	// 서브시스템에서 아이템 정의 조회
-	UGameInstance* GI = GetWorld() ? GetWorld()->GetGameInstance() : nullptr;
-	UItemDataSubsystem* Sub = GI ? GI->GetSubsystem<UItemDataSubsystem>() : nullptr;
-
-	if (!Sub)
+	if (!CachedItemSub)
 	{
 		UE_LOG(LogProject_EXFIL, Warning,
 		       TEXT("TryAddItemByID: UItemDataSubsystem을 찾을 수 없습니다."));
 		return false;
 	}
 
-	const FItemData* ItemData = Sub->GetItemData(ItemDataID);
+	const FItemData* ItemData = CachedItemSub->GetItemData(ItemDataID);
 	if (!ItemData)
 	{
 		UE_LOG(LogProject_EXFIL, Warning,
@@ -592,7 +637,7 @@ bool UInventoryComponent::ConsumeItemByID(FName ItemDataID, int32 Count)
 	}
 
 	// 보유량 사전 확인
-	if (GetItemCountByID(ItemDataID) < Count)
+	if (GetItemCountByID_Cached(ItemDataID) < Count)
 	{
 		UE_LOG(LogProject_EXFIL, Warning,
 		       TEXT("ConsumeItemByID: Not enough '%s' (need %d)"), *ItemDataID.ToString(), Count);

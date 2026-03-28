@@ -57,8 +57,6 @@ void UCraftingPanelWidget::RefreshRecipeList()
         return;
     }
 
-    ScrollBox_Recipes->ClearChildren();
-
     UItemDataSubsystem* Sub = nullptr;
     if (UWorld* World = GetWorld())
     {
@@ -76,23 +74,38 @@ void UCraftingPanelWidget::RefreshRecipeList()
     UCraftingComponent* Crafting = CraftingComp.Get();
     UInventoryComponent* Inventory = InventoryComp.Get();
 
-    for (const FName& RecipeID : Sub->GetAllRecipeIDs())
+    // 초회만 위젯 생성, 이후는 상태만 갱신
+    if (!bRecipesInitialized)
     {
-        UCraftingRecipeWidget* RecipeWidget =
-            CreateWidget<UCraftingRecipeWidget>(this, RecipeWidgetClass);
-        if (!RecipeWidget)
+        bRecipesInitialized = true;
+
+        for (const FName& RecipeID : Sub->GetAllRecipeIDs())
         {
-            continue;
+            UCraftingRecipeWidget* RecipeWidget =
+                CreateWidget<UCraftingRecipeWidget>(this, RecipeWidgetClass);
+            if (!RecipeWidget)
+            {
+                continue;
+            }
+
+            const bool bCanCraft = Crafting ? Crafting->CanCraft(RecipeID) : false;
+            RecipeWidget->SetRecipe(RecipeID, Inventory, bCanCraft);
+
+            RecipeWidget->OnRecipeClicked.BindUObject(
+                this, &UCraftingPanelWidget::OnRecipeSelected);
+
+            ScrollBox_Recipes->AddChild(RecipeWidget);
+            RecipeWidgetCache.Add(RecipeID, RecipeWidget);
         }
-
-        const bool bCanCraft = Crafting ? Crafting->CanCraft(RecipeID) : false;
-        RecipeWidget->SetRecipe(RecipeID, Inventory, bCanCraft);
-
-        // 클릭 델리게이트 바인딩 (람다)
-        RecipeWidget->OnRecipeClicked.BindUObject(
-            this, &UCraftingPanelWidget::OnRecipeSelected);
-
-        ScrollBox_Recipes->AddChild(RecipeWidget);
+    }
+    else
+    {
+        // 캐시된 위젯의 상태만 갱신 — ClearChildren/CreateWidget 호출 없음
+        for (auto& Pair : RecipeWidgetCache)
+        {
+            const bool bCanCraft = Crafting ? Crafting->CanCraft(Pair.Key) : false;
+            Pair.Value->SetRecipe(Pair.Key, Inventory, bCanCraft);
+        }
     }
 }
 
@@ -172,10 +185,13 @@ void UCraftingPanelWidget::OnRecipeSelected(FName ClickedRecipeID)
 
 void UCraftingPanelWidget::StartProgressTimer(float Duration)
 {
-    CraftStartTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+    UWorld* World = GetWorld();
+    CraftStartTime = World ? World->GetTimeSeconds() : 0.f;
     CraftTotalDuration = Duration;
+    CachedElapsedTenths = -1;
+    CachedDurationTenths = -1;
 
-    GetWorld()->GetTimerManager().SetTimer(
+    World->GetTimerManager().SetTimer(
         ProgressTimerHandle,
         this,
         &UCraftingPanelWidget::UpdateProgressBar,
@@ -203,12 +219,13 @@ void UCraftingPanelWidget::StopProgressTimer()
 
 void UCraftingPanelWidget::UpdateProgressBar()
 {
-    if (!GetWorld())
+    UWorld* World = GetWorld();
+    if (!World)
     {
         return;
     }
 
-    const float Elapsed = GetWorld()->GetTimeSeconds() - CraftStartTime;
+    const float Elapsed = World->GetTimeSeconds() - CraftStartTime;
     const float Percent = FMath::Clamp(Elapsed / CraftTotalDuration, 0.f, 1.f);
 
     if (Image_ProgressFill)
@@ -216,10 +233,17 @@ void UCraftingPanelWidget::UpdateProgressBar()
         Image_ProgressFill->SetRenderScale(FVector2D(Percent, 1.f));
     }
 
+    // 소수점 1자리 반올림값이 변했을 때만 SetText (0.05초 타이머 → 불필요한 문자열 생성 방지)
     if (TextBlock_CraftingTime)
     {
-        TextBlock_CraftingTime->SetText(FText::FromString(
-            FString::Printf(TEXT("%.1fs / %.1fs"),
-                Elapsed, CraftTotalDuration)));
+        const int32 ElapsedTenths = FMath::RoundToInt(Elapsed * 10.f);
+        const int32 DurationTenths = FMath::RoundToInt(CraftTotalDuration * 10.f);
+        if (ElapsedTenths != CachedElapsedTenths || DurationTenths != CachedDurationTenths)
+        {
+            CachedElapsedTenths = ElapsedTenths;
+            CachedDurationTenths = DurationTenths;
+            TextBlock_CraftingTime->SetText(FText::FromString(
+                FString::Printf(TEXT("%.1fs / %.1fs"), Elapsed, CraftTotalDuration)));
+        }
     }
 }

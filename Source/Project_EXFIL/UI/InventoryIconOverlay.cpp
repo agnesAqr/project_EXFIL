@@ -17,6 +17,7 @@
 #include "Inventory/InventoryComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Data/ItemDataSubsystem.h"
 #include "Core/EXFILLog.h"
 
 void UInventoryIconOverlay::NativeOnInitialized()
@@ -38,7 +39,8 @@ void UInventoryIconOverlay::CloseContextMenuIfOpen()
 
 void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
                                           UUniformGridPanel* InGridPanel,
-                                          int32 InGridWidth, int32 InGridHeight)
+                                          int32 InGridWidth, int32 InGridHeight,
+                                          const TSet<int32>& DirtyIndices)
 {
     // 우클릭 HitTest용 캐시 갱신
     CachedViewModel  = InViewModel;
@@ -51,9 +53,6 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         return;
     }
 
-    IconCanvas->ClearChildren();
-
-    // 첫 번째 슬롯(0,0)의 geometry에서 슬롯 크기 확보
     UWidget* FirstSlot = InGridPanel->GetChildAt(0);
     if (!FirstSlot)
     {
@@ -65,87 +64,197 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
     const FVector2D GridLocalSize = InGridPanel->GetCachedGeometry().GetLocalSize();
     const FVector2D CellStride(GridLocalSize.X / InGridWidth, GridLocalSize.Y / InGridHeight);
 
-    // geometry가 아직 0이면 배치 의미 없음 (RefreshIconOverlay 타이머가 재호출함)
     if (GridLocalSize.IsNearlyZero() || CellStride.X < 1.f || CellStride.Y < 1.f)
     {
         return;
     }
-    const FVector2D Origin = FVector2D::ZeroVector;
-    const FVector2D LocalStride = CellStride;
 
-
-    TArray<UInventorySlotViewModel*> AllSlots = InViewModel->GetAllSlots();
-    for (UInventorySlotViewModel* SlotVM : AllSlots)
+    // CellStride가 변경되면 전체 재생성
+    const bool bStrideChanged = !CachedCellStride.Equals(CellStride, 0.5f);
+    if (bStrideChanged)
     {
-        if (!SlotVM || SlotVM->IsEmpty() || !SlotVM->IsRootSlot())
+        CachedCellStride = CellStride;
+        IconCanvas->ClearChildren();
+        IconImageCache.Empty();
+        StackTextCache.Empty();
+    }
+
+    // ItemDataSubsystem 캐시 조회용
+    UItemDataSubsystem* ItemSub = nullptr;
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        ItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+    }
+
+    // ── dirty 슬롯에서 영향받는 루트 아이템 ID 수집 (중복 제거) ──
+    TSet<FGuid> DirtyRootItems;
+    TSet<FGuid> RemovedFromDirty; // dirty 슬롯이 빈칸 → 이전에 있던 아이콘 제거 후보
+
+    for (int32 SlotIndex : DirtyIndices)
+    {
+        const FIntPoint Pos(SlotIndex % InGridWidth, SlotIndex / InGridWidth);
+        UInventorySlotViewModel* SlotVM = InViewModel->GetSlotAt(Pos);
+        if (!SlotVM) continue;
+
+        if (!SlotVM->IsEmpty())
         {
-            continue;
+            const FGuid ItemID = SlotVM->GetItemInstanceID();
+            if (ItemID.IsValid())
+            {
+                DirtyRootItems.Add(ItemID);
+            }
         }
+        else
+        {
+            // 빈 슬롯 — 캐시에 이 위치에 해당하는 아이템이 있었다면 제거 대상
+            // (아래에서 캐시 전체 대조로 처리)
+        }
+    }
 
-        const FIntPoint GridPos = SlotVM->GetGridPosition();
-        const FVector2D IconPos(
-            Origin.X + GridPos.X * LocalStride.X,
-            Origin.Y + GridPos.Y * LocalStride.Y);
+    // ── dirty root item 기준 아이콘 갱신 O(dirty root items) ──
+    for (const FGuid& ItemID : DirtyRootItems)
+    {
+        // 루트 슬롯 ViewModel 찾기 — InventoryComponent에서 루트 위치 조회
+        const FIntPoint RootPos = InViewModel->GetItemRootPosition(ItemID);
+        if (RootPos.X < 0) continue; // 이미 제거된 아이템
+
+        UInventorySlotViewModel* RootSlotVM = InViewModel->GetSlotAt(RootPos);
+        if (!RootSlotVM || RootSlotVM->IsEmpty() || !RootSlotVM->IsRootSlot()) continue;
+
+        const FVector2D IconPos(RootPos.X * CellStride.X, RootPos.Y * CellStride.Y);
         const FVector2D IconSize(
-            SlotVM->GetItemSizeX() * CellStride.X,
-            SlotVM->GetItemSizeY() * CellStride.Y);
+            RootSlotVM->GetItemSizeX() * CellStride.X,
+            RootSlotVM->GetItemSizeY() * CellStride.Y);
 
-        // 아이콘 이미지 — 텍스처가 있을 때만 생성
-        const TSoftObjectPtr<UTexture2D> IconPtr = SlotVM->GetIcon();
+        // ── 아이콘 이미지 ──
+        const TSoftObjectPtr<UTexture2D> IconPtr = RootSlotVM->GetIcon();
+        UImage** ExistingImage = IconImageCache.Find(ItemID);
+
         if (!IconPtr.IsNull())
         {
-            UTexture2D* IconTex = IconPtr.LoadSynchronous();
+            UTexture2D* IconTex = ItemSub ? ItemSub->GetCachedTexture(IconPtr) : IconPtr.LoadSynchronous();
             if (IconTex)
             {
-                UImage* IconImage = NewObject<UImage>(this);
-                IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
-
-                FSlateBrush Brush;
-                Brush.SetResourceObject(IconTex);
-                Brush.DrawAs = ESlateBrushDrawType::Image;
-                IconImage->SetBrush(Brush);
-
-                // 텍스처 원본 비율 유지하며 슬롯에 맞춤 (ScaleToFit + 중앙 정렬)
                 const FVector2D TexSize(IconTex->GetSizeX(), IconTex->GetSizeY());
                 const float Scale = FMath::Min(IconSize.X / TexSize.X, IconSize.Y / TexSize.Y);
                 const FVector2D FinalSize = TexSize * Scale;
                 const FVector2D Offset = (IconSize - FinalSize) * 0.5f;
 
-                UCanvasPanelSlot* CanvasSlot = IconCanvas->AddChildToCanvas(IconImage);
-                if (CanvasSlot)
+                if (ExistingImage && *ExistingImage)
                 {
-                    CanvasSlot->SetPosition(IconPos + Offset);
-                    CanvasSlot->SetSize(FinalSize);
-                    CanvasSlot->SetAutoSize(false);
+                    UImage* Img = *ExistingImage;
+                    FSlateBrush Brush;
+                    Brush.SetResourceObject(IconTex);
+                    Brush.DrawAs = ESlateBrushDrawType::Image;
+                    Img->SetBrush(Brush);
+
+                    if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Img->Slot))
+                    {
+                        CanvasSlot->SetPosition(IconPos + Offset);
+                        CanvasSlot->SetSize(FinalSize);
+                    }
+                }
+                else
+                {
+                    UImage* IconImage = NewObject<UImage>(this);
+                    IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+                    FSlateBrush Brush;
+                    Brush.SetResourceObject(IconTex);
+                    Brush.DrawAs = ESlateBrushDrawType::Image;
+                    IconImage->SetBrush(Brush);
+
+                    UCanvasPanelSlot* CanvasSlot = IconCanvas->AddChildToCanvas(IconImage);
+                    if (CanvasSlot)
+                    {
+                        CanvasSlot->SetPosition(IconPos + Offset);
+                        CanvasSlot->SetSize(FinalSize);
+                        CanvasSlot->SetAutoSize(false);
+                    }
+                    IconImageCache.Add(ItemID, IconImage);
                 }
             }
         }
-
-        // 스택 카운트 텍스트 (2 이상일 때만 표시, 텍스처 유무와 무관)
-        if (SlotVM->GetStackCount() > 1)
+        else if (ExistingImage && *ExistingImage)
         {
-            UTextBlock* StackText = NewObject<UTextBlock>(this);
-            StackText->SetVisibility(ESlateVisibility::HitTestInvisible);
-            StackText->SetText(FText::AsNumber(SlotVM->GetStackCount()));
+            (*ExistingImage)->RemoveFromParent();
+            IconImageCache.Remove(ItemID);
+        }
 
-            FSlateFontInfo FontInfo = StackText->GetFont();
-            FontInfo.Size = 12;
-            StackText->SetFont(FontInfo);
-            StackText->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 1.f, 1.f, 0.9f)));
+        // ── 스택 카운트 텍스트 ──
+        UTextBlock** ExistingText = StackTextCache.Find(ItemID);
 
-            UCanvasPanelSlot* TextSlot = IconCanvas->AddChildToCanvas(StackText);
-            if (TextSlot)
+        if (RootSlotVM->GetStackCount() > 1)
+        {
+            if (ExistingText && *ExistingText)
             {
-                TextSlot->SetAutoSize(true);
-                TextSlot->SetPosition(FVector2D(
-                    IconPos.X + IconSize.X - SlotSize.X * 0.3f,
-                    IconPos.Y + IconSize.Y - SlotSize.Y * 0.3f));
+                (*ExistingText)->SetText(FText::AsNumber(RootSlotVM->GetStackCount()));
+                if (UCanvasPanelSlot* TextSlot = Cast<UCanvasPanelSlot>((*ExistingText)->Slot))
+                {
+                    TextSlot->SetPosition(FVector2D(
+                        IconPos.X + IconSize.X - SlotSize.X * 0.3f,
+                        IconPos.Y + IconSize.Y - SlotSize.Y * 0.3f));
+                }
             }
+            else
+            {
+                UTextBlock* StackText = NewObject<UTextBlock>(this);
+                StackText->SetVisibility(ESlateVisibility::HitTestInvisible);
+                StackText->SetText(FText::AsNumber(RootSlotVM->GetStackCount()));
+
+                FSlateFontInfo FontInfo = StackText->GetFont();
+                FontInfo.Size = 12;
+                StackText->SetFont(FontInfo);
+                StackText->SetColorAndOpacity(FSlateColor(FLinearColor(1.f, 1.f, 1.f, 0.9f)));
+
+                UCanvasPanelSlot* TextSlot = IconCanvas->AddChildToCanvas(StackText);
+                if (TextSlot)
+                {
+                    TextSlot->SetAutoSize(true);
+                    TextSlot->SetPosition(FVector2D(
+                        IconPos.X + IconSize.X - SlotSize.X * 0.3f,
+                        IconPos.Y + IconSize.Y - SlotSize.Y * 0.3f));
+                }
+                StackTextCache.Add(ItemID, StackText);
+            }
+        }
+        else if (ExistingText && *ExistingText)
+        {
+            (*ExistingText)->RemoveFromParent();
+            StackTextCache.Remove(ItemID);
         }
     }
 
-    // 자식 추가 후 명시적 Invalidate — 렌더 트리거 보장 (protected이므로 내부에서 호출)
-    Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
+    // ── 제거된 아이템 정리: 캐시에 있지만 ViewModel에 없는 아이콘 제거 ──
+    // dirty 슬롯이 빈칸이 된 경우 해당 아이템이 삭제된 것
+    TArray<FGuid> StaleIDs;
+    for (auto& Pair : IconImageCache)
+    {
+        const FIntPoint RootPos = InViewModel->GetItemRootPosition(Pair.Key);
+        if (RootPos.X < 0)
+        {
+            // ViewModel에서 이 아이템을 찾을 수 없음 → 제거됨
+            StaleIDs.Add(Pair.Key);
+        }
+    }
+    for (const FGuid& ID : StaleIDs)
+    {
+        if (UImage** Img = IconImageCache.Find(ID))
+        {
+            if (*Img) (*Img)->RemoveFromParent();
+        }
+        if (UTextBlock** Txt = StackTextCache.Find(ID))
+        {
+            if (*Txt) (*Txt)->RemoveFromParent();
+        }
+        IconImageCache.Remove(ID);
+        StackTextCache.Remove(ID);
+    }
+
+    if (DirtyRootItems.Num() > 0 || StaleIDs.Num() > 0)
+    {
+        Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
+    }
 }
 
 // ========== 우클릭 컨텍스트 메뉴 ==========
@@ -285,27 +394,24 @@ bool UInventoryIconOverlay::FindItemAtPosition(const FVector2D& LocalPos,
     const FVector2D CellStride(GridLocalSize.X / CachedGridWidth,
                                 GridLocalSize.Y / CachedGridHeight);
 
-    // ViewModel의 루트 슬롯을 순회하여 바운드 박스 검사
-    for (UInventorySlotViewModel* SlotVM : CachedViewModel->GetAllSlots())
+    // 좌표 → 셀 인덱스 O(1) 직접 접근
+    const int32 Col = FMath::FloorToInt(LocalPos.X / CellStride.X);
+    const int32 Row = FMath::FloorToInt(LocalPos.Y / CellStride.Y);
+
+    if (Col < 0 || Col >= CachedGridWidth || Row < 0 || Row >= CachedGridHeight)
     {
-        if (!SlotVM || SlotVM->IsEmpty() || !SlotVM->IsRootSlot()) continue;
-
-        const FIntPoint GridPos  = SlotVM->GetGridPosition();
-        const FVector2D TopLeft(GridPos.X * CellStride.X, GridPos.Y * CellStride.Y);
-        const FVector2D Size(SlotVM->GetItemSizeX() * CellStride.X,
-                              SlotVM->GetItemSizeY() * CellStride.Y);
-        const FVector2D BottomRight = TopLeft + Size;
-
-        if (LocalPos.X >= TopLeft.X && LocalPos.X <= BottomRight.X &&
-            LocalPos.Y >= TopLeft.Y && LocalPos.Y <= BottomRight.Y)
-        {
-            OutInstanceID = SlotVM->GetItemInstanceID();
-            OutItemDataID = SlotVM->GetItemDataID();
-            return true;
-        }
+        return false;
     }
 
-    return false;
+    UInventorySlotViewModel* SlotVM = CachedViewModel->GetSlotAt(FIntPoint(Col, Row));
+    if (!SlotVM || SlotVM->IsEmpty())
+    {
+        return false;
+    }
+
+    OutInstanceID = SlotVM->GetItemInstanceID();
+    OutItemDataID = SlotVM->GetItemDataID();
+    return true;
 }
 
 // ========== ParentPanel 주입 ==========

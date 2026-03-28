@@ -61,7 +61,7 @@ void UCraftingRecipeWidget::SetRecipe(FName InRecipeID, UInventoryComponent* InI
         for (int32 i = 0; i < Recipe->Ingredients.Num(); ++i)
         {
             const FCraftingIngredient& Ing = Recipe->Ingredients[i];
-            const int32 Owned = InInventory ? InInventory->GetItemCountByID(Ing.ItemDataID) : 0;
+            const int32 Owned = InInventory ? InInventory->GetItemCountByID_Cached(Ing.ItemDataID) : 0;
             IngredientsStr += FString::Printf(TEXT("%s x%d (%d)"),
                 *Ing.ItemDataID.ToString(), Ing.RequiredCount, Owned);
             if (i < Recipe->Ingredients.Num() - 1)
@@ -91,10 +91,10 @@ void UCraftingRecipeWidget::SetRecipe(FName InRecipeID, UInventoryComponent* InI
         const FItemData* ResultItem = Sub->GetItemData(Recipe->ResultItemID);
         if (ResultItem && !ResultItem->Icon.IsNull())
         {
-            UTexture2D* IconTex = ResultItem->Icon.LoadSynchronous();
+            UTexture2D* IconTex = Sub->GetCachedTexture(ResultItem->Icon);
             if (IconTex)
             {
-                Image_ResultIcon->SetBrushFromTexture(IconTex);
+                Image_ResultIcon->SetBrushFromTexture(IconTex, true);
             }
         }
     }

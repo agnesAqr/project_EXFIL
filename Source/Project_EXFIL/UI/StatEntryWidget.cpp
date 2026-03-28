@@ -98,12 +98,18 @@ void UStatEntryWidget::UpdateStat(float Current, float Maximum)
         Image_TrackFill->SetColorAndOpacity(FillColor);
     }
 
-    // 텍스트: "100/100"
+    // 텍스트: "100/100" — 반올림 값이 변하지 않으면 SetText 스킵
     if (TextBlock_Value)
     {
-        const FString ValueStr = FString::Printf(
-            TEXT("%d/%d"), FMath::RoundToInt(Current), FMath::RoundToInt(Maximum));
-        TextBlock_Value->SetText(FText::FromString(ValueStr));
+        const int32 RoundedCur = FMath::RoundToInt(Current);
+        const int32 RoundedMax = FMath::RoundToInt(Maximum);
+        if (RoundedCur != CachedRoundedCurrent || RoundedMax != CachedRoundedMax)
+        {
+            CachedRoundedCurrent = RoundedCur;
+            CachedRoundedMax = RoundedMax;
+            TextBlock_Value->SetText(FText::FromString(
+                FString::Printf(TEXT("%d/%d"), RoundedCur, RoundedMax)));
+        }
     }
 }
 

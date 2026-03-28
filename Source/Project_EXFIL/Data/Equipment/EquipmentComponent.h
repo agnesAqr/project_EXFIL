@@ -9,6 +9,7 @@
 #include "EquipmentComponent.generated.h"
 
 class UAbilitySystemComponent;
+class UItemDataSubsystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
     FOnEquipmentChanged,
@@ -116,9 +117,15 @@ private:
     /** 태그→슬롯 데이터 매핑 테이블 */
     TMap<FName, TArray<EEquipmentSlot>> SlotTagToCandidates;
 
-    /** TArray에서 슬롯 검색 헬퍼 */
+    /** TArray에서 슬롯 검색 헬퍼 (SlotIndexMap 기반 O(1)) */
     FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType);
     const FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType) const;
+
+    /** SlotType → ReplicatedSlots 배열 인덱스 매핑 (O(1) 조회용) */
+    TMap<EEquipmentSlot, int32> SlotIndexMap;
+
+    /** SlotIndexMap 재구축 */
+    void RebuildSlotIndexMap();
 
     /** EquipmentEffect(Infinite Duration GE) 로드 및 ASC Apply */
     void ApplyEquipmentEffect(FEquipmentSlotData& SlotData, const FInventoryItemInstance& Item);
@@ -128,4 +135,8 @@ private:
 
     /** 소유 Actor의 ASC 획득 헬퍼 */
     UAbilitySystemComponent* GetASC() const;
+
+    /** ItemDataSubsystem 캐시 (BeginPlay에서 1회 조회) */
+    UPROPERTY()
+    TObjectPtr<UItemDataSubsystem> CachedItemSub;
 };

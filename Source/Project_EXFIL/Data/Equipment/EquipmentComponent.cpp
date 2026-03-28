@@ -23,6 +23,15 @@ void UEquipmentComponent::BeginPlay()
 {
     Super::BeginPlay();
 
+    // ItemDataSubsystem 캐싱
+    if (UWorld* World = GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+        }
+    }
+
     // 서버에서만 슬롯 초기화
     if (GetOwner() && GetOwner()->HasAuthority())
     {
@@ -42,6 +51,8 @@ void UEquipmentComponent::GetLifetimeReplicatedProps(
 
 void UEquipmentComponent::OnRep_Slots()
 {
+    RebuildSlotIndexMap();
+
     // 모든 슬롯에 대해 장착/해제 델리게이트 브로드캐스트
     for (const FEquipmentSlotData& SlotData : ReplicatedSlots)
     {
@@ -94,6 +105,7 @@ void UEquipmentComponent::InitializeSlots()
     ReplicatedSlots.Add(FEquipmentSlotData(EEquipmentSlot::Weapon2));
 
     InitializeSlotMapping();
+    RebuildSlotIndexMap();
 }
 
 void UEquipmentComponent::InitializeSlotMapping()
@@ -200,16 +212,31 @@ bool UEquipmentComponent::HasWeaponEquipped() const
 
 // ========== 내부 헬퍼 ==========
 
+void UEquipmentComponent::RebuildSlotIndexMap()
+{
+    SlotIndexMap.Empty(ReplicatedSlots.Num());
+    for (int32 i = 0; i < ReplicatedSlots.Num(); ++i)
+    {
+        SlotIndexMap.Add(ReplicatedSlots[i].SlotType, i);
+    }
+}
+
 FEquipmentSlotData* UEquipmentComponent::FindSlotData(EEquipmentSlot SlotType)
 {
-    return ReplicatedSlots.FindByPredicate(
-        [SlotType](const FEquipmentSlotData& S) { return S.SlotType == SlotType; });
+    if (const int32* Index = SlotIndexMap.Find(SlotType))
+    {
+        return &ReplicatedSlots[*Index];
+    }
+    return nullptr;
 }
 
 const FEquipmentSlotData* UEquipmentComponent::FindSlotData(EEquipmentSlot SlotType) const
 {
-    return ReplicatedSlots.FindByPredicate(
-        [SlotType](const FEquipmentSlotData& S) { return S.SlotType == SlotType; });
+    if (const int32* Index = SlotIndexMap.Find(SlotType))
+    {
+        return &ReplicatedSlots[*Index];
+    }
+    return nullptr;
 }
 
 void UEquipmentComponent::ApplyEquipmentEffect(FEquipmentSlotData& SlotData,
@@ -221,31 +248,18 @@ void UEquipmentComponent::ApplyEquipmentEffect(FEquipmentSlotData& SlotData,
         return;
     }
 
-    // ItemDataSubsystem에서 EquipmentEffect 조회
-    UItemDataSubsystem* ItemSub = nullptr;
-    if (AActor* Owner = GetOwner())
-    {
-        if (UWorld* World = Owner->GetWorld())
-        {
-            if (UGameInstance* GI = World->GetGameInstance())
-            {
-                ItemSub = GI->GetSubsystem<UItemDataSubsystem>();
-            }
-        }
-    }
-
-    if (!ItemSub)
+    if (!CachedItemSub)
     {
         return;
     }
 
-    const FItemData* ItemData = ItemSub->GetItemData(Item.ItemDataID);
+    const FItemData* ItemData = CachedItemSub->GetItemData(Item.ItemDataID);
     if (!ItemData || ItemData->EquipmentEffect.IsNull())
     {
         return;
     }
 
-    TSubclassOf<UGameplayEffect> GEClass = ItemData->EquipmentEffect.LoadSynchronous();
+    TSubclassOf<UGameplayEffect> GEClass = CachedItemSub->GetCachedEffect(ItemData->EquipmentEffect);
     if (!GEClass)
     {
         return;
@@ -322,19 +336,10 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
     }
 
     // DataTable에서 EquipmentSlotTag 조회 → FindTargetSlot으로 실제 슬롯 결정
-    UItemDataSubsystem* Sub = nullptr;
-    if (UWorld* World = Owner->GetWorld())
-    {
-        if (UGameInstance* GI = World->GetGameInstance())
-        {
-            Sub = GI->GetSubsystem<UItemDataSubsystem>();
-        }
-    }
-
     EEquipmentSlot TargetSlot = EEquipmentSlot::None;
-    if (Sub)
+    if (CachedItemSub)
     {
-        const FItemData* ItemData = Sub->GetItemData(ItemInstance.ItemDataID);
+        const FItemData* ItemData = CachedItemSub->GetItemData(ItemInstance.ItemDataID);
         if (!ItemData || ItemData->ItemType != EItemType::Equipment)
         {
             UE_LOG(LogEXFIL, Warning,

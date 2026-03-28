@@ -77,6 +77,13 @@ private:
     TWeakObjectPtr<UCraftingComponent> CraftingComp;
     TWeakObjectPtr<UInventoryComponent> InventoryComp;
 
+    /** RecipeID → 위젯 캐시 (1회 생성 후 재사용) */
+    UPROPERTY()
+    TMap<FName, UCraftingRecipeWidget*> RecipeWidgetCache;
+
+    /** 레시피 위젯 초기 생성 여부 */
+    bool bRecipesInitialized = false;
+
     /** 크래프팅 상태 변경 콜백 */
     UFUNCTION()
     void OnCraftingStateChanged(bool bIsCrafting, float RemainingTime);
@@ -99,4 +106,8 @@ private:
     void StartProgressTimer(float Duration);
     void StopProgressTimer();
     void UpdateProgressBar();
+
+    /** 진행바 텍스트 캐싱 — 소수점 1자리 반올림값이 같으면 SetText 스킵 */
+    int32 CachedElapsedTenths = -1;
+    int32 CachedDurationTenths = -1;
 };

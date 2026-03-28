@@ -136,11 +136,17 @@ private:
     /** GridPanel 초기화 */
     void ClearGrid();
 
-    /** IconOverlay에 아이콘 갱신 요청 */
-    void RefreshIconOverlay();
+    /** IconOverlay에 아이콘 갱신 요청 (DirtyIndices 전달) */
+    void RefreshIconOverlay(const TSet<int32>& DirtyIndices);
+
+    /** 전체 갱신 폴백 (타이머, NativePaint에서 사용) */
+    void RefreshIconOverlayFull();
 
     /** NativePaint에서 1회 셀 정사각형 보정용 플래그 */
     mutable bool bNeedsCellSquareFix = true;
+
+    /** Geometry 변경 감지 — 최초 레이아웃 완료 시 아이콘 리프레시 트리거 */
+    FVector2D CachedGeometrySize = FVector2D::ZeroVector;
 
     /** 셀 정사각형 보정 후 아이콘 배치용 타이머 */
     FTimerHandle IconRefreshTimerHandle;

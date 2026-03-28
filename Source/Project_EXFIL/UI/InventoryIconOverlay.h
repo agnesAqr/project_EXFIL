@@ -8,6 +8,8 @@
 #include "InventoryIconOverlay.generated.h"
 
 class UCanvasPanel;
+class UImage;
+class UTextBlock;
 class UInventoryViewModel;
 class UInventorySlotViewModel;
 class UUniformGridPanel;
@@ -29,15 +31,17 @@ class PROJECT_EXFIL_API UInventoryIconOverlay : public UUserWidget
 
 public:
     /**
-     * ViewModel의 모든 아이템을 순회하여 루트 슬롯에 아이콘 Image 위젯 배치.
+     * 변경된 슬롯(DirtyIndices)에 해당하는 루트 아이템의 아이콘만 갱신.
      * 내부적으로 ViewModel/GridPanel/Dimensions를 캐싱하여 우클릭 HitTest에 활용.
      * @param InViewModel   조회할 InventoryViewModel
      * @param InGridPanel   슬롯이 배치된 UniformGridPanel
      * @param InGridWidth   그리드 열 수
      * @param InGridHeight  그리드 행 수
+     * @param DirtyIndices  변경된 슬롯 인덱스 (1D: Y*Width+X)
      */
     void RefreshIcons(UInventoryViewModel* InViewModel, UUniformGridPanel* InGridPanel,
-                      int32 InGridWidth, int32 InGridHeight);
+                      int32 InGridWidth, int32 InGridHeight,
+                      const TSet<int32>& DirtyIndices);
 
     /** 컨텍스트 메뉴 위젯 클래스 — BP 디테일에서 할당 */
     UPROPERTY(EditAnywhere, Category = "UI")
@@ -107,4 +111,17 @@ private:
 
     /** 컨텍스트 메뉴를 지연 생성하거나 기존 것을 반환 */
     UItemContextMenuWidget* GetOrCreateContextMenu();
+
+    // ========== 아이콘 위젯 캐시 (ClearChildren 제거 최적화) ==========
+
+    /** 아이템 InstanceID → 아이콘 Image 위젯 캐시 */
+    UPROPERTY()
+    TMap<FGuid, UImage*> IconImageCache;
+
+    /** 아이템 InstanceID → 스택 카운트 TextBlock 캐시 */
+    UPROPERTY()
+    TMap<FGuid, UTextBlock*> StackTextCache;
+
+    /** 캐시된 CellStride (geometry 변경 시 전체 재배치 판별용) */
+    FVector2D CachedCellStride = FVector2D::ZeroVector;
 };
