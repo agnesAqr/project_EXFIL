@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>ASC Initialization Timing — Before vs After</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0e17; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Consolas', 'Courier New', monospace; }
+  .container { width: 1020px; padding: 40px 20px; }
+  h2 { color: #00e5ff; font-size: 14px; letter-spacing: 3px; margin-bottom: 24px; font-weight: 400; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>— ASC INITIALIZATION TIMING</h2>
+  
+  <svg width="980" height="520" viewBox="0 0 980 520" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
+    
+    <defs>
+      <marker id="ad" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#58a6ff"/></marker>
+      <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3fb950"/></marker>
+      <marker id="ar" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f85149"/></marker>
+    </defs>
+
+
+    <!-- ============================================ -->
+    <!-- 좌측: SERVER 타이밍 (정상)                     -->
+    <!-- ============================================ -->
+    <text x="15" y="18" fill="#3fb950" font-size="11" letter-spacing="2" font-weight="600">SERVER (정상)</text>
+    <line x1="15" y1="28" x2="280" y2="28" stroke="#3fb95033" stroke-width="2"/>
+
+    <!-- 수직 타임라인 -->
+    <line x1="150" y1="40" x2="150" y2="280" stroke="#ffffff10" stroke-width="1" stroke-dasharray="4,4"/>
+
+    <!-- 시간 흐름 화살표 -->
+    <text x="20" y="50" fill="#8b949e" font-size="8">시간 ↓</text>
+
+    <!-- Step 1: BeginPlay -->
+    <rect x="30" y="60" width="240" height="40" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="42" y="76" fill="#3fb950" font-size="10" font-weight="600">BeginPlay()</text>
+    <text x="42" y="90" fill="#8b949e" font-size="9">캐릭터 스폰</text>
+
+    <line x1="150" y1="100" x2="150" y2="118" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+
+    <!-- Step 2: PossessedBy -->
+    <rect x="30" y="120" width="240" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="42" y="136" fill="#3fb950" font-size="10" font-weight="600">PossessedBy(Controller)</text>
+    <text x="42" y="150" fill="#e6edf3" font-size="9">InitAbilityActorInfo(this, this)</text>
+    <text x="42" y="164" fill="#3fb950" font-size="9" font-weight="600">ASC 초기화 ✅</text>
+
+    <line x1="150" y1="174" x2="150" y2="192" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+
+    <!-- Step 3: InitializeViewModels -->
+    <rect x="30" y="194" width="240" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="42" y="210" fill="#3fb950" font-size="10" font-weight="600">InitializeViewModels()</text>
+    <text x="42" y="224" fill="#e6edf3" font-size="9">ASC→GetSet&lt;SurvivalAttributeSet&gt;()</text>
+    <text x="42" y="238" fill="#3fb950" font-size="9" font-weight="600">→ Valid ✅ StatsBar 정상</text>
+
+    <!-- 결과 -->
+    <rect x="30" y="264" width="240" height="26" rx="5" fill="#23863622" stroke="#3fb95044"/>
+    <text x="150" y="281" fill="#3fb950" font-size="11" font-weight="600" text-anchor="middle">정상 동작</text>
+
+
+    <!-- ============================================ -->
+    <!-- 중앙: CLIENT BEFORE (문제)                     -->
+    <!-- ============================================ -->
+    <text x="340" y="18" fill="#f85149" font-size="11" letter-spacing="2" font-weight="600">CLIENT — BEFORE (문제)</text>
+    <line x1="340" y1="28" x2="630" y2="28" stroke="#f8514933" stroke-width="2"/>
+
+    <!-- 수직 타임라인 -->
+    <line x1="485" y1="40" x2="485" y2="280" stroke="#ffffff10" stroke-width="1" stroke-dasharray="4,4"/>
+
+    <!-- Step 1: BeginPlay + InitVM -->
+    <rect x="355" y="60" width="260" height="68" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="367" y="76" fill="#f85149" font-size="10" font-weight="600">BeginPlay()</text>
+    <text x="367" y="90" fill="#e6edf3" font-size="9">InitializeViewModels() ← 여기서 호출</text>
+    <text x="367" y="104" fill="#e6edf3" font-size="9">ASC→GetSet&lt;SurvivalAttributeSet&gt;()</text>
+    <text x="367" y="118" fill="#f85149" font-size="9" font-weight="600">→ null ❌ ASC 미초기화</text>
+
+    <line x1="485" y1="128" x2="485" y2="146" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
+
+    <!-- Step 2: OnRep_PlayerState (나중에 도착) -->
+    <rect x="355" y="148" width="260" height="54" rx="5" fill="#161b22" stroke="#8b949e44"/>
+    <text x="367" y="164" fill="#8b949e" font-size="10" font-weight="600">OnRep_PlayerState()</text>
+    <text x="367" y="178" fill="#8b949e" font-size="9">InitAbilityActorInfo(this, this)</text>
+    <text x="367" y="192" fill="#8b949e" font-size="9">ASC 초기화됨 — 하지만 이미 늦음</text>
+
+    <!-- 결과 -->
+    <rect x="355" y="264" width="260" height="26" rx="5" fill="#f8514922" stroke="#f8514944"/>
+    <text x="485" y="281" fill="#f85149" font-size="11" font-weight="600" text-anchor="middle">StatsBar 갱신 안 됨</text>
+
+    <!-- 문제 원인 화살표 -->
+    <text x="400" y="224" fill="#f85149" font-size="9">VM 바인딩이 ASC 초기화보다 먼저!</text>
+    <line x1="485" y1="230" x2="485" y2="260" stroke="#f85149" stroke-width="1" stroke-dasharray="3,3"/>
+
+
+    <!-- ============================================ -->
+    <!-- 우측: CLIENT AFTER (해결)                      -->
+    <!-- ============================================ -->
+    <text x="680" y="18" fill="#3fb950" font-size="11" letter-spacing="2" font-weight="600">CLIENT — AFTER (해결)</text>
+    <line x1="680" y1="28" x2="965" y2="28" stroke="#3fb95033" stroke-width="2"/>
+
+    <!-- 수직 타임라인 -->
+    <line x1="822" y1="40" x2="822" y2="280" stroke="#ffffff10" stroke-width="1" stroke-dasharray="4,4"/>
+
+    <!-- Step 1: BeginPlay (VM 안 함) -->
+    <rect x="695" y="60" width="255" height="40" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="707" y="76" fill="#58a6ff" font-size="10" font-weight="600">BeginPlay()</text>
+    <text x="707" y="90" fill="#8b949e" font-size="9">캐릭터 스폰 (VM 바인딩 안 함)</text>
+
+    <line x1="822" y1="100" x2="822" y2="118" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+
+    <!-- Step 2: OnRep_PlayerState → ASC Init + VM -->
+    <rect x="695" y="120" width="255" height="82" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="707" y="136" fill="#3fb950" font-size="10" font-weight="600">OnRep_PlayerState()</text>
+    <text x="707" y="150" fill="#e6edf3" font-size="9">InitAbilityActorInfo(this, this)</text>
+    <text x="707" y="164" fill="#3fb950" font-size="9" font-weight="600">ASC 초기화 ✅</text>
+    <text x="707" y="182" fill="#e6edf3" font-size="9">InitializeViewModels()</text>
+    <text x="707" y="196" fill="#3fb950" font-size="9" font-weight="600">→ Valid ✅ StatsBar 정상</text>
+
+    <!-- 결과 -->
+    <rect x="695" y="264" width="255" height="26" rx="5" fill="#23863622" stroke="#3fb95044"/>
+    <text x="822" y="281" fill="#3fb950" font-size="11" font-weight="600" text-anchor="middle">정상 동작</text>
+
+    <!-- 핵심 포인트 표시 -->
+    <rect x="707" y="218" width="230" height="30" rx="4" fill="#0a0e17" stroke="#00e5ff44"/>
+    <text x="822" y="237" fill="#00e5ff" font-size="9" text-anchor="middle">ASC 초기화 후 VM 바인딩 → 순서 보장</text>
+
+
+    <!-- ============================================ -->
+    <!-- 하단: 요약                                     -->
+    <!-- ============================================ -->
+    <line x1="15" y1="310" x2="965" y2="310" stroke="#30363d" stroke-width="1"/>
+
+    <text x="15" y="335" fill="#00e5ff" font-size="11" letter-spacing="2" font-weight="600">핵심 원인</text>
+
+    <rect x="15" y="345" width="465" height="68" rx="5" fill="#161b22" stroke="#f8514944"/>
+    <text x="27" y="361" fill="#f85149" font-size="10" font-weight="600">Dedicated Server에서만 발생</text>
+    <text x="27" y="375" fill="#e6edf3" font-size="9">서버: PossessedBy → ASC 즉시 초기화</text>
+    <text x="27" y="389" fill="#e6edf3" font-size="9">클라이언트: PlayerState 리플리케이션 대기 → ASC 초기화 지연</text>
+    <text x="27" y="403" fill="#8b949e" font-size="9">Listen Server에서는 호스트=서버라 타이밍 차이 없음 → 문제 미발생</text>
+
+    <rect x="500" y="345" width="465" height="68" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="512" y="361" fill="#3fb950" font-size="10" font-weight="600">해결: 바인딩 시점 이동</text>
+    <text x="512" y="375" fill="#e6edf3" font-size="9">BeginPlay에서 InitializeViewModels() 제거</text>
+    <text x="512" y="389" fill="#e6edf3" font-size="9">OnRep_PlayerState에서 InitAbilityActorInfo() 후 호출</text>
+    <text x="512" y="403" fill="#8b949e" font-size="9">ASC 준비 완료가 보장된 시점에서만 ViewModel 바인딩</text>
+
+
+    <!-- ============================================ -->
+    <!-- LEGEND                                        -->
+    <!-- ============================================ -->
+    <rect x="15" y="430" width="950" height="30" rx="5" fill="#161b2244" stroke="#30363d"/>
+    
+    <rect x="30" y="440" width="10" height="10" rx="2" fill="#3fb95033" stroke="#3fb95066"/>
+    <text x="46" y="450" fill="#8b949e" font-size="9">정상 동작</text>
+
+    <rect x="160" y="440" width="10" height="10" rx="2" fill="#f8514933" stroke="#f8514966"/>
+    <text x="176" y="450" fill="#8b949e" font-size="9">문제 발생 (ASC null)</text>
+
+    <rect x="340" y="440" width="10" height="10" rx="2" fill="#58a6ff33" stroke="#58a6ff66"/>
+    <text x="356" y="450" fill="#8b949e" font-size="9">수정된 코드 경로</text>
+
+    <rect x="510" y="440" width="10" height="10" rx="2" fill="#00e5ff33" stroke="#00e5ff66"/>
+    <text x="526" y="450" fill="#8b949e" font-size="9">핵심 해결 포인트</text>
+
+
+
+  </svg>
+</div>
+</body>
+</html>

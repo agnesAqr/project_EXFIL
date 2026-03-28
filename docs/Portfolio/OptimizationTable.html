@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Performance Optimization — Before / After</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0e17; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Consolas', 'Courier New', monospace; }
+  .container { width: 1020px; padding: 40px 20px; }
+  h2 { color: #00e5ff; font-size: 14px; letter-spacing: 3px; margin-bottom: 24px; font-weight: 400; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>— PERFORMANCE OPTIMIZATION</h2>
+  
+  <svg width="980" height="420" viewBox="0 0 980 420" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
+
+    <!-- 테이블 헤더 -->
+    <rect x="15" y="10" width="950" height="30" rx="5" fill="#161b22" stroke="#30363d"/>
+    <text x="27" y="30" fill="#00e5ff" font-size="10" font-weight="600">최적화 항목</text>
+    <text x="300" y="30" fill="#f85149" font-size="10" font-weight="600">BEFORE</text>
+    <text x="560" y="30" fill="#3fb950" font-size="10" font-weight="600">AFTER</text>
+    <text x="800" y="30" fill="#d29922" font-size="10" font-weight="600">기법</text>
+
+    <!-- Row 1: 빈 영역 검증 -->
+    <rect x="15" y="50" width="950" height="60" rx="0" fill="#58a6ff06"/>
+    <line x1="15" y1="50" x2="965" y2="50" stroke="#30363d" stroke-width="0.5"/>
+    <text x="27" y="74" fill="#58a6ff" font-size="10" font-weight="600">빈 영역 검증</text>
+    <text x="27" y="96" fill="#8b949e" font-size="9">AreSlotsFree()</text>
+    <text x="300" y="74" fill="#f85149" font-size="11" font-weight="600">O(W × H)</text>
+    <text x="300" y="96" fill="#8b949e" font-size="9">매 셀마다 GridSlots 배열 접근</text>
+    <text x="560" y="74" fill="#3fb950" font-size="11" font-weight="600">O(1)</text>
+    <text x="560" y="96" fill="#8b949e" font-size="9">행당 비트 AND 연산 1회</text>
+    <text x="800" y="74" fill="#d29922" font-size="10">Bitmap</text>
+    <text x="800" y="96" fill="#8b949e" font-size="9">TArray&lt;uint16&gt; RowBitmap</text>
+
+    <!-- Row 2: 아이템 탐색 -->
+    <rect x="15" y="110" width="950" height="60" rx="0" fill="transparent"/>
+    <line x1="15" y1="110" x2="965" y2="110" stroke="#30363d" stroke-width="0.5"/>
+    <text x="27" y="134" fill="#58a6ff" font-size="10" font-weight="600">아이템 탐색</text>
+    <text x="27" y="156" fill="#8b949e" font-size="9">FindItemByInstanceID()</text>
+    <text x="300" y="134" fill="#f85149" font-size="11" font-weight="600">O(N)</text>
+    <text x="300" y="156" fill="#8b949e" font-size="9">FindByPredicate 선형 탐색</text>
+    <text x="560" y="134" fill="#3fb950" font-size="11" font-weight="600">O(1)</text>
+    <text x="560" y="156" fill="#8b949e" font-size="9">TMap::Find 해시 조회</text>
+    <text x="800" y="134" fill="#d29922" font-size="10">ItemIndexMap</text>
+    <text x="800" y="156" fill="#8b949e" font-size="9">TMap&lt;FGuid, int32&gt;</text>
+
+    <!-- Row 3: 수량 조회 -->
+    <rect x="15" y="170" width="950" height="60" rx="0" fill="#58a6ff06"/>
+    <line x1="15" y1="170" x2="965" y2="170" stroke="#30363d" stroke-width="0.5"/>
+    <text x="27" y="194" fill="#58a6ff" font-size="10" font-weight="600">수량 조회</text>
+    <text x="27" y="216" fill="#8b949e" font-size="9">GetItemCountByID()</text>
+    <text x="300" y="194" fill="#f85149" font-size="11" font-weight="600">O(N)</text>
+    <text x="300" y="216" fill="#8b949e" font-size="9">Items 배열 전체 순회</text>
+    <text x="560" y="194" fill="#3fb950" font-size="11" font-weight="600">O(1)</text>
+    <text x="560" y="216" fill="#8b949e" font-size="9">TMap::Find 해시 조회</text>
+    <text x="800" y="194" fill="#d29922" font-size="10">ItemCountCache</text>
+    <text x="800" y="216" fill="#8b949e" font-size="9">TMap&lt;FName, int32&gt;</text>
+
+    <!-- Row 4: ViewModel 갱신 -->
+    <rect x="15" y="230" width="950" height="60" rx="0" fill="transparent"/>
+    <line x1="15" y1="230" x2="965" y2="230" stroke="#30363d" stroke-width="0.5"/>
+    <text x="27" y="254" fill="#58a6ff" font-size="10" font-weight="600">ViewModel 갱신</text>
+    <text x="27" y="276" fill="#8b949e" font-size="9">OnInventoryUpdated</text>
+    <text x="300" y="254" fill="#f85149" font-size="11" font-weight="600">130칸 전체</text>
+    <text x="300" y="276" fill="#8b949e" font-size="9">RefreshAllSlots() 매번 호출</text>
+    <text x="560" y="254" fill="#3fb950" font-size="11" font-weight="600">변경 슬롯만</text>
+    <text x="560" y="276" fill="#8b949e" font-size="9">TSet&lt;int32&gt; DirtyIndices 전파</text>
+    <text x="800" y="254" fill="#d29922" font-size="10">Dirty Flag</text>
+    <text x="800" y="276" fill="#8b949e" font-size="9">변경분만 ViewModel에 전달</text>
+
+    <line x1="15" y1="290" x2="965" y2="290" stroke="#30363d" stroke-width="0.5"/>
+
+    <!-- Optimization Strategy -->
+    <text x="15" y="320" fill="#8b949e" font-size="9" letter-spacing="2">OPTIMIZATION STRATEGY</text>
+
+    <rect x="15" y="330" width="465" height="54" rx="5" fill="#161b22" stroke="#58a6ff44"/>
+    <text x="27" y="346" fill="#58a6ff" font-size="10" font-weight="600">리플리케이션 + 캐시 분리</text>
+    <text x="27" y="360" fill="#8b949e" font-size="9">Replicated State(Items + GridSlots) + 로컬 캐시(TMap/Bitmap)</text>
+    <text x="27" y="374" fill="#8b949e" font-size="9">OnRep_Items에서 3개 캐시 자동 리빌드</text>
+
+    <rect x="500" y="330" width="465" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
+    <text x="512" y="346" fill="#3fb950" font-size="10" font-weight="600">이벤트 드리븐 갱신</text>
+    <text x="512" y="360" fill="#8b949e" font-size="9">게임플레이 상태 동기화 Tick-free — Delegate/OnRep 기반</text>
+    <text x="512" y="374" fill="#8b949e" font-size="9">Dirty Flag로 변경 슬롯만 ViewModel에 전파</text>
+
+  </svg>
+</div>
+</body>
+</html>
