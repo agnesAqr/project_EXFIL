@@ -49,13 +49,13 @@
 
     <!-- ROW2 → ROW3 수직 화살표 (배경 패널 y=220 상단으로) -->
     <line x1="126" y1="184" x2="126" y2="218" stroke="#58a6ff" stroke-width="1" marker-end="url(#ab)"/>
-    <line x1="358" y1="184" x2="358" y2="218" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+    <line x1="358" y1="184" x2="358" y2="218" stroke="#3fb950" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#ag)"/>
     <line x1="590" y1="184" x2="590" y2="218" stroke="#d29922" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#ao)"/>
     <line x1="838" y1="184" x2="838" y2="218" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
 
     <!-- ROW3 → ROW4 대각선 합류 화살표 (배경 패널 y=370 상단으로) -->
     <line x1="126" y1="300" x2="388" y2="368" stroke="#58a6ff" stroke-width="1" marker-end="url(#ab)"/>
-    <line x1="358" y1="300" x2="408" y2="368" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
+    <line x1="358" y1="300" x2="408" y2="368" stroke="#3fb950" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#ag)"/>
     <line x1="838" y1="300" x2="592" y2="368" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
     <text x="490" y="335" fill="#00e5ff" font-size="9" text-anchor="middle">Modify Attribute</text>
 
@@ -126,10 +126,10 @@
     <text x="29" y="270" fill="#d29922" font-size="9">Duration: Instant</text>
     <text x="29" y="284" fill="#8b949e" font-size="9">HP +30, Hunger +20 등</text>
 
-    <rect x="249" y="240" width="218" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
-    <text x="261" y="256" fill="#3fb950" font-size="10" font-weight="600">GE_Equipment</text>
-    <text x="261" y="270" fill="#d29922" font-size="9">Duration: Infinite</text>
-    <text x="261" y="284" fill="#8b949e" font-size="9">MaxHP +50 등 (해제 시 Remove)</text>
+    <rect x="249" y="240" width="218" height="54" rx="5" fill="#161b22" stroke="#3fb95033" stroke-dasharray="4,2"/>
+    <text x="261" y="256" fill="#3fb950" font-size="10" font-weight="600" opacity="0.6">GE_Equipment</text>
+    <text x="261" y="270" fill="#d29922" font-size="9" opacity="0.6">Apply/Remove 프레임워크 구현</text>
+    <text x="261" y="284" fill="#8b949e" font-size="9" opacity="0.6">GE BP 미연결 — 스탯 변경 미발생</text>
 
     <rect x="481" y="240" width="218" height="54" rx="5" fill="#161b22" stroke="#d2992244"/>
     <text x="493" y="256" fill="#d29922" font-size="10" font-weight="600">결과물 생성</text>
@@ -186,8 +186,8 @@
     <rect x="20" y="718" width="10" height="10" rx="2" fill="#58a6ff33" stroke="#58a6ff66"/>
     <text x="36" y="728" fill="#8b949e" font-size="9">소비 (Instant)</text>
 
-    <rect x="155" y="718" width="10" height="10" rx="2" fill="#3fb95033" stroke="#3fb95066"/>
-    <text x="171" y="728" fill="#8b949e" font-size="9">장비 (Infinite)</text>
+    <rect x="155" y="718" width="10" height="10" rx="2" fill="#3fb95033" stroke="#3fb95066" stroke-dasharray="2,1"/>
+    <text x="171" y="728" fill="#8b949e" font-size="9">장비 (구조 구현)</text>
 
     <rect x="290" y="718" width="10" height="10" rx="2" fill="#d2992233" stroke="#d2992266"/>
     <text x="306" y="728" fill="#8b949e" font-size="9">크래프팅</text>
@@ -201,7 +201,7 @@
     <rect x="645" y="718" width="10" height="10" rx="2" fill="#bc8cff33" stroke="#bc8cff66"/>
     <text x="661" y="728" fill="#8b949e" font-size="9">PostExecute</text>
 
-    <text x="780" y="728" fill="#8b949e" font-size="9">GA 3종 + GE 3종 + AttributeSet 8속성</text>
+    <text x="780" y="728" fill="#8b949e" font-size="9">GA 3종 + GE 2종 실동작 + AttributeSet 8속성</text>
 
   </svg>
 </div>
