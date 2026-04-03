@@ -458,20 +458,6 @@ void AEXFILCharacter::OnDeath()
         AEXFILCharacter* Self = WeakThis.Get();
         if (!Self) return;
 
-        // HP 풀 회복
-        if (Self->AbilitySystemComponent)
-        {
-            USurvivalAttributeSet* AttrSet = const_cast<USurvivalAttributeSet*>(
-                Self->AbilitySystemComponent->GetSet<USurvivalAttributeSet>());
-            if (AttrSet)
-            {
-                AttrSet->SetHealth(AttrSet->GetMaxHealth());
-            }
-        }
-
-        // 텔레포트 전 숨기기 (이동하는 모습 안 보이게)
-        Self->SetActorHiddenInGame(true);
-
         // 스폰 지점으로 텔레포트
         if (AGameModeBase* GM = Self->GetWorld()->GetAuthGameMode())
         {
@@ -481,6 +467,20 @@ void AEXFILCharacter::OnDeath()
                 Self->SetActorLocationAndRotation(
                     PlayerStart->GetActorLocation(),
                     PlayerStart->GetActorRotation());
+            }
+        }
+
+        // 모든 스탯 Max로 풀 회복
+        if (Self->AbilitySystemComponent)
+        {
+            USurvivalAttributeSet* AttrSet = const_cast<USurvivalAttributeSet*>(
+                Self->AbilitySystemComponent->GetSet<USurvivalAttributeSet>());
+            if (AttrSet)
+            {
+                AttrSet->SetHealth(AttrSet->GetMaxHealth());
+                AttrSet->SetHunger(AttrSet->GetMaxHunger());
+                AttrSet->SetThirst(AttrSet->GetMaxThirst());
+                AttrSet->SetStamina(AttrSet->GetMaxStamina());
             }
         }
 
@@ -523,6 +523,17 @@ void AEXFILCharacter::Multicast_OnDeath_Implementation()
             DisableInput(PC);
         }
     }
+
+    // 3초 후 액터 숨기기 — 텔레포트(5초) 전에 확실히 안 보이도록
+    FTimerHandle HideTimer;
+    GetWorldTimerManager().SetTimer(HideTimer, [WeakThis = TWeakObjectPtr<AEXFILCharacter>(this)]()
+    {
+        if (AEXFILCharacter* Self = WeakThis.Get())
+        {
+            Self->SetActorHiddenInGame(true);
+            Self->SetActorEnableCollision(false);
+        }
+    }, 3.f, false);
 }
 
 void AEXFILCharacter::Multicast_Respawn_Implementation()
@@ -560,13 +571,14 @@ void AEXFILCharacter::Multicast_Respawn_Implementation()
         }
     }
 
-    // 짧은 딜레이 후 다시 보이게
+    // 리스폰 1초 후 다시 보이게 (래그돌 해제 + 위치 안정화 후)
     FTimerHandle ShowTimer;
     GetWorldTimerManager().SetTimer(ShowTimer, [WeakThis = TWeakObjectPtr<AEXFILCharacter>(this)]()
     {
         if (AEXFILCharacter* Self = WeakThis.Get())
         {
             Self->SetActorHiddenInGame(false);
+            Self->SetActorEnableCollision(true);
         }
     }, 1.f, false);
 }

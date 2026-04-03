@@ -200,7 +200,7 @@ protected:
 
     /** 사망 후 액터 제거까지 대기 시간 (초) */
     UPROPERTY(EditAnywhere, Category = "Combat")
-    float DeathLifeSpan = 6.f;
+    float DeathLifeSpan = 3.5f;
 
     /** F키 인터랙션 InputAction — 에디터에서 할당 */
     UPROPERTY(EditAnywhere, Category = "Input")
