@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventoryIconOverlay.h — 인벤토리 아이콘 오버레이: 아이템 아이콘 렌더링, 드래그&드롭, 우클릭 메뉴
 
 #pragma once
 
@@ -22,7 +23,7 @@ class UInventoryPanelWidget;
  * UniformGridPanel 위에 CanvasPanel을 겹쳐 배치하여
  * 아이템 실제 크기(W×H 칸)에 맞는 아이콘 이미지를 표시한다.
  *
- * Day 7: 우클릭 → 컨텍스트 메뉴 (Use / Equip / Drop)
+ * 우클릭 → 컨텍스트 메뉴 (Use / Equip / Drop)
  */
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UInventoryIconOverlay : public UUserWidget

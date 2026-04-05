@@ -12,11 +12,9 @@
 #include "UI/InventorySlotViewModel.h"
 #include "UI/ItemContextMenuWidget.h"
 #include "UI/InventoryDragDropOp.h"
-#include "UI/InventoryDragPreviewWidget.h"
 #include "UI/InventoryPanelWidget.h"
 #include "Inventory/InventoryComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Data/ItemDataSubsystem.h"
 #include "Core/EXFILLog.h"
 

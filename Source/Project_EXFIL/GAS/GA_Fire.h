@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// GA_Fire.h — 사격 GameplayAbility: 라인 트레이스 + 히트 검증 Server RPC
 
 #pragma once
 
@@ -11,7 +12,7 @@ class UEquipmentComponent;
 /**
  * UGA_Fire — 라인 트레이스 슈팅 GameplayAbility
  *
- * Day 8: 클라이언트에서 카메라 Forward 라인 트레이스 → 히트 결과를 Server RPC로 전송
+ * 클라이언트에서 카메라 Forward 라인 트레이스 → 히트 결과를 Server RPC로 전송
  * NetExecutionPolicy = LocalPredicted (클라이언트 즉시 디버그 라인, 서버에서 데미지 확정)
  */
 UCLASS()

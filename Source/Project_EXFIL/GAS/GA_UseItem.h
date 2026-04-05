@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// GA_UseItem.h — 소비 아이템 사용 GameplayAbility: GE 적용 + 인벤토리 차감
 
 #pragma once
 
@@ -10,8 +11,7 @@
  * UGA_UseItem — 소비 아이템 사용 GameplayAbility
  *
  * 호출 측에서 SetByCallerMagnitude 또는 AbilitySpec.GameplayEffectLevel로 아이템 ID를 전달.
- * Day 4: 기초 구조 — ActivateAbility에서 ConsumableEffect 로드 후 ASC에 Apply.
- * Day 5: UCraftingComponent 연동 예정.
+ * ActivateAbility에서 ConsumableEffect 로드 후 ASC에 Apply.
  */
 UCLASS()
 class PROJECT_EXFIL_API UGA_UseItem : public UGameplayAbility

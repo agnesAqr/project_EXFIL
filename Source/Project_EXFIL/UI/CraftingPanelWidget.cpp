@@ -9,7 +9,6 @@
 #include "Crafting/CraftingComponent.h"
 #include "Inventory/InventoryComponent.h"
 #include "Data/ItemDataSubsystem.h"
-#include "Data/EXFILItemTypes.h"
 #include "UI/CraftingRecipeWidget.h"
 #include "Engine/GameInstance.h"
 

@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// WorldItem.h — 월드 드롭 아이템 액터: 메시/라벨 표시, 픽업 충돌, 리플리케이션
 
 #pragma once
 
@@ -15,7 +16,7 @@ class UTextRenderComponent;
  *
  * bReplicates=true: 서버 스폰 → 모든 클라이언트에 자동 생성
  * SetReplicatingMovement(true): 물리 낙하 후 위치 동기화
- * Day 7: 픽업/드롭 리플리케이션 핵심 클래스
+ * 픽업/드롭 리플리케이션 핵심 클래스
  */
 UCLASS()
 class PROJECT_EXFIL_API AWorldItem : public AActor

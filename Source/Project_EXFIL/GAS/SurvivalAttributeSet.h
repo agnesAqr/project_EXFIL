@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// SurvivalAttributeSet.h — GAS 어트리뷰트: Health, Hunger, Thirst, Stamina + Max 값, 클램프 처리
 
 #pragma once
 

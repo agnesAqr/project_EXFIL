@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// StatEntryWidget.h — 개별 스탯 바 위젯: 아이콘 + 프로그레스 바 + 수치 텍스트
 
 #pragma once
 

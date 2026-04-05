@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// CraftingRecipeWidget.h — 개별 레시피 위젯: 재료/결과 아이콘, 제작 가능 여부 표시
 
 #pragma once
 

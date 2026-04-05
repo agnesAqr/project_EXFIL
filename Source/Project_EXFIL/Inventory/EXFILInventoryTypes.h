@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// EXFILInventoryTypes.h — 인벤토리 공용 구조체: FItemSize, FInventorySlot, FInventoryItemInstance
 
 #pragma once
 
@@ -44,7 +45,7 @@ struct PROJECT_EXFIL_API FInventoryItemInstance
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	FGuid InstanceID;
 
-	/** 아이템 정의 ID (Day 3에서 DataTable RowName으로 연결) */
+	/** 아이템 정의 ID (DataTable RowName으로 연결) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FName ItemDataID;
 
@@ -64,7 +65,7 @@ struct PROJECT_EXFIL_API FInventoryItemInstance
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 StackCount = 1;
 
-	/** 최대 스택 수량 (Day 3에서 DataTable에서 로드) */
+	/** 최대 스택 수량 (DataTable에서 로드) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 MaxStackCount = 1;
 

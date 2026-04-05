@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventoryComponent.h — 그리드 인벤토리 데이터 관리: 아이템 추가/제거/이동, Bitmap 기반 배치, 리플리케이션
 
 #pragma once
 
@@ -7,7 +8,7 @@
 #include "EXFILInventoryTypes.h"
 #include "InventoryComponent.generated.h"
 
-// 델리게이트 선언 (Day 2 ViewModel 바인딩용)
+// 델리게이트 선언 (ViewModel 바인딩용)
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const TSet<int32>&);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FOnItemAdded, const FInventoryItemInstance&, AddedItem);
@@ -45,7 +46,7 @@ public:
 	bool TryAddItem(FName ItemDataID, FItemSize Size,
 	                int32 StackCount = 1, int32 MaxStack = 1);
 
-	/** DataTable에서 크기·스택 정보를 자동 조회한 뒤 추가 (Day 3) */
+	/** DataTable에서 크기·스택 정보를 자동 조회한 뒤 추가 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	bool TryAddItemByID(FName ItemDataID, int32 StackCount = 1);
 
@@ -95,7 +96,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory|Debug")
 	void DebugPrintGrid() const;
 
-	// ========== Day 5 추가 API ==========
+	// ========== 크래프팅/장비 연동 API ==========
 
 	/**
 	 * 인벤토리에서 해당 ItemDataID 아이템을 Count만큼 스택 소비.
@@ -121,21 +122,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	int32 DecrementStack(const FGuid& InstanceID);
 
-	// ========== Server RPCs (Day 6) ==========
+	// ========== Server RPCs ==========
 
+	/** 아이템 추가 요청 — Validate: !IsNone && Count > 0 */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_TryAddItemByID(FName ItemDataID, int32 StackCount);
 
+	/** 아이템 삭제 요청 — Validate: IsValid */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RemoveItem(FGuid ItemInstanceID);
 
+	/** 아이템 이동 요청 — Validate: IsValid && 그리드 범위 내 */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_MoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated);
 
+	/** 아이템 소모 요청 — Validate: !IsNone && Count > 0 */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_ConsumeItemByID(FName ItemDataID, int32 Count);
 
-	/** 인벤토리 아이템을 월드에 드롭 — 아이템 제거 + AWorldItem 스폰 */
+	/** 아이템 월드 드롭 — Validate: IsValid */
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_DropItem(FGuid ItemInstanceID);
 
@@ -148,7 +153,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
 	FOnItemRemoved OnItemRemoved;
 
-	// ========== Replication (Day 6) ==========
+	// ========== Replication ==========
 	virtual void GetLifetimeReplicatedProps(
 		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -156,7 +161,7 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
-	// ========== Replicated 데이터 (Day 6) ==========
+	// ========== Replicated 데이터 ==========
 
 	/** 1D 배열로 표현한 2D 그리드 (Index = Y * GridWidth + X) */
 	UPROPERTY(Replicated)
@@ -166,6 +171,7 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_Items)
 	TArray<FInventoryItemInstance> Items;
 
+	/** Items 리플리케이션 수신 → 캐시 리빌드 + PreviousItems diff → 변경분만 Broadcast */
 	UFUNCTION()
 	void OnRep_Items();
 
@@ -187,6 +193,7 @@ private:
 	/** ItemDataID → 총 수량 캐시 — 리플리케이션 제외 (UPROPERTY 없음) */
 	TMap<FName, int32> ItemCountCache;
 
+	// TMap은 DOREPLIFETIME 미지원 → TArray(Replicated) + TMap(Local Cache) 분리
 	/** InstanceID → Items 배열 인덱스 캐시 — 리플리케이션 제외 (UPROPERTY 없음) */
 	TMap<FGuid, int32> ItemIndexMap;
 
@@ -195,6 +202,7 @@ private:
 
 	// ========== Bitmap 기반 그리드 탐색 ==========
 
+	// Bitmap O(1) — 그리드 폭 10 = uint16으로 충분 (16 초과 시 uint32 전환 필요)
 	/** 행별 점유 비트마스크 — 리플리케이션 제외 (UPROPERTY 없음) */
 	TArray<uint16> RowBitmap;
 
@@ -214,6 +222,7 @@ private:
 	/** 아이템 영역에 해당하는 슬롯들을 Dirty로 마킹 */
 	void MarkSlotsDirty(FIntPoint Position, FItemSize Size);
 
+	// PreviousItems diff 기반 dirty — OnRep 경로에서 변경 슬롯만 감지
 	/** OnRep_Items diff용 이전 상태 — 리플리케이션 제외 (로컬 전용) */
 	TArray<FInventoryItemInstance> PreviousItems;
 

@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventoryPanelWidget.h — 인벤토리 메인 패널 (CommonUI): 그리드, 탭, 장비/크래프팅/스탯 서브패널
 
 #pragma once
 

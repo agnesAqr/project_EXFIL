@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// EquipmentTypes.h — 장비 시스템 공용 타입: EEquipmentSlot, FEquipmentSlotEntry
 
 #pragma once
 
@@ -21,7 +22,7 @@ enum class EEquipmentSlot : uint8
 };
 
 /**
- * FEquipmentSlotData — 장비 슬롯 상태 (Day 6: TMap→TArray 변환용)
+ * FEquipmentSlotData — 장비 슬롯 상태 (TMap→TArray 변환 — 리플리케이션 지원)
  *
  * 리플리케이션 대상. ActiveGEHandle은 서버 전용(NotReplicated).
  */

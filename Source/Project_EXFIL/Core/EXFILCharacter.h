@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// EXFILCharacter.h — 메인 캐릭터: GAS, 인벤토리, 장비, 크래프팅 컴포넌트 통합 + 사망/리스폰 시퀀스
 
 #pragma once
 
@@ -26,7 +27,7 @@ struct FInputActionValue;
  * AEXFILCharacter — EXFIL 프로젝트의 플레이어 캐릭터
  * 인벤토리, GAS(ASC+AttributeSet), 장비, 크래프팅 컴포넌트의 부착 대상
  *
- * Day 6: bReplicates, SetIsReplicated, ASC Mixed Mode, IsLocallyControlled 가드
+ * bReplicates, SetIsReplicated, ASC Mixed Mode, IsLocallyControlled 가드
  */
 UCLASS()
 class PROJECT_EXFIL_API AEXFILCharacter : public AProject_EXFILCharacter,
@@ -51,7 +52,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
-    // === Combat (Day 8) ===
+    // === Combat ===
 
     /** 인벤토리 UI가 현재 보이는지 반환 (GA_Fire에서 참조) */
     bool IsInventoryUIVisible() const;
@@ -130,7 +131,7 @@ protected:
               meta = (AllowPrivateAccess = "true"))
     TObjectPtr<UEquipmentComponent> EquipmentComponent;
 
-    // === Combat (Day 8) ===
+    // === Combat ===
 
     UPROPERTY(EditAnywhere, Category = "Combat")
     TSubclassOf<UGameplayAbility> GA_FireClass;
@@ -150,7 +151,7 @@ protected:
 
     void OnFirePressed();
 
-    // === 조준 (Day 8) ===
+    // === 조준 ===
 
     UPROPERTY(EditAnywhere, Category = "Input")
     TObjectPtr<UInputAction> IA_Aim;

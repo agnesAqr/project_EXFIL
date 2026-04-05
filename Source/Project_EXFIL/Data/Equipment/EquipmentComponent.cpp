@@ -357,7 +357,7 @@ void UEquipmentComponent::Server_EquipFromInventory_Implementation(
         return;
     }
 
-    // ── Day 7: 스왑 로직 ──
+    // ── 스왑 로직 ──
     // 슬롯이 이미 점유된 경우 기존 장비를 인벤토리에 먼저 복귀 (실패 시 거부)
     FEquipmentSlotData* SlotData = FindSlotData(TargetSlot);
     if (SlotData && !SlotData->IsEmpty())

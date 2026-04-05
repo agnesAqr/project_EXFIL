@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventoryViewModel.h — 인벤토리 MVVM ViewModel: 슬롯별 ViewModel 배열, 변경분만 갱신
 
 #pragma once
 

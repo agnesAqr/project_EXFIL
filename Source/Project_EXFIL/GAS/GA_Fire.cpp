@@ -2,10 +2,8 @@
 
 #include "GAS/GA_Fire.h"
 #include "CoreMinimal.h"
-#include "AbilitySystemComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
 #include "Core/EXFILCharacter.h"
-#include "DrawDebugHelpers.h"
 #include "GameFramework/PlayerController.h"
 
 UGA_Fire::UGA_Fire()

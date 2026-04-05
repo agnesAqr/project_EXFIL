@@ -271,16 +271,12 @@ void ASideScrollingCharacter::MultiJump()
 		}
 	}
 
-
-
 	// test for double jump only if we haven't already tested for wall jump
 	if (!bHasWallJumped)
 	{
 		// are we still within coyote time frames?
 		if (GetWorld()->GetTimeSeconds() - LastFallTime < MaxCoyoteTime)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Coyote Jump"));
-
 			// use the built-in CMC functionality to do the jump
 			Jump();
 

@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// ItemDataSubsystem.h — 아이템/레시피 DataTable 중앙 관리 + 에셋 캐시 (O(1) 조회)
 
 #pragma once
 

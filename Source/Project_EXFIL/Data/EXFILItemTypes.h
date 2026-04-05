@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// EXFILItemTypes.h — DataTable 행 구조체: FItemData, FCraftingRecipe, EItemType, EItemRarity
 
 #pragma once
 

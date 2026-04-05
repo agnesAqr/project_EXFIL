@@ -1,4 +1,6 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventoryDragPreviewWidget.h — 드래그 미리보기 위젯: 그리드 크기 반영 드래그 비주얼
+
 #pragma once
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"

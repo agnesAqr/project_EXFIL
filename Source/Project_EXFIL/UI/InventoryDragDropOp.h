@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventoryDragDropOp.h — 인벤토리 드래그 오퍼레이션: 드래그 중 아이템 데이터 + 출발 슬롯 정보
 
 #pragma once
 

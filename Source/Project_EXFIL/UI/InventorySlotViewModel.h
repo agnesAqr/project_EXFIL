@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventorySlotViewModel.h — 슬롯별 MVVM ViewModel: 점유 상태, 아이콘, 스택 수 필드 알림
 
 #pragma once
 

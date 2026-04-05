@@ -15,7 +15,6 @@
 #include "EnhancedInputComponent.h"
 #include "EngineUtils.h"
 #include "World/WorldItem.h"
-#include "DrawDebugHelpers.h"
 #include "GameplayEffect.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -24,11 +23,10 @@
 #include "GameFramework/GameModeBase.h"
 #include "Core/EXFILLog.h"
 #include "Components/CapsuleComponent.h"
-#include "Animation/AnimInstance.h"
 
 AEXFILCharacter::AEXFILCharacter()
 {
-    // Day 6: 리플리케이션 활성화 (ACharacter 기본값이 true이지만 명시)
+    // 리플리케이션 활성화 (ACharacter 기본값이 true이지만 명시)
     bReplicates = true;
 
     InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
@@ -305,7 +303,7 @@ void AEXFILCharacter::InitializeViewModels()
 
 }
 
-// ========== Combat (Day 8) ==========
+// ========== Combat ==========
 
 bool AEXFILCharacter::IsInventoryUIVisible() const
 {
@@ -421,7 +419,7 @@ void AEXFILCharacter::Server_ConfirmHit_Implementation(
 void AEXFILCharacter::Multicast_PlayHitEffect_Implementation(
     FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal)
 {
-    // TODO: 파티클/사운드 이펙트로 교체
+
 }
 
 void AEXFILCharacter::Multicast_PlayHitReact_Implementation()

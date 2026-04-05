@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// EquipmentSlotWidget.h — 장비 슬롯 위젯 (CommonUI): 장착 아이콘, 드래그&드롭 장착/해제
 
 #pragma once
 

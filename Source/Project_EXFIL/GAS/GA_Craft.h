@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// GA_Craft.h — 크래프팅 실행 GameplayAbility: CraftingComponent에 위임
 
 #pragma once
 

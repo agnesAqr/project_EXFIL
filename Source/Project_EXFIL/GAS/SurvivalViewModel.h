@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// SurvivalViewModel.h — 서바이벌 스탯 MVVM ViewModel: ASC 어트리뷰트 변경 → UI 델리게이트 브로드캐스트
 
 #pragma once
 

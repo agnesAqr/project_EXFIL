@@ -620,7 +620,7 @@ int32 UInventoryComponent::GetItemCount(FName ItemDataID) const
 	return Count;
 }
 
-// ========== Day 5 추가 API ==========
+// ========== 크래프팅/장비 연동 API ==========
 
 bool UInventoryComponent::ConsumeItemByID(FName ItemDataID, int32 Count)
 {

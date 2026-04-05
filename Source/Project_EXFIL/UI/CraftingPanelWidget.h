@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// CraftingPanelWidget.h — 크래프팅 패널 위젯: 레시피 목록 표시, 제작 진행 바, 결과 미리보기
 
 #pragma once
 

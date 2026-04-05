@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// ItemContextMenuWidget.h — 아이템 우클릭 컨텍스트 메뉴: 사용/장착/버리기 액션
 
 #pragma once
 

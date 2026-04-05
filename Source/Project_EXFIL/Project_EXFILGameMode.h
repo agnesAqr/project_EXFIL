@@ -19,6 +19,3 @@ public:
 	/** Constructor */
 	AProject_EXFILGameMode();
 };
-
-
-

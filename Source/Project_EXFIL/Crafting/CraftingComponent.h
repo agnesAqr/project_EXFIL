@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// CraftingComponent.h — 크래프팅 시스템: 레시피 검증, 재료 소모, 타이머 기반 제작, 결과물 지급
 
 #pragma once
 
@@ -17,7 +18,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 /**
  * UCraftingComponent — 크래프팅 로직 컴포넌트
  *
- * Day 6: Server RPC + 상태 리플리케이션
+ * Server RPC + 상태 리플리케이션
  * StartCraft() → 재료 소비 → 타이머 → OnCraftTimerComplete() → 결과물 추가
  * CancelCraft() → 타이머 클리어 → 재료 복구
  *
@@ -55,7 +56,7 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Crafting")
     TArray<FName> GetAvailableRecipes() const;
 
-    // ========== Server RPCs (Day 6) ==========
+    // ========== Server RPCs ==========
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_StartCraft(FName RecipeID);
@@ -71,7 +72,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Crafting|Events")
     FOnCraftingCompleted OnCraftingCompleted;
 
-    // ========== Replication (Day 6) ==========
+    // ========== Replication ==========
     virtual void GetLifetimeReplicatedProps(
         TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -79,7 +80,7 @@ protected:
     virtual void BeginPlay() override;
 
 private:
-    // ========== Replicated 상태 (Day 6) ==========
+    // ========== Replicated 상태 ==========
 
     UPROPERTY(ReplicatedUsing = OnRep_CraftingState)
     bool bIsCrafting = false;

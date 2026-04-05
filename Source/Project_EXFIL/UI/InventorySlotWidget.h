@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// InventorySlotWidget.h — 그리드 개별 슬롯 위젯 (CommonUI): 배경색/하이라이트, ViewModel 바인딩
 
 #pragma once
 

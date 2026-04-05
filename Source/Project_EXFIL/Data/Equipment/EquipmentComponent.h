@@ -1,4 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
+// EquipmentComponent.h — 장비 슬롯 관리: 장착/해제, 동적 GE 적용, 리플리케이션
 
 #pragma once
 
@@ -19,7 +20,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 /**
  * UEquipmentComponent — Head / Body / Weapon 슬롯 장비 관리
  *
- * Day 6: TMap→TArray 변환 + 리플리케이션 + Server RPC
+ * TMap→TArray 변환 + 리플리케이션 + Server RPC
  */
 UCLASS(ClassGroup=(Equipment), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UEquipmentComponent : public UActorComponent
@@ -52,7 +53,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     bool HasWeaponEquipped() const;
 
-    // ========== Server RPCs (Day 6) ==========
+    // ========== Server RPCs ==========
 
     UFUNCTION(Server, Reliable, WithValidation)
     void Server_EquipItem(EEquipmentSlot Slot, FInventoryItemInstance ItemInstance);
@@ -93,7 +94,7 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Equipment|Events")
     FOnEquipmentChanged OnItemUnequipped;
 
-    // ========== Replication (Day 6) ==========
+    // ========== Replication ==========
     virtual void GetLifetimeReplicatedProps(
         TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
