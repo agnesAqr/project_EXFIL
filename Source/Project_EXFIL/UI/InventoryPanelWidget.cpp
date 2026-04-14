@@ -2,6 +2,8 @@
 
 #include "UI/InventoryPanelWidget.h"
 #include "CoreMinimal.h"
+#include "Core/EXFILPlayerController.h"
+#include "UI/EXFILUIManager.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
 #include "Components/WidgetSwitcher.h"
@@ -51,23 +53,19 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
     if (ViewModel)
     {
         ViewModelRefreshedHandle = ViewModel->OnViewModelRefreshed.AddUObject(
-            this, &UInventoryPanelWidget::RefreshIconOverlay);
+            this, &UInventoryPanelWidget::HandleViewModelRefreshed);
         BuildGrid();
     }
-}
-
-void UInventoryPanelWidget::NativeConstruct()
-{
-    Super::NativeConstruct();
-    SetKeyboardFocus();
 }
 
 void UInventoryPanelWidget::NativeOnActivated()
 {
     Super::NativeOnActivated();
 
-    // 인벤토리 열 때마다 셀 크기 재계산부터 시작 (해상도/창 크기 변경 대응)
+    // 인벤토리 열 때마다 셀 크기 재계산 + 레이아웃 상태 리셋 (해상도/창 크기 변경 대응)
     bNeedsCellSquareFix = true;
+    bLayoutReady = false;
+    CachedCellStride = FVector2D::ZeroVector;
 }
 
 void UInventoryPanelWidget::NativeOnDeactivated()
@@ -89,26 +87,50 @@ FReply UInventoryPanelWidget::NativeOnMouseButtonDown(const FGeometry& InGeometr
     {
         IconOverlay->CloseContextMenuIfOpen();
     }
+    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+    {
+        // 빈 영역 드래그가 게임 입력으로 새지 않도록 패널이 직접 마우스를 소비한다.
+        return FReply::Handled().CaptureMouse(TakeWidget());
+    }
+
     return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+FReply UInventoryPanelWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry,
+    const FPointerEvent& InMouseEvent)
+{
+    if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && HasMouseCapture())
+    {
+        return FReply::Handled().ReleaseMouseCapture();
+    }
+
+    return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
+}
+
+FReply UInventoryPanelWidget::NativeOnMouseMove(const FGeometry& InGeometry,
+    const FPointerEvent& InMouseEvent)
+{
+    if (HasMouseCapture() && InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton))
+    {
+        return FReply::Handled();
+    }
+
+    return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 }
 
 FReply UInventoryPanelWidget::NativeOnKeyDown(const FGeometry& InGeometry,
     const FKeyEvent& InKeyEvent)
 {
-    // I키 또는 ESC키로 닫기
-    if (InKeyEvent.GetKey() == EKeys::I || InKeyEvent.GetKey() == EKeys::Escape)
+    if (InKeyEvent.GetKey() == EKeys::I)
     {
-        RemoveFromParent();
-
-        APlayerController* PC = GetOwningPlayer();
-        if (PC)
+        if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetOwningPlayer()))
         {
-            FInputModeGameOnly InputMode;
-            PC->SetInputMode(InputMode);
-            PC->bShowMouseCursor = false;
+            if (UEXFILUIManager* UIManager = PC->GetUIManager())
+            {
+                UIManager->ToggleInventory();
+                return FReply::Handled();
+            }
         }
-
-        return FReply::Handled();
     }
 
     return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
@@ -162,8 +184,14 @@ void UInventoryPanelWidget::BuildGrid()
         IconOverlay->SetParentPanel(this);
     }
 
-    // 초기 아이콘 오버레이 갱신
-    RefreshIconOverlayFull();
+    // 초기 데이터를 pending에 등록 — NativePaint에서 레이아웃 확정 후 flush
+    const int32 Total = Width * Height;
+    PendingDirtyIndices.Reserve(Total);
+    for (int32 i = 0; i < Total; ++i)
+    {
+        PendingDirtyIndices.Add(i);
+    }
+    bHasPendingOverlayRefresh = true;
 }
 
 bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition,
@@ -173,7 +201,8 @@ bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint N
     {
         return false;
     }
-    return ViewModel->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
+    ViewModel->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
+    return true;
 }
 
 void UInventoryPanelWidget::ClearGrid()
@@ -214,48 +243,70 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
     }
 }
 
-void UInventoryPanelWidget::RefreshIconOverlay(const TSet<int32>& DirtyIndices)
+// ─── Deferred Overlay Refresh ────────────────────────────────────────────────
+
+void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyIndices)
 {
-    if (!IconOverlay || !ViewModel || !GridPanel)
-    {
-        return;
-    }
-
-    const float CellWidth = GridPanel->GetCachedGeometry().GetLocalSize().X;
-    if (CellWidth <= 1.f)
-    {
-        UWorld* World = GetWorld();
-        if (!World) return;
-
-        World->GetTimerManager().SetTimer(
-            IconRefreshTimerHandle,
-            [this]()
-            {
-                if (IsValid(this))
-                {
-                    RefreshIconOverlayFull();
-                }
-            },
-            0.15f, false);
-        return;
-    }
-
-    IconOverlay->RefreshIcons(ViewModel, GridPanel,
-        ViewModel->GetGridWidth(), ViewModel->GetGridHeight(), DirtyIndices);
+    PendingDirtyIndices.Append(DirtyIndices);
+    bHasPendingOverlayRefresh = true;
+    TryFlushOverlayRefresh(false);
 }
 
-void UInventoryPanelWidget::RefreshIconOverlayFull()
+void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeometry)
 {
-    if (!ViewModel) return;
+    if (!GridPanel || !ViewModel) return;
 
-    const int32 Total = ViewModel->GetGridWidth() * ViewModel->GetGridHeight();
-    TSet<int32> AllIndices;
-    AllIndices.Reserve(Total);
-    for (int32 i = 0; i < Total; ++i)
+    // layout 유효성 판정 — GridPanel의 실제 geometry가 유효한지
+    const FVector2D GridSize = GridPanel->GetCachedGeometry().GetLocalSize();
+    bLayoutReady = (GridSize.X > 1.f && GridSize.Y > 1.f);
+
+    if (!bLayoutReady) return;
+
+    // stride 변경 감지 (창 리사이즈, 셀 정사각형 보정 후 등)
+    const int32 GridW = ViewModel->GetGridWidth();
+    const int32 GridH = ViewModel->GetGridHeight();
+    const FVector2D NewStride(GridSize.X / GridW, GridSize.Y / GridH);
+    const bool bStrideChanged = !CachedCellStride.Equals(NewStride, 0.5f);
+
+    if (bStrideChanged)
     {
-        AllIndices.Add(i);
+        CachedCellStride = NewStride;
+        TryFlushOverlayRefresh(true);
+        return;
     }
-    RefreshIconOverlay(AllIndices);
+
+    TryFlushOverlayRefresh(false);
+}
+
+void UInventoryPanelWidget::TryFlushOverlayRefresh(bool bForceFull)
+{
+    if (!bLayoutReady) return;
+    if (!bForceFull && !bHasPendingOverlayRefresh) return;
+    if (!IconOverlay || !ViewModel || !GridPanel) return;
+
+    const int32 GridW = ViewModel->GetGridWidth();
+    const int32 GridH = ViewModel->GetGridHeight();
+
+    if (bForceFull)
+    {
+        // 전체 슬롯 갱신 (stride 변경 → 모든 아이콘 좌표 재계산)
+        TSet<int32> AllIndices;
+        const int32 Total = GridW * GridH;
+        AllIndices.Reserve(Total);
+        for (int32 i = 0; i < Total; ++i)
+        {
+            AllIndices.Add(i);
+        }
+        IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, AllIndices);
+    }
+    else
+    {
+        // dirty 슬롯만 갱신
+        IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, PendingDirtyIndices);
+    }
+
+    PendingDirtyIndices.Empty();
+    bHasPendingOverlayRefresh = false;
 }
 
 int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
@@ -269,6 +320,7 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
     auto* MutableThis = const_cast<UInventoryPanelWidget*>(this);
 
     // 셀 정사각형 보정 — 레이아웃 첫 유효 시점에 1회 실행
+    // SetMinDesiredSlotHeight가 레이아웃을 무효화하므로 이번 프레임은 skip
     if (bNeedsCellSquareFix && GridPanel && GridPanel->GetChildrenCount() > 0)
     {
         UWidget* FirstSlot = GridPanel->GetChildAt(0);
@@ -277,37 +329,15 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
         if (CellWidth > 1.f)
         {
             MutableThis->bNeedsCellSquareFix = false;
-
             MutableThis->GridPanel->SetMinDesiredSlotHeight(CellWidth);
             MutableThis->GridPanel->SetMinDesiredSlotWidth(0.f);
-
-            // 0.1초 후 아이콘 배치 — 레이아웃이 완전히 끝난 후
-            UWorld* World = MutableThis->GetWorld();
-            if (!World) return Result;
-            World->GetTimerManager().SetTimer(
-                MutableThis->IconRefreshTimerHandle,
-                [MutableThis]()
-                {
-                    if (IsValid(MutableThis))
-                    {
-                        MutableThis->RefreshIconOverlayFull();
-                    }
-                },
-                0.1f, false);
+            // 다음 프레임에 geometry가 확정된 후 HandleLayoutMeasured에서 처리
+            return Result;
         }
     }
 
-    // Geometry 변경 감지 — 창 크기 변경 또는 최초 레이아웃 완료 시 아이콘 재배치
-    const FVector2D NewSize = AllottedGeometry.GetLocalSize();
-    if (!NewSize.Equals(MutableThis->CachedGeometrySize, 1.f))
-    {
-        MutableThis->CachedGeometrySize = NewSize;
-
-        if (IconOverlay && ViewModel && ViewModel->GetAllSlots().Num() > 0)
-        {
-            MutableThis->RefreshIconOverlayFull();
-        }
-    }
+    // geometry 확정 후 레이아웃 측정 → flush 시도
+    MutableThis->HandleLayoutMeasured(AllottedGeometry);
 
     return Result;
 }

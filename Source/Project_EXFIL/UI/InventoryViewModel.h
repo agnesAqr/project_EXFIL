@@ -43,10 +43,10 @@ public:
     // === 사용자 액션 (View → ViewModel → Model) ===
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
-    bool RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
+    void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
-    bool RequestRemoveItem(FGuid ItemInstanceID);
+    void RequestRemoveItem(FGuid ItemInstanceID);
 
     /** 아이템 루트 위치 반환 (비루트 슬롯 드래그 오프셋 계산용) */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
@@ -76,12 +76,6 @@ private:
 
     // Model 델리게이트 콜백
     void HandleInventoryUpdated(const TSet<int32>& DirtyIndices);
-
-    UFUNCTION()
-    void OnItemAdded(const FInventoryItemInstance& AddedItem);
-
-    UFUNCTION()
-    void OnItemRemoved(const FGuid& RemovedItemID);
 
     /** 전체 그리드 상태를 SlotViewModels에 동기화 (전체 슬롯 dirty로 브로드캐스트) */
     void RefreshAllSlots();

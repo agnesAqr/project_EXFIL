@@ -63,11 +63,14 @@ protected:
     virtual void NativeOnInitialized() override;
     virtual void NativeOnActivated() override;
     virtual void NativeOnDeactivated() override;
-    virtual void NativeConstruct() override;
     virtual bool NativeOnHandleBackAction() override;
     virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry,
                                            const FPointerEvent& InMouseEvent) override;
+    virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry,
+                                         const FPointerEvent& InMouseEvent) override;
+    virtual FReply NativeOnMouseMove(const FGeometry& InGeometry,
+                                     const FPointerEvent& InMouseEvent) override;
     virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
     virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
                               const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements,
@@ -137,22 +140,36 @@ private:
     /** GridPanel 초기화 */
     void ClearGrid();
 
-    /** IconOverlay에 아이콘 갱신 요청 (DirtyIndices 전달) */
-    void RefreshIconOverlay(const TSet<int32>& DirtyIndices);
+    // ─── Deferred Overlay Refresh ────────────────────────────────────────────
 
-    /** 전체 갱신 폴백 (타이머, NativePaint에서 사용) */
-    void RefreshIconOverlayFull();
+    /** ViewModel 데이터 변경 콜백 → dirty 누적 + flush 시도 */
+    void HandleViewModelRefreshed(const TSet<int32>& DirtyIndices);
+
+    /** NativePaint에서 geometry 확정 시 호출 → layout 상태 갱신 + flush 시도 */
+    void HandleLayoutMeasured(const FGeometry& AllottedGeometry);
+
+    /**
+     * 데이터 + 레이아웃 모두 준비됐을 때 실제 아이콘 갱신 실행.
+     * @param bForceFull  stride 변경 등 전체 재배치가 필요한 경우 true
+     */
+    void TryFlushOverlayRefresh(bool bForceFull);
+
+    /** 누적된 dirty 슬롯 인덱스 (데이터 변경마다 Append) */
+    TSet<int32> PendingDirtyIndices;
+
+    /** 데이터 변경이 대기 중인지 (PendingDirtyIndices.Num() > 0 과 동의어이나 빠른 체크용) */
+    bool bHasPendingOverlayRefresh = false;
+
+    /** geometry 기반 레이아웃 유효 여부 (매 HandleLayoutMeasured 시 갱신) */
+    mutable bool bLayoutReady = false;
+
+    /** CellStride 변경 감지용 캐시 */
+    FVector2D CachedCellStride = FVector2D::ZeroVector;
 
     /** NativePaint에서 1회 셀 정사각형 보정용 플래그 */
     mutable bool bNeedsCellSquareFix = true;
 
-    /** Geometry 변경 감지 — 최초 레이아웃 완료 시 아이콘 리프레시 트리거 */
-    FVector2D CachedGeometrySize = FVector2D::ZeroVector;
-
-    /** 셀 정사각형 보정 후 아이콘 배치용 타이머 */
-    FTimerHandle IconRefreshTimerHandle;
-
-    /** ViewModel RefreshAllSlots 후 콜백 핸들 */
+    /** ViewModel OnViewModelRefreshed 콜백 핸들 */
     FDelegateHandle ViewModelRefreshedHandle;
 
     // ─── 탭 버튼 콜백 ─────────────────────────────────────────────────────────
