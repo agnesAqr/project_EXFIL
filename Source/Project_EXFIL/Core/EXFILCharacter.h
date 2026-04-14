@@ -1,6 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// EXFILCharacter.h — 메인 캐릭터: GAS, 인벤토리, 장비, 크래프팅 컴포넌트 통합 + 사망/리스폰 시퀀스
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -8,216 +6,259 @@
 #include "Project_EXFILCharacter.h"
 #include "EXFILCharacter.generated.h"
 
-class UInventoryComponent;
-class UInventoryViewModel;
-class UInventoryPanelWidget;
+class AWorldItem;
 class UAbilitySystemComponent;
-class USurvivalAttributeSet;
 class UCraftingComponent;
 class UEquipmentComponent;
-class USurvivalViewModel;
-class AWorldItem;
-class UInputAction;
+class UEXFILUIManager;
 class UGameplayAbility;
 class UGameplayEffect;
+class UInputAction;
+class UInventoryComponent;
+class UInventoryViewModel;
+class UMaterialInterface;
 class USpringArmComponent;
+class USurvivalAttributeSet;
+class USurvivalViewModel;
 struct FInputActionValue;
 
-/**
- * AEXFILCharacter — EXFIL 프로젝트의 플레이어 캐릭터
- * 인벤토리, GAS(ASC+AttributeSet), 장비, 크래프팅 컴포넌트의 부착 대상
- *
- * bReplicates, SetIsReplicated, ASC Mixed Mode, IsLocallyControlled 가드
- */
+/** 죽음/리스폰 phase. late-joiner는 이 값을 복제받아 현재 상태를 복구한다. */
+UENUM(BlueprintType)
+enum class ERespawnPhase : uint8
+{
+	Alive,
+	Dead,
+	HiddenDead,
+	Respawning
+};
+
 UCLASS()
 class PROJECT_EXFIL_API AEXFILCharacter : public AProject_EXFILCharacter,
-                                           public IAbilitySystemInterface
+										   public IAbilitySystemInterface
 {
-    GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-    AEXFILCharacter();
+	AEXFILCharacter();
 
-    // === IAbilitySystemInterface ===
-    virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	// === IAbilitySystemInterface ===
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
-    // === Inventory ===
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-    UInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
+	// === Inventory ===
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	UInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
-    UInventoryViewModel* GetInventoryViewModel() const { return InventoryViewModel; }
+	// === Equipment ===
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
+	UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
-    // === Equipment ===
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
-    UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+	// === Combat ===
 
-    // === Combat ===
+	/** 인벤토리 UI가 현재 보이는지 반환 (GA_Fire에서 참조) */
+	bool IsInventoryUIVisible() const;
 
-    /** 인벤토리 UI가 현재 보이는지 반환 (GA_Fire에서 참조) */
-    bool IsInventoryUIVisible() const;
+	/** 서버 히트 확인 후 클라이언트에 라인트레이스 히트 결과를 전송 */
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_ConfirmHit(AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
 
-    /** 서버 히트 확인 — 클라이언트에서 라인 트레이스 히트 결과를 전송 */
-    UFUNCTION(Server, Reliable, WithValidation)
-    void Server_ConfirmHit(AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
+	/** 히트 이펙트를 모든 클라이언트에 표시 */
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlayHitEffect(FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
 
-    /** 히트 이펙트 — 모든 클라이언트에 표시 */
-    UFUNCTION(NetMulticast, Unreliable)
-    void Multicast_PlayHitEffect(FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
+	/** 피격 애니메이션을 모든 클라이언트에 재생 */
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlayHitReact();
 
-    /** 피격 애니메이션 — 모든 클라이언트에서 재생 */
-    UFUNCTION(NetMulticast, Unreliable)
-    void Multicast_PlayHitReact();
+	/** 죽음 처리 시작. 서버가 phase를 변경하고 respawn 타이머를 건다. */
+	void OnDeath();
 
-    /** 사망 연출 — 래그돌 + 입력 차단 */
-    UFUNCTION(NetMulticast, Reliable)
-    void Multicast_OnDeath();
+	/** 서버가 리스폰 위치를 결정하고 Respawning phase로 전환한다. */
+	void Server_PrepareRespawn();
 
-    /** 리스폰 연출 — 래그돌 해제 + 입력 복구 */
-    UFUNCTION(NetMulticast, Reliable)
-    void Multicast_Respawn();
+	/** 서버가 최종적으로 Alive phase로 전환한다. */
+	void Server_FinishRespawn();
 
-    /** 사망 처리 — 서버 전용, 래그돌 → 3초 후 리스폰 */
-    void OnDeath();
+	/** 서버가 시체를 숨기고 HiddenDead phase로 전환한다. */
+	void Server_HideDeadBody();
 
-    /** 인벤토리 풀 등 서버→클라이언트 알림 */
-    UFUNCTION(Client, Reliable)
-    void Client_ShowNotification(const FString& Message);
+	/** 인벤토리 부족 등 서버 -> 클라 알림 */
+	UFUNCTION(Client, Reliable)
+	void Client_ShowNotification(const FString& Message);
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
-    virtual void BeginPlay() override;
-    virtual void PossessedBy(AController* NewController) override;
-    virtual void OnRep_PlayerState() override;
+	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void OnRep_PlayerState() override;
 
-    /** SurvivalViewModel 생성 + ASC 바인딩 + UI 연결 (ASC 초기화 후 호출) */
-    void InitializeViewModels();
+	/** SurvivalViewModel 생성 + ASC 바인딩 + UI 연결 */
+	void InitializeViewModels();
 
-    // === Inventory ===
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
-              meta = (AllowPrivateAccess = "true"))
-    TObjectPtr<UInventoryComponent> InventoryComponent;
+	// === Inventory ===
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+		meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UInventoryComponent> InventoryComponent;
 
-    /** BP에서 WBP_InventoryPanel 클래스 지정 */
-    UPROPERTY(EditDefaultsOnly, Category = "Inventory|UI")
-    TSubclassOf<UInventoryPanelWidget> InventoryPanelWidgetClass;
+	UPROPERTY()
+	TObjectPtr<UInventoryViewModel> InventoryViewModel;
 
-    UPROPERTY()
-    TObjectPtr<UInventoryViewModel> InventoryViewModel;
+	// === GAS ===
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
+	TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 
-    UPROPERTY(BlueprintReadOnly, Category = "Inventory|UI", meta = (AllowPrivateAccess = "true"))
-    TObjectPtr<UInventoryPanelWidget> InventoryPanelWidget;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
+	TObjectPtr<USurvivalAttributeSet> SurvivalAttributes;
 
-    // === GAS ===
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
-    TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
+	UPROPERTY()
+	TObjectPtr<USurvivalViewModel> SurvivalViewModel;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
-    TObjectPtr<USurvivalAttributeSet> SurvivalAttributes;
+	// === Crafting ===
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+		meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UCraftingComponent> CraftingComponent;
 
-    UPROPERTY()
-    TObjectPtr<USurvivalViewModel> SurvivalViewModel;
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Crafting")
+	UCraftingComponent* GetCraftingComponent() const { return CraftingComponent; }
 
+	// === Equipment ===
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+		meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UEquipmentComponent> EquipmentComponent;
 
-    // === Crafting ===
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
-              meta = (AllowPrivateAccess = "true"))
-    TObjectPtr<UCraftingComponent> CraftingComponent;
+	// === Combat ===
 
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Crafting")
-    UCraftingComponent* GetCraftingComponent() const { return CraftingComponent; }
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	TSubclassOf<UGameplayAbility> GA_FireClass;
 
-    // === Equipment ===
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
-              meta = (AllowPrivateAccess = "true"))
-    TObjectPtr<UEquipmentComponent> EquipmentComponent;
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	TSubclassOf<UGameplayEffect> DamageEffectClass;
 
-    // === Combat ===
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float FireRange = 5000.f;
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    TSubclassOf<UGameplayAbility> GA_FireClass;
+	/** 피격 시 잠깐 표시할 오버레이 머티리얼 */
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	TObjectPtr<UMaterialInterface> HitOverlayMaterial;
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    TSubclassOf<UGameplayEffect> DamageEffectClass;
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> IA_Fire;
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    float FireRange = 5000.f;
+	void OnFirePressed();
 
-    /** 피격 시 0.2초간 오버레이할 반투명 머티리얼 (에디터에서 M_HitOverlay 할당) */
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    TObjectPtr<UMaterialInterface> HitOverlayMaterial;
+	// === Aim ===
 
-    UPROPERTY(EditAnywhere, Category = "Input")
-    TObjectPtr<UInputAction> IA_Fire;
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> IA_Aim;
 
-    void OnFirePressed();
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	bool bIsAiming = false;
 
-    // === 조준 ===
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float DefaultArmLength = 300.f;
 
-    UPROPERTY(EditAnywhere, Category = "Input")
-    TObjectPtr<UInputAction> IA_Aim;
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float AimArmLength = 15.f;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
-    bool bIsAiming = false;
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float DefaultFOV = 90.f;
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    float DefaultArmLength = 300.f;
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float AimFOV = 60.f;
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    float AimArmLength = 15.f;
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	FVector DefaultSocketOffset = FVector(0.f, 0.f, 0.f);
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    float DefaultFOV = 90.f;
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	FVector AimSocketOffset = FVector(0.f, 30.f, 70.f);
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    float AimFOV = 60.f;
+	void OnAimToggled();
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    FVector DefaultSocketOffset = FVector(0.f, 0.f, 0.f);
+	/** 인벤토리 토글 InputAction */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> IA_ToggleInventory;
 
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    FVector AimSocketOffset = FVector(0.f, 30.f, 70.f);
+	void OnToggleInventory();
 
-    void OnAimToggled();
+	// === Interaction ===
 
-    UPROPERTY(EditAnywhere, Category = "UI")
-    TSubclassOf<UUserWidget> CrosshairWidgetClass;
+	/** 월드 아이템 탐색 거리 (cm) */
+	UPROPERTY(EditAnywhere, Category = "Interaction")
+	float InteractionDistance = 300.f;
 
-    UPROPERTY()
-    TObjectPtr<UUserWidget> CrosshairWidget;
+	/** 서버 픽업 검증 최대 거리 (cm) */
+	UPROPERTY(EditAnywhere, Category = "Interaction")
+	float MaxPickupDistance = 400.f;
 
-    // === 인터랙션 ===
+	/** 피격 오버레이 표시 시간 (초) */
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float HitOverlayDuration = 0.2f;
 
-    /** 라인 트레이스 최대 거리 (cm) */
-    UPROPERTY(EditAnywhere, Category = "Interaction")
-    float InteractionDistance = 300.f;
+	/** 시체를 보여주는 시간 (초) */
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float CorpseVisibleDuration = 2.5f;
 
-    /** 서버 픽업 검증 최대 거리 (cm) — 네트워크 지연 보상 포함 */
-    UPROPERTY(EditAnywhere, Category = "Interaction")
-    float MaxPickupDistance = 400.f;
+	/** 시체를 숨긴 뒤 실제 리스폰 준비 전까지 대기 시간 (초) */
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float HiddenRespawnDelay = 2.5f;
 
-    /** 피격 오버레이 머티리얼 표시 지속 시간 (초) */
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    float HitOverlayDuration = 0.2f;
+	/** Respawning phase 후 다시 보이기까지 짧은 지연 (초) */
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float RespawnRevealDelay = 0.3f;
 
-    /** 사망 후 액터 제거까지 대기 시간 (초) */
-    UPROPERTY(EditAnywhere, Category = "Combat")
-    float DeathLifeSpan = 3.5f;
+	/** 상호작용 InputAction */
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TObjectPtr<UInputAction> IA_Interact;
 
-    /** F키 인터랙션 InputAction — 에디터에서 할당 */
-    UPROPERTY(EditAnywhere, Category = "Input")
-    TObjectPtr<UInputAction> IA_Interact;
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
-    virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	void OnInteractPressed();
 
-    void OnInteractPressed();
+	/** 카메라 Forward 방향으로 라인트레이스하여 AWorldItem 탐색 */
+	AWorldItem* TraceForWorldItem() const;
 
-    /** 카메라 Forward 방향으로 라인 트레이스하여 AWorldItem 탐색 */
-    AWorldItem* TraceForWorldItem() const;
+	// === Pickup Server RPC ===
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestPickupItem(AWorldItem* TargetItem);
 
-    // === 픽업 Server RPC ===
-    UFUNCTION(Server, Reliable, WithValidation)
-    void Server_RequestPickupItem(AWorldItem* TargetItem);
+	void ExecutePickup(AWorldItem* TargetItem);
 
-    void ExecutePickup(AWorldItem* TargetItem);
+	/** Dead -> HiddenDead 전환 타이머 */
+	FTimerHandle HideCorpseTimerHandle;
 
+	/** HiddenDead -> Respawning 전환 타이머 */
+	FTimerHandle RespawnPrepareTimerHandle;
+
+	/** Respawning -> Alive 전환 타이머 */
+	FTimerHandle RespawnRevealTimerHandle;
+
+	/** Respawning phase에서 사용할 authoritative respawn 위치 */
+	UPROPERTY(Replicated)
+	FVector_NetQuantize PendingRespawnLocation = FVector::ZeroVector;
+
+	/** Respawning phase에서 사용할 authoritative respawn 회전 */
+	UPROPERTY(Replicated)
+	FRotator PendingRespawnRotation = FRotator::ZeroRotator;
+
+	/** 서버 authoritative respawn phase. late-joiner는 OnRep로 상태를 복원한다. */
+	UPROPERTY(ReplicatedUsing = OnRep_RespawnPhase)
+	ERespawnPhase RespawnPhase = ERespawnPhase::Alive;
+
+	UFUNCTION()
+	void OnRep_RespawnPhase();
+
+	/** Dead 상태 비주얼/물리/입력 적용 */
+	void ApplyDeadState();
+
+	/** HiddenDead 상태 비주얼/물리 적용 */
+	void ApplyHiddenDeadState();
+
+	/** Respawning 상태 비주얼/물리 적용 */
+	void ApplyRespawningState();
+
+	/** Alive 상태 비주얼/물리/입력 복구 */
+	void ApplyAliveState();
+
+	/** 서버가 정한 respawn transform으로 즉시 스냅 */
+	void SnapToPendingRespawnTransform();
 };

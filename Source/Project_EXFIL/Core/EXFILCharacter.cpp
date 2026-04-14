@@ -2,16 +2,16 @@
 
 #include "EXFILCharacter.h"
 #include "CoreMinimal.h"
+#include "Net/UnrealNetwork.h"
 #include "AbilitySystemComponent.h"
 #include "GAS/SurvivalAttributeSet.h"
 #include "Inventory/InventoryComponent.h"
 #include "Crafting/CraftingComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
 #include "UI/InventoryViewModel.h"
-#include "UI/InventoryPanelWidget.h"
-#include "UI/CraftingPanelWidget.h"
+#include "UI/EXFILUIManager.h"
 #include "GAS/SurvivalViewModel.h"
-#include "Blueprint/UserWidget.h"
+#include "Core/EXFILPlayerController.h"
 #include "EnhancedInputComponent.h"
 #include "EngineUtils.h"
 #include "World/WorldItem.h"
@@ -20,6 +20,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/GameModeBase.h"
 #include "Core/EXFILLog.h"
 #include "Components/CapsuleComponent.h"
@@ -94,63 +95,36 @@ void AEXFILCharacter::BeginPlay()
     {
         if (InventoryComponent)
         {
-            InventoryComponent->TryAddItemByID(FName("Bandage"),    3);
-            InventoryComponent->TryAddItemByID(FName("Pistol"), 2);
-            InventoryComponent->TryAddItemByID(FName("BodyArmor"));
-            InventoryComponent->TryAddItemByID(FName("Painkillers"), 5);
-            InventoryComponent->TryAddItemByID(FName("Medkit"));
+            InventoryComponent->AddItemByID_Internal(FName("Bandage"),    3);
+            InventoryComponent->AddItemByID_Internal(FName("Pistol"), 2);
+            InventoryComponent->AddItemByID_Internal(FName("BodyArmor"));
+            InventoryComponent->AddItemByID_Internal(FName("Painkillers"), 5);
+            InventoryComponent->AddItemByID_Internal(FName("Medkit"));
 
         }
     }
 
-    // ===== 클라이언트 전용: UI 생성 + 델리게이트 바인딩 =====
+    // ===== 클라이언트 전용: ViewModel 생성 + UIManager 바인딩 =====
     if (IsLocallyControlled())
     {
-
-        // 1. InventoryViewModel
+        // 1. InventoryViewModel 생성 (Model 의존이라 Character에서 생성)
         if (InventoryComponent)
         {
             InventoryViewModel = NewObject<UInventoryViewModel>(this);
             InventoryViewModel->Initialize(InventoryComponent);
         }
 
-        // 2. InventoryPanelWidget 생성 및 연결
-        if (InventoryViewModel && InventoryPanelWidgetClass)
+        // 2. UIManager에 Pawn UI 바인딩 (위젯 생성/소유는 UIManager가 담당)
+        if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
         {
-            APlayerController* PC = Cast<APlayerController>(GetController());
-            if (PC)
+            if (UEXFILUIManager* UIManager = PC->GetUIManager())
             {
-                InventoryPanelWidget = CreateWidget<UInventoryPanelWidget>(PC, InventoryPanelWidgetClass);
-                if (InventoryPanelWidget)
-                {
-                    InventoryPanelWidget->SetViewModel(InventoryViewModel);
-
-                    // CraftingPanel이 WBP 안에 있으면 컴포넌트 연결
-                    if (UCraftingPanelWidget* CraftingPanel = InventoryPanelWidget->GetCraftingPanel())
-                    {
-                        CraftingPanel->SetupCrafting(CraftingComponent, InventoryComponent);
-                    }
-                }
+                UIManager->BindPawnUI(InventoryViewModel, CraftingComponent, InventoryComponent);
             }
         }
 
         // 3. SurvivalViewModel — Standalone에서는 BeginPlay에서 ASC가 이미 초기화됨
         InitializeViewModels();
-
-        // 4. 크로스헤어 위젯 생성 (초기에 숨김)
-        if (CrosshairWidgetClass)
-        {
-            APlayerController* CrosshairPC = Cast<APlayerController>(GetController());
-            if (CrosshairPC)
-            {
-                CrosshairWidget = CreateWidget<UUserWidget>(CrosshairPC, CrosshairWidgetClass);
-                if (CrosshairWidget)
-                {
-                    CrosshairWidget->AddToViewport();
-                    CrosshairWidget->SetVisibility(ESlateVisibility::Collapsed);
-                }
-            }
-        }
     }
 }
 
@@ -182,6 +156,13 @@ void AEXFILCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
             EnhancedInput->BindAction(
                 IA_Aim, ETriggerEvent::Started, this,
                 &AEXFILCharacter::OnAimToggled);
+        }
+
+        if (IA_ToggleInventory)
+        {
+            EnhancedInput->BindAction(
+                IA_ToggleInventory, ETriggerEvent::Started, this,
+                &AEXFILCharacter::OnToggleInventory);
         }
     }
 }
@@ -227,7 +208,10 @@ void AEXFILCharacter::Server_RequestPickupItem_Implementation(AWorldItem* Target
 
 void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
 {
-    if (!HasAuthority()) return;
+    if (!HasAuthority())
+    {
+        return;
+    }
 
     // 1. WorldItem 유효성 검증 (다른 플레이어가 이미 주웠을 수 있음)
     if (!IsValid(TargetItem)) return;
@@ -245,7 +229,7 @@ void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
     UInventoryComponent* Inventory = FindComponentByClass<UInventoryComponent>();
     if (!Inventory) return;
 
-    const bool bAdded = Inventory->TryAddItemByID(
+    const bool bAdded = Inventory->AddItemByID_Internal(
         TargetItem->GetItemDataID(), TargetItem->GetStackCount());
 
     if (!bAdded)
@@ -295,21 +279,39 @@ void AEXFILCharacter::InitializeViewModels()
     SurvivalViewModel = NewObject<USurvivalViewModel>(this);
     SurvivalViewModel->InitializeWithASC(AbilitySystemComponent);
 
-    // StatEntry 바인딩
-    if (InventoryPanelWidget)
+    // StatEntry 바인딩 (UIManager 경유)
+    if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
     {
-        InventoryPanelWidget->BindStatsToViewModel(SurvivalViewModel);
+        if (UEXFILUIManager* UIManager = PC->GetUIManager())
+        {
+            UIManager->BindSurvivalStats(SurvivalViewModel);
+        }
     }
-
 }
 
 // ========== Combat ==========
 
 bool AEXFILCharacter::IsInventoryUIVisible() const
 {
-    return InventoryPanelWidget &&
-           InventoryPanelWidget->IsInViewport() &&
-           InventoryPanelWidget->GetVisibility() == ESlateVisibility::Visible;
+    if (const AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
+    {
+        if (const UEXFILUIManager* UIManager = PC->GetUIManager())
+        {
+            return UIManager->IsInventoryVisible();
+        }
+    }
+    return false;
+}
+
+void AEXFILCharacter::OnToggleInventory()
+{
+    if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
+    {
+        if (UEXFILUIManager* UIManager = PC->GetUIManager())
+        {
+            UIManager->ToggleInventory();
+        }
+    }
 }
 
 void AEXFILCharacter::OnFirePressed()
@@ -357,11 +359,13 @@ void AEXFILCharacter::OnAimToggled()
         CMC->bOrientRotationToMovement = !bIsAiming;
     }
 
-    // 크로스헤어 토글
-    if (CrosshairWidget)
+    // 크로스헤어 토글 (UIManager 경유)
+    if (AEXFILPlayerController* AimPC = Cast<AEXFILPlayerController>(GetController()))
     {
-        CrosshairWidget->SetVisibility(
-            bIsAiming ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        if (UEXFILUIManager* UIManager = AimPC->GetUIManager())
+        {
+            UIManager->SetCrosshairVisible(bIsAiming);
+        }
     }
 }
 
@@ -447,68 +451,122 @@ void AEXFILCharacter::Multicast_PlayHitReact_Implementation()
 void AEXFILCharacter::OnDeath()
 {
     if (!HasAuthority()) return;
+    if (RespawnPhase != ERespawnPhase::Alive) return; // 중복 진입 차단
 
-    Multicast_OnDeath();
+    RespawnPhase = ERespawnPhase::Dead;
+    ApplyDeadState();
+    ForceNetUpdate();
 
-    FTimerHandle RespawnTimer;
-    GetWorldTimerManager().SetTimer(RespawnTimer, [WeakThis = TWeakObjectPtr<AEXFILCharacter>(this)]()
-    {
-        AEXFILCharacter* Self = WeakThis.Get();
-        if (!Self) return;
-
-        // 스폰 지점으로 텔레포트
-        if (AGameModeBase* GM = Self->GetWorld()->GetAuthGameMode())
-        {
-            AActor* PlayerStart = GM->FindPlayerStart(Self->GetController());
-            if (PlayerStart)
-            {
-                Self->SetActorLocationAndRotation(
-                    PlayerStart->GetActorLocation(),
-                    PlayerStart->GetActorRotation());
-            }
-        }
-
-        // 모든 스탯 Max로 풀 회복
-        if (Self->AbilitySystemComponent)
-        {
-            USurvivalAttributeSet* AttrSet = const_cast<USurvivalAttributeSet*>(
-                Self->AbilitySystemComponent->GetSet<USurvivalAttributeSet>());
-            if (AttrSet)
-            {
-                AttrSet->SetHealth(AttrSet->GetMaxHealth());
-                AttrSet->SetHunger(AttrSet->GetMaxHunger());
-                AttrSet->SetThirst(AttrSet->GetMaxThirst());
-                AttrSet->SetStamina(AttrSet->GetMaxStamina());
-            }
-        }
-
-        Self->Multicast_Respawn();
-
-    }, DeathLifeSpan, false);
+    GetWorldTimerManager().SetTimer(
+        HideCorpseTimerHandle,
+        this,
+        &AEXFILCharacter::Server_HideDeadBody,
+        CorpseVisibleDuration,
+        false);
 }
 
-void AEXFILCharacter::Multicast_OnDeath_Implementation()
+void AEXFILCharacter::Server_HideDeadBody()
 {
-    // 래그돌
+    if (!HasAuthority()) return;
+    if (RespawnPhase != ERespawnPhase::Dead) return;
+
+    RespawnPhase = ERespawnPhase::HiddenDead;
+    ApplyHiddenDeadState();
+    ForceNetUpdate();
+
+    GetWorldTimerManager().SetTimer(
+        RespawnPrepareTimerHandle,
+        this,
+        &AEXFILCharacter::Server_PrepareRespawn,
+        HiddenRespawnDelay,
+        false);
+}
+
+void AEXFILCharacter::Server_PrepareRespawn()
+{
+    if (!HasAuthority()) return;
+    if (RespawnPhase != ERespawnPhase::HiddenDead) return;
+
+    FVector RespawnLocation = GetActorLocation(); // 폴백: 현재 위치
+    FRotator RespawnRotation = GetActorRotation();
+
+    if (AGameModeBase* GM = GetWorld()->GetAuthGameMode())
+    {
+        if (AActor* PlayerStart = GM->FindPlayerStart(GetController()))
+        {
+            RespawnLocation = PlayerStart->GetActorLocation();
+            RespawnRotation = PlayerStart->GetActorRotation();
+        }
+        else
+        {
+            UE_LOG(LogEXFIL, Warning, TEXT("Server_PrepareRespawn: FindPlayerStart failed — respawning at current location"));
+        }
+    }
+
+    PendingRespawnLocation = RespawnLocation;
+    PendingRespawnRotation = RespawnRotation;
+
+    RespawnPhase = ERespawnPhase::Respawning;
+    ApplyRespawningState();
+    SnapToPendingRespawnTransform();
+
+    if (AbilitySystemComponent)
+    {
+        USurvivalAttributeSet* AttrSet = const_cast<USurvivalAttributeSet*>(
+            AbilitySystemComponent->GetSet<USurvivalAttributeSet>());
+        if (AttrSet)
+        {
+            AttrSet->SetHealth(AttrSet->GetMaxHealth());
+            AttrSet->SetHunger(AttrSet->GetMaxHunger());
+            AttrSet->SetThirst(AttrSet->GetMaxThirst());
+            AttrSet->SetStamina(AttrSet->GetMaxStamina());
+        }
+    }
+
+    ForceNetUpdate();
+
+    GetWorldTimerManager().SetTimer(
+        RespawnRevealTimerHandle,
+        this,
+        &AEXFILCharacter::Server_FinishRespawn,
+        RespawnRevealDelay,
+        false);
+}
+
+void AEXFILCharacter::Server_FinishRespawn()
+{
+    if (!HasAuthority()) return;
+    if (RespawnPhase != ERespawnPhase::Respawning) return;
+
+    SnapToPendingRespawnTransform();
+    RespawnPhase = ERespawnPhase::Alive;
+    ApplyAliveState();
+    ForceNetUpdate();
+}
+
+void AEXFILCharacter::ApplyDeadState()
+{
+    SetActorHiddenInGame(false);
+    SetActorEnableCollision(true);
+
     if (USkeletalMeshComponent* MeshComp = GetMesh())
     {
         MeshComp->SetSimulatePhysics(true);
         MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));
+        MeshComp->SetVisibility(true, true);
     }
 
-    // 캡슐 콜리전 끄기
     if (UCapsuleComponent* Capsule = GetCapsuleComponent())
     {
         Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     }
 
-    // 이동 중지
     if (UCharacterMovementComponent* CMC = GetCharacterMovement())
     {
+        CMC->StopMovementImmediately();
         CMC->DisableMovement();
     }
 
-    // 본인 클라이언트: 조준 해제 + 입력 차단
     if (IsLocallyControlled())
     {
         if (bIsAiming)
@@ -521,46 +579,84 @@ void AEXFILCharacter::Multicast_OnDeath_Implementation()
             DisableInput(PC);
         }
     }
-
-    // 3초 후 액터 숨기기 — 텔레포트(5초) 전에 확실히 안 보이도록
-    FTimerHandle HideTimer;
-    GetWorldTimerManager().SetTimer(HideTimer, [WeakThis = TWeakObjectPtr<AEXFILCharacter>(this)]()
-    {
-        if (AEXFILCharacter* Self = WeakThis.Get())
-        {
-            Self->SetActorHiddenInGame(true);
-            Self->SetActorEnableCollision(false);
-        }
-    }, 3.f, false);
 }
 
-void AEXFILCharacter::Multicast_Respawn_Implementation()
+void AEXFILCharacter::ApplyHiddenDeadState()
 {
-    // 래그돌 해제
+    SetActorHiddenInGame(true);
+    SetActorEnableCollision(false);
+
+    if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+    {
+        Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    }
+
+    if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+    {
+        CMC->StopMovementImmediately();
+        CMC->DisableMovement();
+    }
+}
+
+void AEXFILCharacter::ApplyRespawningState()
+{
+    SetActorHiddenInGame(true);
+    SetActorEnableCollision(false);
+
     if (USkeletalMeshComponent* MeshComp = GetMesh())
     {
         MeshComp->SetSimulatePhysics(false);
         MeshComp->SetCollisionProfileName(TEXT("CharacterMesh"));
-        MeshComp->AttachToComponent(GetCapsuleComponent(),
+        MeshComp->AttachToComponent(
+            GetCapsuleComponent(),
             FAttachmentTransformRules::SnapToTargetNotIncludingScale);
         MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
         MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+        MeshComp->SetVisibility(true, true);
         MeshComp->SetOverlayMaterial(nullptr);
     }
 
-    // 캡슐 콜리전 복구
+    if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+    {
+        Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    }
+
+    if (UCharacterMovementComponent* CMC = GetCharacterMovement())
+    {
+        CMC->StopMovementImmediately();
+        CMC->DisableMovement();
+    }
+}
+
+void AEXFILCharacter::ApplyAliveState()
+{
+    if (USkeletalMeshComponent* MeshComp = GetMesh())
+    {
+        MeshComp->SetSimulatePhysics(false);
+        MeshComp->SetCollisionProfileName(TEXT("CharacterMesh"));
+        MeshComp->AttachToComponent(
+            GetCapsuleComponent(),
+            FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+        MeshComp->SetRelativeLocation(FVector(0.f, 0.f, -90.f));
+        MeshComp->SetRelativeRotation(FRotator(0.f, -90.f, 0.f));
+        MeshComp->SetVisibility(true, true);
+        MeshComp->SetOverlayMaterial(nullptr);
+    }
+
     if (UCapsuleComponent* Capsule = GetCapsuleComponent())
     {
         Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
     }
 
-    // 이동 복구
     if (UCharacterMovementComponent* CMC = GetCharacterMovement())
     {
+        CMC->StopMovementImmediately();
         CMC->SetMovementMode(MOVE_Walking);
     }
 
-    // 입력 복구 (본인만)
+    SetActorEnableCollision(true);
+    SetActorHiddenInGame(false);
+
     if (IsLocallyControlled())
     {
         if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -568,17 +664,57 @@ void AEXFILCharacter::Multicast_Respawn_Implementation()
             EnableInput(PC);
         }
     }
+}
 
-    // 리스폰 1초 후 다시 보이게 (래그돌 해제 + 위치 안정화 후)
-    FTimerHandle ShowTimer;
-    GetWorldTimerManager().SetTimer(ShowTimer, [WeakThis = TWeakObjectPtr<AEXFILCharacter>(this)]()
+void AEXFILCharacter::SnapToPendingRespawnTransform()
+{
+    SetActorLocationAndRotation(
+        PendingRespawnLocation,
+        PendingRespawnRotation,
+        false,
+        nullptr,
+        ETeleportType::TeleportPhysics);
+
+    if (AController* MyController = GetController())
     {
-        if (AEXFILCharacter* Self = WeakThis.Get())
-        {
-            Self->SetActorHiddenInGame(false);
-            Self->SetActorEnableCollision(true);
-        }
-    }, 1.f, false);
+        MyController->SetControlRotation(PendingRespawnRotation);
+    }
+}
+
+// ========== Replication ==========
+
+void AEXFILCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(AEXFILCharacter, PendingRespawnLocation);
+    DOREPLIFETIME(AEXFILCharacter, PendingRespawnRotation);
+    DOREPLIFETIME(AEXFILCharacter, RespawnPhase);
+}
+
+void AEXFILCharacter::OnRep_RespawnPhase()
+{
+    switch (RespawnPhase)
+    {
+    case ERespawnPhase::Dead:
+        // late-joiner가 Dead 상태 캐릭터를 보면 래그돌 적용
+        ApplyDeadState();
+        break;
+
+    case ERespawnPhase::HiddenDead:
+        ApplyHiddenDeadState();
+        break;
+
+    case ERespawnPhase::Respawning:
+        // late-joiner가 Respawning 상태를 보면 숨김 처리
+        ApplyRespawningState();
+        SnapToPendingRespawnTransform();
+        break;
+
+    case ERespawnPhase::Alive:
+        // late-joiner가 Alive 상태를 보면 정상 복구
+        ApplyAliveState();
+        break;
+    }
 }
 
 void AEXFILCharacter::Client_ShowNotification_Implementation(const FString& Message)
