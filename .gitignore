@@ -73,3 +73,9 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+
+# Private / personal notes (not tracked)
+private/
+
+# Claude Code local settings
+.claude/

@@ -41,19 +41,6 @@ public class Project_EXFIL : ModuleRules
 			"Project_EXFIL/UI",
 			"Project_EXFIL/GAS",
 			"Project_EXFIL/Equipment",
-			"Project_EXFIL/Variant_Platforming",
-			"Project_EXFIL/Variant_Platforming/Animation",
-			"Project_EXFIL/Variant_Combat",
-			"Project_EXFIL/Variant_Combat/AI",
-			"Project_EXFIL/Variant_Combat/Animation",
-			"Project_EXFIL/Variant_Combat/Gameplay",
-			"Project_EXFIL/Variant_Combat/Interfaces",
-			"Project_EXFIL/Variant_Combat/UI",
-			"Project_EXFIL/Variant_SideScrolling",
-			"Project_EXFIL/Variant_SideScrolling/AI",
-			"Project_EXFIL/Variant_SideScrolling/Gameplay",
-			"Project_EXFIL/Variant_SideScrolling/Interfaces",
-			"Project_EXFIL/Variant_SideScrolling/UI"
 		});
 
 		// Uncomment if you are using Slate UI
