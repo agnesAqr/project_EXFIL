@@ -67,7 +67,7 @@ void UItemContextMenuWidget::OnUseClicked()
 {
     if (UInventoryComponent* Inv = GetInventoryComponent())
     {
-        Inv->Server_ConsumeItemByID(CachedItemDataID, 1);
+        Inv->RequestConsumeItemByID(CachedItemDataID, 1);
     }
     CloseMenu();
 }
@@ -77,7 +77,7 @@ void UItemContextMenuWidget::OnEquipClicked()
     // 슬롯 결정은 서버의 FindTargetSlot이 전담 → 클라이언트는 None 전달
     if (UEquipmentComponent* Equip = GetEquipmentComponent())
     {
-        Equip->Server_EquipFromInventory(EEquipmentSlot::None, CachedItemInstanceID);
+        Equip->RequestEquipFromInventory(EEquipmentSlot::None, CachedItemInstanceID);
     }
     else
     {
@@ -90,7 +90,7 @@ void UItemContextMenuWidget::OnUnequipClicked()
 {
     if (UEquipmentComponent* Equip = GetEquipmentComponent())
     {
-        Equip->Server_UnequipToInventory(CachedEquipmentSlot);
+        Equip->RequestUnequipToInventory(CachedEquipmentSlot);
     }
     CloseMenu();
 }
@@ -101,14 +101,14 @@ void UItemContextMenuWidget::OnDropClicked()
     {
         if (UEquipmentComponent* Equip = GetEquipmentComponent())
         {
-            Equip->Server_DropEquippedItem(CachedEquipmentSlot);
+            Equip->RequestDropEquippedItem(CachedEquipmentSlot);
         }
     }
     else
     {
         if (UInventoryComponent* Inv = GetInventoryComponent())
         {
-            Inv->Server_DropItem(CachedItemInstanceID);
+            Inv->RequestDropItem(CachedItemInstanceID);
         }
     }
     CloseMenu();

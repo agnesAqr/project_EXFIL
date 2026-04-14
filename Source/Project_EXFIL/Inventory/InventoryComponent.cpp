@@ -20,7 +20,6 @@ void UInventoryComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ItemDataSubsystem 캐싱
 	if (UWorld* World = GetWorld())
 	{
 		if (UGameInstance* GI = World->GetGameInstance())
@@ -29,7 +28,6 @@ void UInventoryComponent::BeginPlay()
 		}
 	}
 
-	// 서버에서만 그리드 초기화 (클라이언트는 리플리케이션으로 수신)
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
 		InitializeGrid();
@@ -42,22 +40,18 @@ void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	// 인벤토리는 소유자 클라이언트에게만 전파
 	DOREPLIFETIME_CONDITION(UInventoryComponent, Items, COND_OwnerOnly);
 	DOREPLIFETIME_CONDITION(UInventoryComponent, GridSlots, COND_OwnerOnly);
-	DOREPLIFETIME_CONDITION(UInventoryComponent, GridHeight, COND_OwnerOnly);
 }
 
 void UInventoryComponent::OnRep_Items()
 {
-	// 캐시 재구축
 	RebuildItemIndexMap();
 	RebuildItemCountCache();
 	RebuildRowBitmap();
 
 	DirtySlotIndices.Empty();
 
-	// 이전 상태를 TMap으로 변환 — O(N) 1회
 	TMap<FGuid, const FInventoryItemInstance*> PrevMap;
 	PrevMap.Reserve(PreviousItems.Num());
 	for (const FInventoryItemInstance& Prev : PreviousItems)
@@ -65,7 +59,6 @@ void UInventoryComponent::OnRep_Items()
 		PrevMap.Add(Prev.InstanceID, &Prev);
 	}
 
-	// 현재 Items 순회 — 추가/변경 감지 O(N)
 	for (const FInventoryItemInstance& Item : Items)
 	{
 		const FInventoryItemInstance** PrevPtr = PrevMap.Find(Item.InstanceID);
@@ -76,30 +69,25 @@ void UInventoryComponent::OnRep_Items()
 		{
 			MarkSlotsDirty(Item.RootPosition, Item.GetEffectiveSize());
 
-			// 이동된 경우 이전 위치도 dirty
 			if (PrevPtr && (*PrevPtr)->RootPosition != Item.RootPosition)
 			{
 				MarkSlotsDirty((*PrevPtr)->RootPosition, (*PrevPtr)->GetEffectiveSize());
 			}
 		}
 
-		// 처리 완료 → PrevMap에서 제거 (남은 것 = 제거된 아이템)
 		if (PrevPtr)
 		{
 			PrevMap.Remove(Item.InstanceID);
 		}
 	}
 
-	// PrevMap에 남아있는 것 = 제거된 아이템 O(남은 개수)
 	for (const auto& Pair : PrevMap)
 	{
 		MarkSlotsDirty(Pair.Value->RootPosition, Pair.Value->GetEffectiveSize());
 	}
 
-	// 이전 상태 갱신
 	PreviousItems = Items;
 
-	// 첫 수신 시 diff 결과가 비어있으면 전체 갱신 (초기 동기화)
 	if (DirtySlotIndices.Num() == 0 && Items.Num() > 0)
 	{
 		MarkSlotsDirty(FIntPoint(0, 0), FItemSize(GridWidth, GridHeight));
@@ -109,52 +97,82 @@ void UInventoryComponent::OnRep_Items()
 	DirtySlotIndices.Empty();
 }
 
+// ========== Request API ==========
+
+void UInventoryComponent::RequestRemoveItem(FGuid ItemInstanceID)
+{
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestRemoveItem(ItemInstanceID);
+		return;
+	}
+
+	RemoveItem_Internal(ItemInstanceID);
+}
+
+void UInventoryComponent::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
+{
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
+		return;
+	}
+
+	MoveItem_Internal(ItemInstanceID, NewPosition, bNewRotated);
+}
+
+void UInventoryComponent::RequestConsumeItemByID(FName ItemDataID, int32 Count)
+{
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestConsumeItemByID(ItemDataID, Count);
+		return;
+	}
+
+	Server_RequestConsumeItemByID_Implementation(ItemDataID, Count);
+}
+
+void UInventoryComponent::RequestDropItem(FGuid ItemInstanceID)
+{
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		Server_RequestDropItem(ItemInstanceID);
+		return;
+	}
+
+	DropItem_Internal(ItemInstanceID);
+}
+
 // ========== Server RPCs ==========
 
-bool UInventoryComponent::Server_TryAddItemByID_Validate(
-	FName ItemDataID, int32 StackCount)
+void UInventoryComponent::Server_RequestRemoveItem_Implementation(FGuid ItemInstanceID)
 {
-	return !ItemDataID.IsNone() && StackCount > 0;
+	if (!ItemInstanceID.IsValid())
+	{
+		return;
+	}
+
+	RemoveItem_Internal(ItemInstanceID);
 }
 
-void UInventoryComponent::Server_TryAddItemByID_Implementation(
-	FName ItemDataID, int32 StackCount)
-{
-	TryAddItemByID(ItemDataID, StackCount);
-}
-
-bool UInventoryComponent::Server_RemoveItem_Validate(FGuid ItemInstanceID)
-{
-	return ItemInstanceID.IsValid();
-}
-
-void UInventoryComponent::Server_RemoveItem_Implementation(FGuid ItemInstanceID)
-{
-	RemoveItem(ItemInstanceID);
-}
-
-bool UInventoryComponent::Server_MoveItem_Validate(
+void UInventoryComponent::Server_RequestMoveItem_Implementation(
 	FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
-	return ItemInstanceID.IsValid() && NewPosition.X >= 0 && NewPosition.Y >= 0;
+	if (!ItemInstanceID.IsValid() || NewPosition.X < 0 || NewPosition.Y < 0)
+	{
+		return;
+	}
+
+	MoveItem_Internal(ItemInstanceID, NewPosition, bNewRotated);
 }
 
-void UInventoryComponent::Server_MoveItem_Implementation(
-	FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
+void UInventoryComponent::Server_RequestConsumeItemByID_Implementation(FName ItemDataID, int32 Count)
 {
-	MoveItem(ItemInstanceID, NewPosition, bNewRotated);
-}
+	if (ItemDataID.IsNone() || Count <= 0)
+	{
+		return;
+	}
 
-bool UInventoryComponent::Server_ConsumeItemByID_Validate(
-	FName ItemDataID, int32 Count)
-{
-	return !ItemDataID.IsNone() && Count > 0;
-}
-
-void UInventoryComponent::Server_ConsumeItemByID_Implementation(
-	FName ItemDataID, int32 Count)
-{
-	// 1. ConsumableEffect → ASC에 적용 (StatsBar 반영)
 	if (AActor* Owner = GetOwner())
 	{
 		if (UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>())
@@ -181,56 +199,17 @@ void UInventoryComponent::Server_ConsumeItemByID_Implementation(
 		}
 	}
 
-	// 2. 인벤토리에서 아이템 소비
-	ConsumeItemByID(ItemDataID, Count);
+	ConsumeItemByID_Internal(ItemDataID, Count);
 }
 
-bool UInventoryComponent::Server_DropItem_Validate(FGuid ItemInstanceID)
+void UInventoryComponent::Server_RequestDropItem_Implementation(FGuid ItemInstanceID)
 {
-	return ItemInstanceID.IsValid();
-}
-
-void UInventoryComponent::Server_DropItem_Implementation(FGuid ItemInstanceID)
-{
-	// 1. 아이템 조회
-	const FInventoryItemInstance* Item = FindItemByInstanceID(ItemInstanceID);
-	if (!Item) return;
-
-	// 드롭 정보 캐싱 (스택 조작 전에)
-	const FName DropItemDataID = Item->ItemDataID;
-	const int32 CurrentStack   = Item->StackCount;
-
-	// 2. 스택이 2 이상이면 1만 감소, 1이면 슬롯 전체 제거
-	if (CurrentStack > 1)
+	if (!ItemInstanceID.IsValid())
 	{
-		DecrementStack(ItemInstanceID);
-	}
-	else
-	{
-		RemoveItem(ItemInstanceID);
+		return;
 	}
 
-	// 3. 캐릭터 전방에 AWorldItem 스폰 (항상 1개)
-	AActor* Owner = GetOwner();
-	if (!Owner) return;
-
-	const FVector SpawnLocation =
-		Owner->GetActorLocation()
-		+ Owner->GetActorForwardVector() * DropForwardOffset
-		+ FVector(0.f, 0.f, DropUpwardOffset);
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.Owner = Owner;
-	SpawnParams.SpawnCollisionHandlingOverride =
-		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	AWorldItem* DroppedItem = GetWorld()->SpawnActor<AWorldItem>(
-		AWorldItem::StaticClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-
-	if (DroppedItem)
-	{
-		DroppedItem->InitializeItem(DropItemDataID, 1); // 항상 1개 드롭
-	}
+	DropItem_Internal(ItemInstanceID);
 }
 
 // ========== Dirty Flag ==========
@@ -246,7 +225,6 @@ void UInventoryComponent::MarkSlotsDirty(FIntPoint Position, FItemSize Size)
 	}
 }
 
-
 void UInventoryComponent::BroadcastDirtySlots()
 {
 	RebuildItemIndexMap();
@@ -255,7 +233,7 @@ void UInventoryComponent::BroadcastDirtySlots()
 	DirtySlotIndices.Empty();
 }
 
-// ========== 초기화 ==========
+// ========== Initialize ==========
 
 void UInventoryComponent::InitializeGrid()
 {
@@ -273,24 +251,21 @@ void UInventoryComponent::InitializeGrid()
 	}
 
 	Items.Empty();
+	RebuildItemIndexMap();
 	RebuildItemCountCache();
 	RebuildRowBitmap();
 
 	UE_LOG(LogProject_EXFIL, Log, TEXT("Inventory grid initialized: %dx%d (%d slots)"),
-	       GridWidth, GridHeight, GridSlots.Num());
+		GridWidth, GridHeight, GridSlots.Num());
 }
 
-// ========== 핵심 API ==========
+// ========== Internal Write API ==========
 
-bool UInventoryComponent::TryAddItem(FName ItemDataID, FItemSize Size,
-                                      int32 StackCount, int32 MaxStack)
+bool UInventoryComponent::AddItem_Internal(FName ItemDataID, FItemSize Size,
+	int32 StackCount, int32 MaxStack)
 {
-	// 클라이언트 → Server RPC 포워딩
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		Server_TryAddItemByID(ItemDataID, StackCount);
-		return true; // 낙관적 반환
-	}
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("AddItem_Internal must run on the server."));
 
 	FIntPoint FoundPosition;
 	if (!FindFirstAvailableSlot(Size, FoundPosition))
@@ -298,23 +273,23 @@ bool UInventoryComponent::TryAddItem(FName ItemDataID, FItemSize Size,
 		return false;
 	}
 
-	return TryAddItemAt(ItemDataID, Size, FoundPosition, false, StackCount, MaxStack);
+	return AddItemAt_Internal(ItemDataID, Size, FoundPosition, false, StackCount, MaxStack);
 }
 
-bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
+bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCount)
 {
-	// 클라이언트 → Server RPC 포워딩
-	if (GetOwner() && !GetOwner()->HasAuthority())
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("AddItemByID_Internal must run on the server."));
+
+	if (ItemDataID.IsNone() || StackCount <= 0)
 	{
-		Server_TryAddItemByID(ItemDataID, StackCount);
-		return true; // 낙관적 반환
+		return false;
 	}
 
-	// 서브시스템에서 아이템 정의 조회
 	if (!CachedItemSub)
 	{
 		UE_LOG(LogProject_EXFIL, Warning,
-		       TEXT("TryAddItemByID: UItemDataSubsystem을 찾을 수 없습니다."));
+			TEXT("AddItemByID_Internal: UItemDataSubsystem not found."));
 		return false;
 	}
 
@@ -322,15 +297,14 @@ bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
 	if (!ItemData)
 	{
 		UE_LOG(LogProject_EXFIL, Warning,
-		       TEXT("TryAddItemByID: ItemDataID '%s'를 DataTable에서 찾을 수 없습니다."),
-		       *ItemDataID.ToString());
+			TEXT("AddItemByID_Internal: ItemDataID '%s' not found."),
+			*ItemDataID.ToString());
 		return false;
 	}
 
 	const int32 MaxStack = ItemData->MaxStackCount;
 	int32 Remaining = StackCount;
 
-	// ── 핫픽스 B: 기존 스택에 병합 시도 ──
 	if (MaxStack > 1)
 	{
 		for (FInventoryItemInstance& Existing : Items)
@@ -339,6 +313,7 @@ bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
 			{
 				break;
 			}
+
 			if (Existing.ItemDataID != ItemDataID)
 			{
 				continue;
@@ -354,45 +329,40 @@ bool UInventoryComponent::TryAddItemByID(FName ItemDataID, int32 StackCount)
 			Existing.StackCount += ToMerge;
 			Remaining -= ToMerge;
 
-			// 병합된 슬롯 dirty 마킹
 			MarkSlotsDirty(Existing.RootPosition, Existing.GetEffectiveSize());
 
 			UE_LOG(LogProject_EXFIL, Log,
-			       TEXT("TryAddItemByID: Merged %d into existing stack of '%s' (now %d/%d)"),
-			       ToMerge, *ItemDataID.ToString(), Existing.StackCount, Existing.MaxStackCount);
+				TEXT("AddItemByID_Internal: Merged %d into existing stack of '%s' (now %d/%d)"),
+				ToMerge, *ItemDataID.ToString(), Existing.StackCount, Existing.MaxStackCount);
 		}
 
 		if (Remaining <= 0)
 		{
-			// 전량 기존 스택에 병합 완료
 			BroadcastDirtySlots();
 			return true;
 		}
 	}
 
-	// ── 남은 수량을 새 슬롯에 배치 ──
-	const FItemSize Size = ItemData->GetItemSize();
-	return TryAddItem(ItemDataID, Size, Remaining, MaxStack);
+	return AddItem_Internal(ItemDataID, ItemData->GetItemSize(), Remaining, MaxStack);
 }
 
-bool UInventoryComponent::TryAddItemAt(FName ItemDataID, FItemSize Size,
-                                        FIntPoint Position, bool bRotated,
-                                        int32 StackCount, int32 MaxStack)
+bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
+	FIntPoint Position, bool bRotated, int32 StackCount, int32 MaxStack)
 {
-	// 1. 회전 상태 반영
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("AddItemAt_Internal must run on the server."));
+
 	const FItemSize EffectiveSize = bRotated ? Size.GetRotated() : Size;
 
-	// 2. 공간 검증
 	if (!AreSlotsFree(Position, EffectiveSize))
 	{
 		UE_LOG(LogProject_EXFIL, Warning,
-		       TEXT("TryAddItemAt: Cannot place item '%s' at (%d,%d) Size:%dx%d"),
-		       *ItemDataID.ToString(), Position.X, Position.Y,
-		       EffectiveSize.Width, EffectiveSize.Height);
+			TEXT("AddItemAt_Internal: Cannot place item '%s' at (%d,%d) Size:%dx%d"),
+			*ItemDataID.ToString(), Position.X, Position.Y,
+			EffectiveSize.Width, EffectiveSize.Height);
 		return false;
 	}
 
-	// 3. 인스턴스 생성
 	FInventoryItemInstance NewItem;
 	NewItem.InstanceID = FGuid::NewGuid();
 	NewItem.ItemDataID = ItemDataID;
@@ -402,119 +372,88 @@ bool UInventoryComponent::TryAddItemAt(FName ItemDataID, FItemSize Size,
 	NewItem.StackCount = FMath::Clamp(StackCount, 1, MaxStack);
 	NewItem.MaxStackCount = MaxStack;
 
-	// 4. 슬롯 점유
 	OccupySlots(Position, EffectiveSize, NewItem.InstanceID);
-
-	// 5. 인스턴스 등록 (TArray)
 	Items.Add(NewItem);
 
 	UE_LOG(LogProject_EXFIL, Log,
-	       TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Stack:%d/%d Rotated:%s"),
-	       *ItemDataID.ToString(), *NewItem.InstanceID.ToString(),
-	       Position.X, Position.Y, EffectiveSize.Width, EffectiveSize.Height,
-	       NewItem.StackCount, NewItem.MaxStackCount,
-	       bRotated ? TEXT("Yes") : TEXT("No"));
+		TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Stack:%d/%d Rotated:%s"),
+		*ItemDataID.ToString(), *NewItem.InstanceID.ToString(),
+		Position.X, Position.Y, EffectiveSize.Width, EffectiveSize.Height,
+		NewItem.StackCount, NewItem.MaxStackCount,
+		bRotated ? TEXT("Yes") : TEXT("No"));
 
-	// 6. 델리게이트 브로드캐스트
 	MarkSlotsDirty(Position, EffectiveSize);
-	OnItemAdded.Broadcast(NewItem);
 	BroadcastDirtySlots();
 
 	return true;
 }
 
-bool UInventoryComponent::RemoveItem(const FGuid& InstanceID)
+bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
 {
-	// 클라이언트 → Server RPC 포워딩
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		Server_RemoveItem(InstanceID);
-		return true;
-	}
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("RemoveItem_Internal must run on the server."));
 
 	const int32 Index = FindItemIndexByInstanceID(InstanceID);
 	if (Index == INDEX_NONE)
 	{
-		UE_LOG(LogProject_EXFIL, Warning, TEXT("RemoveItem: Item not found: %s"),
-		       *InstanceID.ToString());
+		UE_LOG(LogProject_EXFIL, Warning, TEXT("RemoveItem_Internal: Item not found: %s"),
+			*InstanceID.ToString());
 		return false;
 	}
 
-	// dirty 마킹 (해제 전 위치 캡처)
 	MarkSlotsDirty(Items[Index].RootPosition, Items[Index].GetEffectiveSize());
-
-	// 슬롯 해제
 	FreeSlots(Items[Index]);
-
-	// 인스턴스 제거
 	Items.RemoveAt(Index);
 
 	UE_LOG(LogProject_EXFIL, Log, TEXT("Item removed: %s"), *InstanceID.ToString());
 
-	// 델리게이트 브로드캐스트
-	OnItemRemoved.Broadcast(InstanceID);
 	BroadcastDirtySlots();
-
 	return true;
 }
 
-bool UInventoryComponent::MoveItem(const FGuid& InstanceID, FIntPoint NewPosition,
-                                    bool bNewRotated)
+bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition,
+	bool bNewRotated)
 {
-	// 클라이언트 → Server RPC 포워딩
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		Server_MoveItem(InstanceID, NewPosition, bNewRotated);
-		return true;
-	}
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("MoveItem_Internal must run on the server."));
 
 	FInventoryItemInstance* FoundItem = FindItemByInstanceID(InstanceID);
 	if (!FoundItem)
 	{
-		UE_LOG(LogProject_EXFIL, Warning, TEXT("MoveItem: Item not found: %s"),
-		       *InstanceID.ToString());
+		UE_LOG(LogProject_EXFIL, Warning, TEXT("MoveItem_Internal: Item not found: %s"),
+			*InstanceID.ToString());
 		return false;
 	}
 
-	// 기존 정보 백업 (롤백용)
 	const FIntPoint OldPosition = FoundItem->RootPosition;
-	const bool bOldRotated = FoundItem->bIsRotated;
 	const FItemSize OldEffectiveSize = FoundItem->GetEffectiveSize();
 
-	// 기존 위치 해제
 	FreeSlots(*FoundItem);
 
-	// 새 사이즈 계산
 	const FItemSize NewEffectiveSize = bNewRotated
 		? FoundItem->ItemSize.GetRotated()
 		: FoundItem->ItemSize;
 
-	// 새 위치 검증
 	if (!AreSlotsFree(NewPosition, NewEffectiveSize))
 	{
-		// 롤백: 기존 위치 재점유
 		OccupySlots(OldPosition, OldEffectiveSize, InstanceID);
 
 		UE_LOG(LogProject_EXFIL, Warning,
-		       TEXT("MoveItem: Cannot move to (%d,%d). Rolling back to (%d,%d)"),
-		       NewPosition.X, NewPosition.Y, OldPosition.X, OldPosition.Y);
+			TEXT("MoveItem_Internal: Cannot move to (%d,%d). Rolling back to (%d,%d)"),
+			NewPosition.X, NewPosition.Y, OldPosition.X, OldPosition.Y);
 		return false;
 	}
 
-	// 새 위치 점유
 	OccupySlots(NewPosition, NewEffectiveSize, InstanceID);
-
-	// 아이템 정보 갱신
 	FoundItem->RootPosition = NewPosition;
 	FoundItem->bIsRotated = bNewRotated;
 
 	UE_LOG(LogProject_EXFIL, Log,
-	       TEXT("Item moved: %s from (%d,%d) to (%d,%d)"),
-	       *InstanceID.ToString(),
-	       OldPosition.X, OldPosition.Y,
-	       NewPosition.X, NewPosition.Y);
+		TEXT("Item moved: %s from (%d,%d) to (%d,%d)"),
+		*InstanceID.ToString(),
+		OldPosition.X, OldPosition.Y,
+		NewPosition.X, NewPosition.Y);
 
-	// 이전 위치 + 새 위치 모두 dirty
 	MarkSlotsDirty(OldPosition, OldEffectiveSize);
 	MarkSlotsDirty(NewPosition, NewEffectiveSize);
 	BroadcastDirtySlots();
@@ -522,15 +461,120 @@ bool UInventoryComponent::MoveItem(const FGuid& InstanceID, FIntPoint NewPositio
 	return true;
 }
 
-// ========== 쿼리 API ==========
+bool UInventoryComponent::ConsumeItemByID_Internal(FName ItemDataID, int32 Count)
+{
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("ConsumeItemByID_Internal must run on the server."));
+
+	if (ItemDataID.IsNone() || Count <= 0)
+	{
+		return false;
+	}
+
+	if (GetItemCountByID_Cached(ItemDataID) < Count)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+			TEXT("ConsumeItemByID_Internal: Not enough '%s' (need %d)"),
+			*ItemDataID.ToString(), Count);
+		return false;
+	}
+
+	int32 Remaining = Count;
+	TArray<int32> IndicesToRemove;
+
+	for (int32 i = 0; i < Items.Num() && Remaining > 0; ++i)
+	{
+		if (Items[i].ItemDataID != ItemDataID)
+		{
+			continue;
+		}
+
+		if (Items[i].StackCount <= Remaining)
+		{
+			Remaining -= Items[i].StackCount;
+			IndicesToRemove.Add(i);
+		}
+		else
+		{
+			Items[i].StackCount -= Remaining;
+			MarkSlotsDirty(Items[i].RootPosition, Items[i].GetEffectiveSize());
+			Remaining = 0;
+		}
+	}
+
+	for (int32 i = IndicesToRemove.Num() - 1; i >= 0; --i)
+	{
+		const int32 RemoveIdx = IndicesToRemove[i];
+		MarkSlotsDirty(Items[RemoveIdx].RootPosition, Items[RemoveIdx].GetEffectiveSize());
+		FreeSlots(Items[RemoveIdx]);
+		Items.RemoveAt(RemoveIdx);
+	}
+
+	BroadcastDirtySlots();
+
+	UE_LOG(LogProject_EXFIL, Log,
+		TEXT("ConsumeItemByID_Internal: '%s' x%d consumed"), *ItemDataID.ToString(), Count);
+	return true;
+}
+
+bool UInventoryComponent::DropItem_Internal(FGuid ItemInstanceID)
+{
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("DropItem_Internal must run on the server."));
+
+	const FInventoryItemInstance* Item = FindItemByInstanceID(ItemInstanceID);
+	if (!Item)
+	{
+		return false;
+	}
+
+	const FName DropItemDataID = Item->ItemDataID;
+	const int32 CurrentStack = Item->StackCount;
+
+	if (CurrentStack > 1)
+	{
+		DecrementStack_Internal(ItemInstanceID);
+	}
+	else
+	{
+		RemoveItem_Internal(ItemInstanceID);
+	}
+
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return false;
+	}
+
+	const FVector SpawnLocation =
+		Owner->GetActorLocation()
+		+ Owner->GetActorForwardVector() * DropForwardOffset
+		+ FVector(0.f, 0.f, DropUpwardOffset);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = Owner;
+	SpawnParams.SpawnCollisionHandlingOverride =
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	AWorldItem* DroppedItem = GetWorld()->SpawnActor<AWorldItem>(
+		AWorldItem::StaticClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+
+	if (DroppedItem)
+	{
+		DroppedItem->InitializeItem(DropItemDataID, 1);
+	}
+
+	return DroppedItem != nullptr;
+}
+
+// ========== Query API ==========
 
 bool UInventoryComponent::CanPlaceItemAt(FIntPoint Position, FItemSize Size) const
 {
 	return AreSlotsFree(Position, Size);
 }
 
-bool UInventoryComponent::FindFirstAvailableSlot(FItemSize Size,
-                                                  FIntPoint& OutPosition) const
+bool UInventoryComponent::FindFirstAvailableSlot(FItemSize Size, FIntPoint& OutPosition) const
 {
 	const int32 W = Size.Width;
 	const int32 H = Size.Height;
@@ -538,14 +582,12 @@ bool UInventoryComponent::FindFirstAvailableSlot(FItemSize Size,
 
 	for (int32 Y = 0; Y <= GridHeight - H; ++Y)
 	{
-		// H개 행 OR 합산 — 하나라도 점유된 열은 1
 		uint16 Merged = 0;
 		for (int32 DY = 0; DY < H; ++DY)
 		{
 			Merged |= RowBitmap[Y + DY];
 		}
 
-		// W비트 슬라이딩 마스크로 빈칸 탐색
 		for (int32 X = 0; X <= GridWidth - W; ++X)
 		{
 			if ((Merged & static_cast<uint16>(BaseMask << X)) == 0)
@@ -558,8 +600,7 @@ bool UInventoryComponent::FindFirstAvailableSlot(FItemSize Size,
 	return false;
 }
 
-bool UInventoryComponent::GetItemAt(FIntPoint Position,
-                                     FInventoryItemInstance& OutItem) const
+bool UInventoryComponent::GetItemAt(FIntPoint Position, FInventoryItemInstance& OutItem) const
 {
 	if (!IsValidGridPosition(Position))
 	{
@@ -584,8 +625,7 @@ bool UInventoryComponent::GetItemAt(FIntPoint Position,
 	return false;
 }
 
-bool UInventoryComponent::GetItemByID(const FGuid& InstanceID,
-                                       FInventoryItemInstance& OutItem) const
+bool UInventoryComponent::GetItemByID(const FGuid& InstanceID, FInventoryItemInstance& OutItem) const
 {
 	const FInventoryItemInstance* Found = FindItemByInstanceID(InstanceID);
 	if (Found)
@@ -620,71 +660,7 @@ int32 UInventoryComponent::GetItemCount(FName ItemDataID) const
 	return Count;
 }
 
-// ========== 크래프팅/장비 연동 API ==========
-
-bool UInventoryComponent::ConsumeItemByID(FName ItemDataID, int32 Count)
-{
-	// 클라이언트 → Server RPC 포워딩
-	if (GetOwner() && !GetOwner()->HasAuthority())
-	{
-		Server_ConsumeItemByID(ItemDataID, Count);
-		return true;
-	}
-
-	if (Count <= 0)
-	{
-		return false;
-	}
-
-	// 보유량 사전 확인
-	if (GetItemCountByID_Cached(ItemDataID) < Count)
-	{
-		UE_LOG(LogProject_EXFIL, Warning,
-		       TEXT("ConsumeItemByID: Not enough '%s' (need %d)"), *ItemDataID.ToString(), Count);
-		return false;
-	}
-
-	int32 Remaining = Count;
-
-	// Items 배열을 순회하며 해당 ID 아이템을 소비
-	TArray<int32> IndicesToRemove;
-	for (int32 i = 0; i < Items.Num() && Remaining > 0; ++i)
-	{
-		if (Items[i].ItemDataID != ItemDataID)
-		{
-			continue;
-		}
-
-		if (Items[i].StackCount <= Remaining)
-		{
-			Remaining -= Items[i].StackCount;
-			IndicesToRemove.Add(i);
-		}
-		else
-		{
-			Items[i].StackCount -= Remaining;
-			MarkSlotsDirty(Items[i].RootPosition, Items[i].GetEffectiveSize());
-			Remaining = 0;
-		}
-	}
-
-	// 스택이 0이 된 인스턴스 제거 (역순으로 제거해야 인덱스 안전)
-	for (int32 i = IndicesToRemove.Num() - 1; i >= 0; --i)
-	{
-		const int32 RemoveIdx = IndicesToRemove[i];
-		MarkSlotsDirty(Items[RemoveIdx].RootPosition, Items[RemoveIdx].GetEffectiveSize());
-		FreeSlots(Items[RemoveIdx]);
-		const FGuid RemovedID = Items[RemoveIdx].InstanceID;
-		Items.RemoveAt(RemoveIdx);
-		OnItemRemoved.Broadcast(RemovedID);
-	}
-
-	BroadcastDirtySlots();
-
-	UE_LOG(LogProject_EXFIL, Log,
-	       TEXT("ConsumeItemByID: '%s' x%d consumed"), *ItemDataID.ToString(), Count);
-	return true;
-}
+// ========== Crafting / Equipment API ==========
 
 int32 UInventoryComponent::GetItemCountByID(FName ItemDataID) const
 {
@@ -723,7 +699,7 @@ void UInventoryComponent::RebuildItemIndexMap()
 	}
 }
 
-// ========== Bitmap 기반 그리드 탐색 ==========
+// ========== Bitmap ==========
 
 void UInventoryComponent::RebuildRowBitmap()
 {
@@ -755,10 +731,13 @@ void UInventoryComponent::SetBit(int32 Col, int32 Row, bool bOccupied)
 	}
 }
 
-// ========== 스택 조작 ==========
+// ========== Stack Helper ==========
 
-int32 UInventoryComponent::DecrementStack(const FGuid& InstanceID)
+int32 UInventoryComponent::DecrementStack_Internal(const FGuid& InstanceID)
 {
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("DecrementStack_Internal must run on the server."));
+
 	FInventoryItemInstance* Item = FindItemByInstanceID(InstanceID);
 	if (!Item)
 	{
@@ -769,20 +748,19 @@ int32 UInventoryComponent::DecrementStack(const FGuid& InstanceID)
 
 	if (Item->StackCount <= 0)
 	{
-		RemoveItem(InstanceID);
+		RemoveItem_Internal(InstanceID);
 		return 0;
 	}
 
-	// 스택만 감소 — 그리드 점유 유지, 리플리케이션 트리거
 	MarkSlotsDirty(Item->RootPosition, Item->GetEffectiveSize());
 	BroadcastDirtySlots();
 
-	UE_LOG(LogProject_EXFIL, Log, TEXT("DecrementStack: '%s' now %d"),
-	       *Item->ItemDataID.ToString(), Item->StackCount);
+	UE_LOG(LogProject_EXFIL, Log, TEXT("DecrementStack_Internal: '%s' now %d"),
+		*Item->ItemDataID.ToString(), Item->StackCount);
 	return Item->StackCount;
 }
 
-// ========== 유틸리티 ==========
+// ========== Utility ==========
 
 void UInventoryComponent::DebugPrintGrid() const
 {
@@ -813,7 +791,7 @@ void UInventoryComponent::DebugPrintGrid() const
 	}
 }
 
-// ========== 내부 헬퍼 ==========
+// ========== Helpers ==========
 
 bool UInventoryComponent::IsValidGridPosition(FIntPoint Position) const
 {
@@ -851,8 +829,7 @@ bool UInventoryComponent::AreSlotsFree(FIntPoint Position, FItemSize Size) const
 	return true;
 }
 
-void UInventoryComponent::OccupySlots(FIntPoint Position, FItemSize Size,
-                                       const FGuid& ItemID)
+void UInventoryComponent::OccupySlots(FIntPoint Position, FItemSize Size, const FGuid& ItemID)
 {
 	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; Y++)
 	{
@@ -885,7 +862,7 @@ void UInventoryComponent::FreeSlots(const FInventoryItemInstance& Item)
 	}
 }
 
-// ========== TMap→TArray 전환 헬퍼 ==========
+// ========== Item Lookup ==========
 
 FInventoryItemInstance* UInventoryComponent::FindItemByInstanceID(const FGuid& InstanceID)
 {

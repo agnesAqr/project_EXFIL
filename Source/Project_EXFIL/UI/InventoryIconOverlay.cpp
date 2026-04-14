@@ -450,7 +450,7 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
         UEquipmentComponent* EquipComp = Pawn
             ? Pawn->FindComponentByClass<UEquipmentComponent>() : nullptr;
         if (!EquipComp) return false;
-        EquipComp->Server_UnequipToInventory(DragOp->SourceEquipmentSlot);
+        EquipComp->RequestUnequipToInventory(DragOp->SourceEquipmentSlot);
         return true;
     }
 

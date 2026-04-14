@@ -8,13 +8,7 @@
 #include "EXFILInventoryTypes.h"
 #include "InventoryComponent.generated.h"
 
-// 델리게이트 선언 (ViewModel 바인딩용)
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const TSet<int32>&);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-	FOnItemAdded, const FInventoryItemInstance&, AddedItem);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-	FOnItemRemoved, const FGuid&, RemovedItemID);
-
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UInventoryComponent : public UActorComponent
@@ -25,45 +19,56 @@ public:
 	UInventoryComponent();
 
 	// ========== 설정 ==========
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridWidth = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Replicated, Category = "Inventory|Config")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridHeight = 12;
 
-	/** 아이템 드롭 시 캐릭터 전방 오프셋 (cm) */
+	/** 아이템 드랍 시 캐릭터 앞쪽 오프셋 (cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropForwardOffset = 100.f;
 
-	/** 아이템 드롭 시 상방 오프셋 — 바닥 관통 방지 (cm) */
+	/** 아이템 드랍 시 위쪽 오프셋 (cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropUpwardOffset = 50.f;
 
-	// ========== 핵심 API ==========
+	// ========== 클라이언트 요청 API ==========
+	// 비동기 요청. 최종 결과는 replication / OnRep / delegate로 반영됨.
 
-	/** 자동 빈칸 탐색 후 아이템 추가 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool TryAddItem(FName ItemDataID, FItemSize Size,
-	                int32 StackCount = 1, int32 MaxStack = 1);
+	void RequestRemoveItem(FGuid ItemInstanceID);
 
-	/** DataTable에서 크기·스택 정보를 자동 조회한 뒤 추가 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool TryAddItemByID(FName ItemDataID, int32 StackCount = 1);
+	void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
 
-	/** 지정 위치에 아이템 배치 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool TryAddItemAt(FName ItemDataID, FItemSize Size,
-	                  FIntPoint Position, bool bRotated = false,
-	                  int32 StackCount = 1, int32 MaxStack = 1);
+	void RequestConsumeItemByID(FName ItemDataID, int32 Count = 1);
 
-	/** 아이템 제거 */
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool RemoveItem(const FGuid& InstanceID);
+	void RequestDropItem(FGuid ItemInstanceID);
 
-	/** 아이템 이동 */
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool MoveItem(const FGuid& InstanceID, FIntPoint NewPosition,
-	              bool bNewRotated = false);
+	// ========== 서버 직접 실행 API ==========
+	// EquipmentComponent, CraftingComponent, Character 등
+	// 이미 서버 컨텍스트인 코드가 직접 호출하는 authoritative 함수.
+
+	bool AddItemByID_Internal(FName ItemDataID, int32 StackCount = 1);
+
+	bool RemoveItem_Internal(const FGuid& InstanceID);
+
+	bool MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition, bool bNewRotated = false);
+
+	bool ConsumeItemByID_Internal(FName ItemDataID, int32 Count = 1);
+
+	bool DropItem_Internal(FGuid ItemInstanceID);
+
+	/**
+	 * 특정 아이템 인스턴스의 StackCount를 1 감소.
+	 * 0이 되면 자동 RemoveItem_Internal. 서버 전용 헬퍼.
+	 * @return 감소 후 남은 StackCount (제거됐으면 0)
+	 */
+	int32 DecrementStack_Internal(const FGuid& InstanceID);
 
 	// ========== 쿼리 API ==========
 
@@ -71,16 +76,13 @@ public:
 	bool CanPlaceItemAt(FIntPoint Position, FItemSize Size) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	bool FindFirstAvailableSlot(FItemSize Size,
-	                            FIntPoint& OutPosition) const;
+	bool FindFirstAvailableSlot(FItemSize Size, FIntPoint& OutPosition) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	bool GetItemAt(FIntPoint Position,
-	               FInventoryItemInstance& OutItem) const;
+	bool GetItemAt(FIntPoint Position, FInventoryItemInstance& OutItem) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	bool GetItemByID(const FGuid& InstanceID,
-	                 FInventoryItemInstance& OutItem) const;
+	bool GetItemByID(const FGuid& InstanceID, FInventoryItemInstance& OutItem) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	TArray<FInventoryItemInstance> GetAllItems() const;
@@ -91,67 +93,21 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCount(FName ItemDataID) const;
 
+	// ========== 크래프팅/장비 연동 API ==========
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetItemCountByID(FName ItemDataID) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	int32 GetItemCountByID_Cached(FName ItemDataID) const;
+
 	// ========== 유틸리티 ==========
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory|Debug")
 	void DebugPrintGrid() const;
 
-	// ========== 크래프팅/장비 연동 API ==========
-
-	/**
-	 * 인벤토리에서 해당 ItemDataID 아이템을 Count만큼 스택 소비.
-	 * 여러 슬롯에 분산된 경우 순서대로 소비.
-	 * 스택이 0이 되는 인스턴스는 자동 제거.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	bool ConsumeItemByID(FName ItemDataID, int32 Count = 1);
-
-	/** 인벤토리 내 해당 ItemDataID의 총 스택 수 합산 반환 */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	int32 GetItemCountByID(FName ItemDataID) const;
-
-	/** 캐시 기반 O(1) 수량 조회 (Items 변경 후 자동 갱신) */
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	int32 GetItemCountByID_Cached(FName ItemDataID) const;
-
-	/**
-	 * 특정 아이템 인스턴스의 StackCount를 1 감소.
-	 * 0이 되면 자동 RemoveItem. 서버 전용.
-	 * @return 감소 후 남은 StackCount (제거됐으면 0)
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	int32 DecrementStack(const FGuid& InstanceID);
-
-	// ========== Server RPCs ==========
-
-	/** 아이템 추가 요청 — Validate: !IsNone && Count > 0 */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_TryAddItemByID(FName ItemDataID, int32 StackCount);
-
-	/** 아이템 삭제 요청 — Validate: IsValid */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RemoveItem(FGuid ItemInstanceID);
-
-	/** 아이템 이동 요청 — Validate: IsValid && 그리드 범위 내 */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_MoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated);
-
-	/** 아이템 소모 요청 — Validate: !IsNone && Count > 0 */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_ConsumeItemByID(FName ItemDataID, int32 Count);
-
-	/** 아이템 월드 드롭 — Validate: IsValid */
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_DropItem(FGuid ItemInstanceID);
-
 	// ========== 델리게이트 ==========
 	FOnInventoryUpdated OnInventoryUpdated;
-
-	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
-	FOnItemAdded OnItemAdded;
-
-	UPROPERTY(BlueprintAssignable, Category = "Inventory|Events")
-	FOnItemRemoved OnItemRemoved;
 
 	// ========== Replication ==========
 	virtual void GetLifetimeReplicatedProps(
@@ -161,75 +117,73 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	// ========== Server RPCs ==========
+	// 외부 호출용이 아니라 Request*가 내부에서 호출하는 네트워크 경계
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestRemoveItem(FGuid ItemInstanceID);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestConsumeItemByID(FName ItemDataID, int32 Count);
+
+	UFUNCTION(Server, Reliable)
+	void Server_RequestDropItem(FGuid ItemInstanceID);
+
+	// ========== 내부 쓰기 헬퍼 ==========
+	// InventoryComponent 내부에서만 쓰는 실제 구현 세부 함수
+
+	bool AddItem_Internal(FName ItemDataID, FItemSize Size,
+		int32 StackCount = 1, int32 MaxStack = 1);
+
+	bool AddItemAt_Internal(FName ItemDataID, FItemSize Size,
+		FIntPoint Position, bool bRotated = false,
+		int32 StackCount = 1, int32 MaxStack = 1);
+
 	// ========== Replicated 데이터 ==========
 
-	/** 1D 배열로 표현한 2D 그리드 (Index = Y * GridWidth + X) */
 	UPROPERTY(Replicated)
 	TArray<FInventorySlot> GridSlots;
 
-	/** 인벤토리에 존재하는 모든 아이템 인스턴스 (TMap→TArray: TMap은 리플리케이션 불가) */
 	UPROPERTY(ReplicatedUsing = OnRep_Items)
 	TArray<FInventoryItemInstance> Items;
 
-	/** Items 리플리케이션 수신 → 캐시 리빌드 + PreviousItems diff → 변경분만 Broadcast */
 	UFUNCTION()
 	void OnRep_Items();
 
 	// ========== 내부 헬퍼 ==========
+
 	bool IsValidGridPosition(FIntPoint Position) const;
 	int32 GridPositionToIndex(FIntPoint Position) const;
 	FIntPoint IndexToGridPosition(int32 Index) const;
 
 	bool AreSlotsFree(FIntPoint Position, FItemSize Size) const;
-	void OccupySlots(FIntPoint Position, FItemSize Size,
-	                 const FGuid& ItemID);
+	void OccupySlots(FIntPoint Position, FItemSize Size, const FGuid& ItemID);
 	void FreeSlots(const FInventoryItemInstance& Item);
 	void InitializeGrid();
 
-	/** ItemDataSubsystem 캐시 (BeginPlay에서 1회 조회) */
 	UPROPERTY()
 	TObjectPtr<class UItemDataSubsystem> CachedItemSub;
 
-	/** ItemDataID → 총 수량 캐시 — 리플리케이션 제외 (UPROPERTY 없음) */
 	TMap<FName, int32> ItemCountCache;
-
-	// TMap은 DOREPLIFETIME 미지원 → TArray(Replicated) + TMap(Local Cache) 분리
-	/** InstanceID → Items 배열 인덱스 캐시 — 리플리케이션 제외 (UPROPERTY 없음) */
 	TMap<FGuid, int32> ItemIndexMap;
 
-	/** ItemIndexMap 재구축 */
 	void RebuildItemIndexMap();
 
-	// ========== Bitmap 기반 그리드 탐색 ==========
-
-	// Bitmap O(1) — 그리드 폭 10 = uint16으로 충분 (16 초과 시 uint32 전환 필요)
-	/** 행별 점유 비트마스크 — 리플리케이션 제외 (UPROPERTY 없음) */
 	TArray<uint16> RowBitmap;
-
-	/** GridSlots 기반으로 RowBitmap 전체 재구축 */
 	void RebuildRowBitmap();
-
-	/** RowBitmap 개별 비트 설정/해제 */
 	void SetBit(int32 Col, int32 Row, bool bOccupied);
 
-
-	/** ItemCountCache 재구축 */
 	void RebuildItemCountCache();
 
-	/** 변경된 슬롯 인덱스 추적 — Broadcast 시 전달 후 Empty */
 	TSet<int32> DirtySlotIndices;
-
-	/** 아이템 영역에 해당하는 슬롯들을 Dirty로 마킹 */
 	void MarkSlotsDirty(FIntPoint Position, FItemSize Size);
 
-	// PreviousItems diff 기반 dirty — OnRep 경로에서 변경 슬롯만 감지
-	/** OnRep_Items diff용 이전 상태 — 리플리케이션 제외 (로컬 전용) */
 	TArray<FInventoryItemInstance> PreviousItems;
-
-	/** DirtySlotIndices 브로드캐스트 후 비우기 */
 	void BroadcastDirtySlots();
 
-	/** TArray에서 InstanceID로 아이템 검색 (TMap→TArray 전환 헬퍼) */
 	FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID);
 	const FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID) const;
 	int32 FindItemIndexByInstanceID(const FGuid& InstanceID) const;

@@ -366,6 +366,6 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
         return false;
     }
 
-    EquipComp->Server_EquipFromInventory(SlotType, DragOp->DraggedItemInstanceID);
+    EquipComp->RequestEquipFromInventory(SlotType, DragOp->DraggedItemInstanceID);
     return true;
 }

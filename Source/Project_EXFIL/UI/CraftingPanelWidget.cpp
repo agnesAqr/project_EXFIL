@@ -172,11 +172,11 @@ void UCraftingPanelWidget::OnRecipeSelected(FName ClickedRecipeID)
     if (Crafting->IsCrafting())
     {
         // 이미 크래프팅 중이면 취소
-        Crafting->CancelCraft();
+        Crafting->RequestCancelCraft();
     }
     else
     {
-        Crafting->StartCraft(ClickedRecipeID);
+        Crafting->RequestStartCraft(ClickedRecipeID);
     }
 }
 

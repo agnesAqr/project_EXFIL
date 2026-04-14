@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/GameInstance.h"
+#include "GameFramework/Pawn.h"
 #include "Inventory/InventoryComponent.h"
 #include "Data/ItemDataSubsystem.h"
 #include "Data/EXFILItemTypes.h"
@@ -20,11 +21,11 @@ void UCraftingComponent::BeginPlay()
 {
     Super::BeginPlay();
 
-    // 컴포넌트/서브시스템 캐싱
     if (AActor* Owner = GetOwner())
     {
         CachedInventoryComp = Owner->FindComponentByClass<UInventoryComponent>();
     }
+
     if (UWorld* World = GetWorld())
     {
         if (UGameInstance* GI = World->GetGameInstance())
@@ -60,29 +61,66 @@ void UCraftingComponent::OnRep_CraftingState()
     }
 }
 
+// ========== Request API ==========
+
+void UCraftingComponent::RequestStartCraft(FName RecipeID)
+{
+    if (RecipeID.IsNone())
+    {
+        NotifyCraftStartFailed(RecipeID);
+        return;
+    }
+
+    if (GetOwner() && !GetOwner()->HasAuthority())
+    {
+        Server_RequestStartCraft(RecipeID);
+        return;
+    }
+
+    if (!StartCraft_Internal(RecipeID))
+    {
+        NotifyCraftStartFailed(RecipeID);
+    }
+}
+
+void UCraftingComponent::RequestCancelCraft()
+{
+    if (GetOwner() && !GetOwner()->HasAuthority())
+    {
+        Server_RequestCancelCraft();
+        return;
+    }
+
+    CancelCraft_Internal();
+}
+
 // ========== Server RPCs ==========
 
-bool UCraftingComponent::Server_StartCraft_Validate(FName RecipeID)
+void UCraftingComponent::Server_RequestStartCraft_Implementation(FName RecipeID)
 {
-    return !RecipeID.IsNone();
+    if (RecipeID.IsNone())
+    {
+        NotifyCraftStartFailed(RecipeID);
+        return;
+    }
+
+    if (!StartCraft_Internal(RecipeID))
+    {
+        NotifyCraftStartFailed(RecipeID);
+    }
 }
 
-void UCraftingComponent::Server_StartCraft_Implementation(FName RecipeID)
+void UCraftingComponent::Server_RequestCancelCraft_Implementation()
 {
-    StartCraft(RecipeID);
+    CancelCraft_Internal();
 }
 
-bool UCraftingComponent::Server_CancelCraft_Validate()
+void UCraftingComponent::Client_NotifyCraftStartFailed_Implementation(FName RecipeID)
 {
-    return true;
+    OnCraftStartFailed.Broadcast(RecipeID);
 }
 
-void UCraftingComponent::Server_CancelCraft_Implementation()
-{
-    CancelCraft();
-}
-
-// ─── 공개 API ─────────────────────────────────────────────────────────────────
+// ========== Query API ==========
 
 bool UCraftingComponent::CanCraft(FName RecipeID) const
 {
@@ -111,56 +149,68 @@ bool UCraftingComponent::CanCraft(FName RecipeID) const
             return false;
         }
     }
+
     return true;
 }
 
-bool UCraftingComponent::StartCraft(FName RecipeID)
+TArray<FName> UCraftingComponent::GetAvailableRecipes() const
 {
-    // 클라이언트 → Server RPC 포워딩
-    if (GetOwner() && !GetOwner()->HasAuthority())
+    UItemDataSubsystem* Sub = GetItemDataSubsystem();
+    if (!Sub)
     {
-        Server_StartCraft(RecipeID);
-        return true;
+        return {};
     }
+
+    return Sub->GetAllRecipeIDs();
+}
+
+// ========== Internal Write API ==========
+
+bool UCraftingComponent::StartCraft_Internal(FName RecipeID)
+{
+    checkf(GetOwner() && GetOwner()->HasAuthority(),
+        TEXT("StartCraft_Internal must run on the server."));
 
     if (bIsCrafting)
     {
-        UE_LOG(LogProject_EXFIL, Warning, TEXT("CraftingComponent: 이미 크래프팅 중입니다."));
+        UE_LOG(LogProject_EXFIL, Warning, TEXT("CraftingComponent: already crafting."));
         return false;
     }
 
     if (!CanCraft(RecipeID))
     {
         UE_LOG(LogProject_EXFIL, Warning,
-               TEXT("CraftingComponent: CanCraft 실패 — RecipeID '%s'"), *RecipeID.ToString());
+            TEXT("CraftingComponent: CanCraft failed for '%s'"), *RecipeID.ToString());
         return false;
     }
 
     UItemDataSubsystem* Sub = GetItemDataSubsystem();
-    const FCraftingRecipe* Recipe = Sub->GetCraftingRecipe(RecipeID);
+    const FCraftingRecipe* Recipe = Sub ? Sub->GetCraftingRecipe(RecipeID) : nullptr;
     UInventoryComponent* InvComp = GetInventoryComp();
+    if (!Recipe || !InvComp)
+    {
+        return false;
+    }
 
-    // 재료 소비 + 스냅샷 저장 (취소 시 복구용)
     ConsumedIngredients.Empty();
     for (const FCraftingIngredient& Ing : Recipe->Ingredients)
     {
-        if (!InvComp->ConsumeItemByID(Ing.ItemDataID, Ing.RequiredCount))
+        if (!InvComp->ConsumeItemByID_Internal(Ing.ItemDataID, Ing.RequiredCount))
         {
-            // 부분 소비 후 실패 — 이미 소비된 재료 복구
             for (const FConsumedIngredient& C : ConsumedIngredients)
             {
-                InvComp->TryAddItemByID(C.ItemDataID, C.Count);
+                InvComp->AddItemByID_Internal(C.ItemDataID, C.Count);
             }
             ConsumedIngredients.Empty();
             return false;
         }
+
         ConsumedIngredients.Add({ Ing.ItemDataID, Ing.RequiredCount });
     }
 
     bIsCrafting = true;
     CurrentRecipeID = RecipeID;
 
-    // 타이머 시작
     GetWorld()->GetTimerManager().SetTimer(
         CraftTimerHandle,
         this,
@@ -170,34 +220,28 @@ bool UCraftingComponent::StartCraft(FName RecipeID)
 
     OnCraftingStateChanged.Broadcast(true, Recipe->CraftDuration);
 
-    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' 크래프팅 시작 (%.1fs)"),
-           *RecipeID.ToString(), Recipe->CraftDuration);
+    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' started (%.1fs)"),
+        *RecipeID.ToString(), Recipe->CraftDuration);
     return true;
 }
 
-void UCraftingComponent::CancelCraft()
+void UCraftingComponent::CancelCraft_Internal()
 {
-    // 클라이언트 → Server RPC 포워딩
-    if (GetOwner() && !GetOwner()->HasAuthority())
-    {
-        Server_CancelCraft();
-        return;
-    }
+    checkf(GetOwner() && GetOwner()->HasAuthority(),
+        TEXT("CancelCraft_Internal must run on the server."));
 
     if (!bIsCrafting)
     {
         return;
     }
 
-    // 타이머 클리어
     GetWorld()->GetTimerManager().ClearTimer(CraftTimerHandle);
 
-    // 소비한 재료 복구
     if (UInventoryComponent* InvComp = GetInventoryComp())
     {
         for (const FConsumedIngredient& C : ConsumedIngredients)
         {
-            InvComp->TryAddItemByID(C.ItemDataID, C.Count);
+            InvComp->AddItemByID_Internal(C.ItemDataID, C.Count);
         }
     }
     ConsumedIngredients.Empty();
@@ -208,21 +252,29 @@ void UCraftingComponent::CancelCraft()
 
     OnCraftingStateChanged.Broadcast(false, 0.f);
 
-    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' 크래프팅 취소 — 재료 복구"),
-           *CancelledRecipe.ToString());
+    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' canceled"),
+        *CancelledRecipe.ToString());
 }
 
-TArray<FName> UCraftingComponent::GetAvailableRecipes() const
+void UCraftingComponent::NotifyCraftStartFailed(FName RecipeID)
 {
-    UItemDataSubsystem* Sub = GetItemDataSubsystem();
-    if (!Sub)
+    OnCraftStartFailed.Broadcast(RecipeID);
+
+    if (!GetOwner() || !GetOwner()->HasAuthority())
     {
-        return {};
+        return;
     }
-    return Sub->GetAllRecipeIDs();
+
+    const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+    if (OwnerPawn && OwnerPawn->IsLocallyControlled())
+    {
+        return;
+    }
+
+    Client_NotifyCraftStartFailed(RecipeID);
 }
 
-// ─── 내부 ──────────────────────────────────────────────────────────────────────
+// ========== Server-only Completion ==========
 
 void UCraftingComponent::OnCraftTimerComplete()
 {
@@ -237,20 +289,20 @@ void UCraftingComponent::OnCraftTimerComplete()
 
     if (Recipe && InvComp)
     {
-        const bool bAdded = InvComp->TryAddItemByID(Recipe->ResultItemID, Recipe->ResultCount);
+        const bool bAdded =
+            InvComp->AddItemByID_Internal(Recipe->ResultItemID, Recipe->ResultCount);
         if (!bAdded)
         {
-            // 인벤토리 공간 부족 → 발밑에 월드 아이템으로 드롭 (결과물 증발 방지)
             UE_LOG(LogProject_EXFIL, Warning,
-                   TEXT("CraftingComponent: 결과물 '%s' 인벤토리 부족 → 월드 드롭"),
-                   *Recipe->ResultItemID.ToString());
+                TEXT("CraftingComponent: Result '%s' inventory full, dropping to world"),
+                *Recipe->ResultItemID.ToString());
 
             AActor* Owner = GetOwner();
             UWorld* World = Owner ? Owner->GetWorld() : nullptr;
             if (World && Owner)
             {
-                const FVector SpawnLoc = Owner->GetActorLocation()
-                    + Owner->GetActorForwardVector() * 80.f;
+                const FVector SpawnLoc =
+                    Owner->GetActorLocation() + Owner->GetActorForwardVector() * 80.f;
                 FActorSpawnParameters SpawnParams;
                 SpawnParams.Owner = Owner;
                 SpawnParams.SpawnCollisionHandlingOverride =
@@ -274,8 +326,8 @@ void UCraftingComponent::OnCraftTimerComplete()
     OnCraftingCompleted.Broadcast(CompletedRecipe);
     OnCraftingStateChanged.Broadcast(false, 0.f);
 
-    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' 크래프팅 완료"),
-           *CompletedRecipe.ToString());
+    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' completed"),
+        *CompletedRecipe.ToString());
 }
 
 UInventoryComponent* UCraftingComponent::GetInventoryComp() const
