@@ -43,7 +43,7 @@ public:
     // === 사용자 액션 (View → ViewModel → Model) ===
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
-    void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
+    void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition);
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
     void RequestRemoveItem(FGuid ItemInstanceID);

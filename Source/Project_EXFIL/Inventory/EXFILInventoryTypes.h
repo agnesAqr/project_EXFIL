@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Net/Serialization/FastArraySerializer.h"
 #include "EXFILInventoryTypes.generated.h"
 
 /**
@@ -37,7 +38,7 @@ struct PROJECT_EXFIL_API FItemSize
  * FInventoryItemInstance — 인벤토리에 존재하는 아이템 런타임 인스턴스
  */
 USTRUCT(BlueprintType)
-struct PROJECT_EXFIL_API FInventoryItemInstance
+struct PROJECT_EXFIL_API FInventoryItemInstance : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
@@ -57,7 +58,7 @@ struct PROJECT_EXFIL_API FInventoryItemInstance
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FItemSize ItemSize;
 
-	/** 회전 여부 */
+	/** 회전 기능 제거 후 호환성 유지용 플래그 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	bool bIsRotated = false;
 
@@ -69,10 +70,10 @@ struct PROJECT_EXFIL_API FInventoryItemInstance
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 MaxStackCount = 1;
 
-	/** 현재 적용 중인 크기 (회전 반영) */
+	/** 현재 적용 중인 크기 */
 	FItemSize GetEffectiveSize() const
 	{
-		return bIsRotated ? ItemSize.GetRotated() : ItemSize;
+		return ItemSize;
 	}
 
 	bool IsValid() const { return InstanceID.IsValid(); }

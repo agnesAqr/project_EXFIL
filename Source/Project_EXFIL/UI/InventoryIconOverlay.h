@@ -15,6 +15,7 @@ class UInventoryViewModel;
 class UInventorySlotViewModel;
 class UUniformGridPanel;
 class UItemContextMenuWidget;
+class UInventoryDragDropOp;
 class UInventoryPanelWidget;
 
 /**
@@ -75,6 +76,8 @@ protected:
 
     virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent,
         UDragDropOperation* InOperation) override;
+    virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent,
+        UDragDropOperation* InOperation) override;
 
 private:
     // 우클릭 HitTest용 캐시
@@ -112,6 +115,16 @@ private:
 
     /** 컨텍스트 메뉴를 지연 생성하거나 기존 것을 반환 */
     UItemContextMenuWidget* GetOrCreateContextMenu();
+
+    UPROPERTY()
+    TObjectPtr<UInventoryDragDropOp> ActiveDragOperation;
+
+    FVector2D CachedDragLocalPos = FVector2D::ZeroVector;
+    FIntPoint CachedPreviewRootPos = FIntPoint::ZeroValue;
+    bool bCachedPreviewCanPlace = false;
+    bool bHasCachedPreview = false;
+
+    void UpdateDragPreview(UInventoryDragDropOp* DragOp, const FVector2D& LocalPos);
 
     // ========== 아이콘 위젯 캐시 (ClearChildren 제거 최적화) ==========
 

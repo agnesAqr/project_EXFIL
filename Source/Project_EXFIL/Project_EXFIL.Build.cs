@@ -28,7 +28,9 @@ public class Project_EXFIL : ModuleRules
 			"GameplayTags",
 			// Day 4
 			"GameplayAbilities",
-			"GameplayTasks"
+			"GameplayTasks",
+			// Replication
+			"NetCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -40,7 +42,6 @@ public class Project_EXFIL : ModuleRules
 			"Project_EXFIL/Inventory",
 			"Project_EXFIL/UI",
 			"Project_EXFIL/GAS",
-			"Project_EXFIL/Equipment",
 		});
 
 		// Uncomment if you are using Slate UI

@@ -52,14 +52,13 @@ const TArray<UInventorySlotViewModel*>& UInventoryViewModel::GetAllSlots() const
     return SlotViewModels;
 }
 
-void UInventoryViewModel::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition,
-                                           bool bNewRotated)
+void UInventoryViewModel::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition)
 {
     if (!InventoryComp.IsValid())
     {
         return;
     }
-    InventoryComp->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
+    InventoryComp->RequestMoveItem(ItemInstanceID, NewPosition);
 }
 
 FIntPoint UInventoryViewModel::GetItemRootPosition(FGuid ItemInstanceID) const
@@ -85,7 +84,7 @@ FItemSize UInventoryViewModel::GetItemEffectiveSize(FGuid ItemInstanceID) const
     FInventoryItemInstance Item;
     if (InventoryComp->GetItemByID(ItemInstanceID, Item))
     {
-        return Item.bIsRotated ? Item.ItemSize.GetRotated() : Item.ItemSize;
+        return Item.ItemSize;
     }
     return FItemSize(1, 1);
 }
@@ -101,14 +100,8 @@ void UInventoryViewModel::RequestRemoveItem(FGuid ItemInstanceID)
 
 void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& DirtyIndices)
 {
-    if (DirtyIndices.Num() == 0 || DirtyIndices.Num() > GridWidth * GridHeight / 2)
-    {
-        RefreshAllSlots();
-    }
-    else
-    {
-        RefreshDirtySlots(DirtyIndices);
-    }
+    (void)DirtyIndices;
+    RefreshAllSlots();
 }
 
 void UInventoryViewModel::RefreshAllSlots()
@@ -167,11 +160,8 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
 
             if (bIsRoot)
             {
-                const FItemSize EffSize = ItemInstance.bIsRotated
-                    ? ItemInstance.ItemSize.GetRotated()
-                    : ItemInstance.ItemSize;
-                SlotVM->SetItemSizeX(EffSize.Width);
-                SlotVM->SetItemSizeY(EffSize.Height);
+                SlotVM->SetItemSizeX(ItemInstance.ItemSize.Width);
+                SlotVM->SetItemSizeY(ItemInstance.ItemSize.Height);
             }
             else
             {

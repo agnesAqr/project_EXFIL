@@ -1,5 +1,5 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// InventoryComponent.h — 그리드 인벤토리 데이터 관리: 아이템 추가/제거/이동, Bitmap 기반 배치, 리플리케이션
+// InventoryComponent.h ??洹몃━???몃깽?좊━ ?곗씠??愿由? ?꾩씠??異붽?/?쒓굅/?대룞, Bitmap 湲곕컲 諛곗튂, FastArray 由ы뵆由ъ??댁뀡
 
 #pragma once
 
@@ -7,6 +7,36 @@
 #include "Components/ActorComponent.h"
 #include "EXFILInventoryTypes.h"
 #include "InventoryComponent.generated.h"
+
+class UInventoryComponent;
+
+USTRUCT()
+struct PROJECT_EXFIL_API FInventoryFastArray : public FFastArraySerializer
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FInventoryItemInstance> Items;
+
+	UInventoryComponent* OwnerComponent = nullptr;
+
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+	{
+		return FFastArraySerializer::FastArrayDeltaSerialize<FInventoryItemInstance, FInventoryFastArray>(
+			Items, DeltaParms, *this);
+	}
+
+	void PostReplicatedReceive(const FFastArraySerializer::FPostReplicatedReceiveParameters& Parameters);
+};
+
+template<>
+struct TStructOpsTypeTraits<FInventoryFastArray> : public TStructOpsTypeTraitsBase2<FInventoryFastArray>
+{
+	enum
+	{
+		WithNetDeltaSerializer = true,
+	};
+};
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const TSet<int32>&);
 
@@ -18,7 +48,7 @@ class PROJECT_EXFIL_API UInventoryComponent : public UActorComponent
 public:
 	UInventoryComponent();
 
-	// ========== 설정 ==========
+	// ========== ?ㅼ젙 ==========
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridWidth = 10;
@@ -26,22 +56,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridHeight = 12;
 
-	/** 아이템 드랍 시 캐릭터 앞쪽 오프셋 (cm) */
+	/** ?꾩씠???쒕엻 ??罹먮┃???욎そ ?ㅽ봽??(cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropForwardOffset = 100.f;
 
-	/** 아이템 드랍 시 위쪽 오프셋 (cm) */
+	/** ?꾩씠???쒕엻 ???꾩そ ?ㅽ봽??(cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropUpwardOffset = 50.f;
 
-	// ========== 클라이언트 요청 API ==========
-	// 비동기 요청. 최종 결과는 replication / OnRep / delegate로 반영됨.
+	// ========== ?대씪?댁뼵???붿껌 API ==========
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestRemoveItem(FGuid ItemInstanceID);
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
+	void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition);
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestConsumeItemByID(FName ItemDataID, int32 Count = 1);
@@ -49,28 +78,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestDropItem(FGuid ItemInstanceID);
 
-	// ========== 서버 직접 실행 API ==========
-	// EquipmentComponent, CraftingComponent, Character 등
-	// 이미 서버 컨텍스트인 코드가 직접 호출하는 authoritative 함수.
+	// ========== ?쒕쾭 吏곸젒 ?ㅽ뻾 API ==========
 
 	bool AddItemByID_Internal(FName ItemDataID, int32 StackCount = 1);
 
 	bool RemoveItem_Internal(const FGuid& InstanceID);
 
-	bool MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition, bool bNewRotated = false);
+	bool MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition);
 
 	bool ConsumeItemByID_Internal(FName ItemDataID, int32 Count = 1);
 
 	bool DropItem_Internal(FGuid ItemInstanceID);
 
 	/**
-	 * 특정 아이템 인스턴스의 StackCount를 1 감소.
-	 * 0이 되면 자동 RemoveItem_Internal. 서버 전용 헬퍼.
-	 * @return 감소 후 남은 StackCount (제거됐으면 0)
+	 * ?뱀젙 ?꾩씠???몄뒪?댁뒪??StackCount瑜?1 媛먯냼.
+	 * 0???섎㈃ ?먮룞 RemoveItem_Internal. ?쒕쾭 ?꾩슜 ?ы띁.
+	 * @return 媛먯냼 ???⑥? StackCount (?쒓굅?먯쑝硫?0)
 	 */
 	int32 DecrementStack_Internal(const FGuid& InstanceID);
 
-	// ========== 쿼리 API ==========
+	// ========== 荑쇰━ API ==========
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool CanPlaceItemAt(FIntPoint Position, FItemSize Size) const;
@@ -93,7 +120,7 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCount(FName ItemDataID) const;
 
-	// ========== 크래프팅/장비 연동 API ==========
+	// ========== ?щ옒?꾪똿/?λ퉬 ?곕룞 API ==========
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID(FName ItemDataID) const;
@@ -101,12 +128,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID_Cached(FName ItemDataID) const;
 
-	// ========== 유틸리티 ==========
+	// ========== ?좏떥由ы떚 ==========
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory|Debug")
 	void DebugPrintGrid() const;
 
-	// ========== 델리게이트 ==========
+	// ========== ?몃━寃뚯씠??==========
 	FOnInventoryUpdated OnInventoryUpdated;
 
 	// ========== Replication ==========
@@ -117,14 +144,15 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	friend struct FInventoryFastArray;
+
 	// ========== Server RPCs ==========
-	// 외부 호출용이 아니라 Request*가 내부에서 호출하는 네트워크 경계
 
 	UFUNCTION(Server, Reliable)
 	void Server_RequestRemoveItem(FGuid ItemInstanceID);
 
 	UFUNCTION(Server, Reliable)
-	void Server_RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated);
+	void Server_RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition);
 
 	UFUNCTION(Server, Reliable)
 	void Server_RequestConsumeItemByID(FName ItemDataID, int32 Count);
@@ -132,28 +160,31 @@ private:
 	UFUNCTION(Server, Reliable)
 	void Server_RequestDropItem(FGuid ItemInstanceID);
 
-	// ========== 내부 쓰기 헬퍼 ==========
-	// InventoryComponent 내부에서만 쓰는 실제 구현 세부 함수
+	// ========== ?대? ?곌린 ?ы띁 ==========
 
 	bool AddItem_Internal(FName ItemDataID, FItemSize Size,
 		int32 StackCount = 1, int32 MaxStack = 1);
 
 	bool AddItemAt_Internal(FName ItemDataID, FItemSize Size,
-		FIntPoint Position, bool bRotated = false,
+		FIntPoint Position,
 		int32 StackCount = 1, int32 MaxStack = 1);
 
-	// ========== Replicated 데이터 ==========
+	void HandleInventoryStateChanged();
+	void HandleReplicatedInventoryReceived();
+	void RebuildGridSlotsFromItems();
+	void RebuildAllCachesFromItems();
+	void BroadcastFullInventoryRefresh();
+	void InitializeGridStorage();
+
+	// ========== Replicated ?곗씠??==========
 
 	UPROPERTY(Replicated)
+	FInventoryFastArray InventoryList;
+
+	UPROPERTY(Transient)
 	TArray<FInventorySlot> GridSlots;
 
-	UPROPERTY(ReplicatedUsing = OnRep_Items)
-	TArray<FInventoryItemInstance> Items;
-
-	UFUNCTION()
-	void OnRep_Items();
-
-	// ========== 내부 헬퍼 ==========
+	// ========== ?대? ?ы띁 ==========
 
 	bool IsValidGridPosition(FIntPoint Position) const;
 	int32 GridPositionToIndex(FIntPoint Position) const;
@@ -162,7 +193,6 @@ private:
 	bool AreSlotsFree(FIntPoint Position, FItemSize Size) const;
 	void OccupySlots(FIntPoint Position, FItemSize Size, const FGuid& ItemID);
 	void FreeSlots(const FInventoryItemInstance& Item);
-	void InitializeGrid();
 
 	UPROPERTY()
 	TObjectPtr<class UItemDataSubsystem> CachedItemSub;
@@ -173,16 +203,8 @@ private:
 	void RebuildItemIndexMap();
 
 	TArray<uint16> RowBitmap;
-	void RebuildRowBitmap();
-	void SetBit(int32 Col, int32 Row, bool bOccupied);
-
 	void RebuildItemCountCache();
-
-	TSet<int32> DirtySlotIndices;
-	void MarkSlotsDirty(FIntPoint Position, FItemSize Size);
-
-	TArray<FInventoryItemInstance> PreviousItems;
-	void BroadcastDirtySlots();
+	void SetBit(int32 Col, int32 Row, bool bOccupied);
 
 	FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID);
 	const FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID) const;

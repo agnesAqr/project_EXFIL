@@ -346,8 +346,7 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
     DragOp->ItemDataID             = ItemInstance.ItemDataID;
     DragOp->OriginalPosition       = ItemInstance.RootPosition;
     DragOp->ItemSize               = ItemInstance.ItemSize;
-    DragOp->DragItemSize           = ItemInstance.GetEffectiveSize();
-    DragOp->bWasRotated            = ItemInstance.bIsRotated;
+    DragOp->DragItemSize           = ItemInstance.ItemSize;
     DragOp->bFromEquipment         = false;
     DragOp->Pivot                  = EDragPivot::TopLeft;
 
@@ -373,6 +372,12 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
 
     // 드래그 비주얼 없음 — 초록색 배치 가능 표시만 사용
     DragOp->DefaultDragVisual = nullptr;
+
+    ActiveDragOperation = DragOp;
+    CachedDragLocalPos = PendingDragClickLocalPos;
+    CachedPreviewRootPos = ItemInstance.RootPosition;
+    bCachedPreviewCanPlace = true;
+    bHasCachedPreview = false;
 
     OutOperation = DragOp;
     PendingDragInstanceID.Invalidate();
@@ -419,6 +424,7 @@ void UInventoryIconOverlay::SetParentPanel(UInventoryPanelWidget* InPanel)
     ParentPanel = InPanel;
 }
 
+
 // ========== 드롭 / 하이라이트 ==========
 
 /** 로컬 좌표 → 그리드 셀 인덱스 변환 헬퍼 */
@@ -430,11 +436,68 @@ static FIntPoint LocalPosToGridCell(const FVector2D& LocalPos,
                      FMath::FloorToInt(LocalPos.Y / CellStride.Y));
 }
 
+void UInventoryIconOverlay::UpdateDragPreview(UInventoryDragDropOp* DragOp, const FVector2D& LocalPos)
+{
+    if (!DragOp || !ParentPanel.IsValid()
+        || !CachedViewModel || !CachedGridPanel.IsValid()
+        || CachedGridWidth <= 0 || CachedGridHeight <= 0)
+    {
+        return;
+    }
+
+    const FVector2D GridLocalSize = CachedGridPanel->GetCachedGeometry().GetLocalSize();
+    if (GridLocalSize.IsNearlyZero())
+    {
+        return;
+    }
+
+    CachedDragLocalPos = LocalPos;
+
+    const FIntPoint DroppedCell = LocalPosToGridCell(LocalPos, GridLocalSize,
+        CachedGridWidth, CachedGridHeight);
+    const FIntPoint RootPos = DroppedCell - DragOp->DragOffset;
+    CachedPreviewRootPos = RootPos;
+    bHasCachedPreview = true;
+
+    const int32 GridW = CachedViewModel->GetGridWidth();
+    const int32 GridH = CachedViewModel->GetGridHeight();
+
+    ParentPanel->ClearAreaHighlights();
+
+    if (RootPos.X < 0 || RootPos.Y < 0 ||
+        RootPos.X + DragOp->DragItemSize.Width > GridW ||
+        RootPos.Y + DragOp->DragItemSize.Height > GridH)
+    {
+        bCachedPreviewCanPlace = false;
+        return;
+    }
+
+    bool bCanPlace = true;
+    for (int32 Y = RootPos.Y; Y < RootPos.Y + DragOp->DragItemSize.Height && bCanPlace; ++Y)
+    {
+        for (int32 X = RootPos.X; X < RootPos.X + DragOp->DragItemSize.Width && bCanPlace; ++X)
+        {
+            UInventorySlotViewModel* TargetSlot = CachedViewModel->GetSlotAt(FIntPoint(X, Y));
+            if (!TargetSlot ||
+                (!TargetSlot->IsEmpty() &&
+                 TargetSlot->GetItemInstanceID() != DragOp->DraggedItemInstanceID))
+            {
+                bCanPlace = false;
+            }
+        }
+    }
+
+    bCachedPreviewCanPlace = bCanPlace;
+    ParentPanel->HighlightArea(RootPos, DragOp->DragItemSize, bCanPlace);
+}
+
 bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
     UInventoryDragDropOp* DragOp = Cast<UInventoryDragDropOp>(InOperation);
     if (!DragOp) return false;
+
+    ActiveDragOperation = nullptr;
 
     if (ParentPanel.IsValid())
     {
@@ -465,9 +528,30 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     if (GridLocalSize.IsNearlyZero()) return false;
 
     const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InDragDropEvent.GetScreenSpacePosition());
+    CachedDragLocalPos = LocalPos;
+    const FIntPoint PreviewRootPos = CachedPreviewRootPos;
+    const bool bPreviewCanPlace = bHasCachedPreview && bCachedPreviewCanPlace;
+
+    // Drop 시점의 실제 마우스 위치를 authoritative input으로 사용한다.
+    // DragOver의 마지막 프리뷰 캐시는 하이라이트용일 뿐, 승인 근거로 쓰지 않는다.
     const FIntPoint DroppedCell = LocalPosToGridCell(LocalPos, GridLocalSize,
-                                                       CachedGridWidth, CachedGridHeight);
+        CachedGridWidth, CachedGridHeight);
     const FIntPoint NewRootPos = DroppedCell - DragOp->DragOffset;
+
+    UE_LOG(LogEXFIL, Log,
+        TEXT("InventoryDrop(UI): Item=%s LocalPos=(%.1f,%.1f) DroppedCell=(%d,%d) NewRoot=(%d,%d) PreviewRoot=(%d,%d) PreviewCanPlace=%s DragOffset=(%d,%d) ItemSize=%dx%d Original=(%d,%d)"),
+        *DragOp->DraggedItemInstanceID.ToString(),
+        LocalPos.X, LocalPos.Y,
+        DroppedCell.X, DroppedCell.Y,
+        NewRootPos.X, NewRootPos.Y,
+        PreviewRootPos.X, PreviewRootPos.Y,
+        bPreviewCanPlace ? TEXT("true") : TEXT("false"),
+        DragOp->DragOffset.X, DragOp->DragOffset.Y,
+        DragOp->DragItemSize.Width, DragOp->DragItemSize.Height,
+        DragOp->OriginalPosition.X, DragOp->OriginalPosition.Y);
+
+    bHasCachedPreview = false;
+    bCachedPreviewCanPlace = false;
 
     if (NewRootPos == DragOp->OriginalPosition)
     {
@@ -475,7 +559,7 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     }
 
     return ParentPanel->ForwardMoveRequest(
-        DragOp->DraggedItemInstanceID, NewRootPos, DragOp->bWasRotated);
+        DragOp->DraggedItemInstanceID, NewRootPos);
 }
 
 bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,
@@ -488,6 +572,13 @@ bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,
     {
         return false;
     }
+
+    const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InDragDropEvent.GetScreenSpacePosition());
+    UpdateDragPreview(DragOp, LocalPos);
+    ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
+    return true;
+
+#if 0
 
     const FVector2D GridLocalSize = CachedGridPanel->GetCachedGeometry().GetLocalSize();
     if (GridLocalSize.IsNearlyZero()) return false;
@@ -533,11 +624,31 @@ bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,
     ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
 
     return true;
+#endif
 }
 
 void UInventoryIconOverlay::NativeOnDragLeave(const FDragDropEvent& InDragDropEvent,
     UDragDropOperation* InOperation)
 {
+    bHasCachedPreview = false;
+    bCachedPreviewCanPlace = false;
+
+    if (ParentPanel.IsValid())
+    {
+        ParentPanel->ClearAreaHighlights();
+        ParentPanel->StopDragAutoScroll();
+    }
+}
+
+void UInventoryIconOverlay::NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent,
+    UDragDropOperation* InOperation)
+{
+    Super::NativeOnDragCancelled(InDragDropEvent, InOperation);
+
+    ActiveDragOperation = nullptr;
+    bHasCachedPreview = false;
+    bCachedPreviewCanPlace = false;
+
     if (ParentPanel.IsValid())
     {
         ParentPanel->ClearAreaHighlights();

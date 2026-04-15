@@ -48,7 +48,7 @@ void AEXFILGameMode::SpawnTestWorldItems()
     // 플레이어 위치 기준 정사각형 꼭짓점 4개, Z는 맵 지형 위로 충분히 띄움 (250cm)
     const TArray<FTestSpawn> TestItems =
     {
-        { FName("Bandage"),     3, FVector( 400.f,  400.f, 250.f) },
+        { FName("Bandage"),     1, FVector( 400.f,  400.f, 250.f) },
         { FName("Helmet"),      1, FVector(-400.f,  400.f, 250.f) },
         { FName("Pistol"),      1, FVector(-400.f, -400.f, 250.f) },
         { FName("SniperRifle"), 1, FVector( 400.f, -400.f, 250.f) },

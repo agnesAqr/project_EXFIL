@@ -33,9 +33,6 @@ public:
     FItemSize DragItemSize;
 
     UPROPERTY(BlueprintReadWrite)
-    bool bWasRotated = false;
-
-    UPROPERTY(BlueprintReadWrite)
     FName ItemDataID;
 
     // ========== 핫픽스 A: 장비슬롯 출처 정보 ==========

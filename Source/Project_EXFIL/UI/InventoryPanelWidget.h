@@ -33,7 +33,7 @@ public:
      * SlotWidget → PanelWidget → ViewModel → Model 이동 요청 중계.
      * View에서 ViewModel을 직접 참조하지 않도록 PanelWidget이 중계.
      */
-    bool ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated);
+    bool ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition);
 
     /** 드래그 호버 시 영역 하이라이트 */
     void HighlightArea(FIntPoint RootPos, FItemSize ItemSize, bool bIsValid);
@@ -165,6 +165,7 @@ private:
 
     /** CellStride 변경 감지용 캐시 */
     FVector2D CachedCellStride = FVector2D::ZeroVector;
+    mutable float CachedSquareCellSize = 0.f;
 
     /** NativePaint에서 1회 셀 정사각형 보정용 플래그 */
     mutable bool bNeedsCellSquareFix = true;

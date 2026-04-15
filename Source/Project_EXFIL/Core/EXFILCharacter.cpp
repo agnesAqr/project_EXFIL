@@ -134,6 +134,11 @@ void AEXFILCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
 
+    if (PlayerInputComponent)
+    {
+        PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AEXFILCharacter::OnToggleInventory);
+    }
+
     if (UEnhancedInputComponent* EnhancedInput =
             Cast<UEnhancedInputComponent>(PlayerInputComponent))
     {

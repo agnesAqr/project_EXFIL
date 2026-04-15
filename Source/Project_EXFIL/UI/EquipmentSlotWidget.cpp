@@ -295,8 +295,7 @@ void UEquipmentSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry,
     DragOp->DraggedItemInstanceID = CachedSlotData.ItemInstance.InstanceID;
     DragOp->ItemDataID             = CachedSlotData.ItemInstance.ItemDataID;
     DragOp->ItemSize               = CachedSlotData.ItemInstance.ItemSize;
-    DragOp->DragItemSize           = CachedSlotData.ItemInstance.GetEffectiveSize();
-    DragOp->bWasRotated            = CachedSlotData.ItemInstance.bIsRotated;
+    DragOp->DragItemSize           = CachedSlotData.ItemInstance.ItemSize;
     DragOp->bFromEquipment         = true;
     DragOp->SourceEquipmentSlot    = SlotType;
     OutOperation = DragOp;

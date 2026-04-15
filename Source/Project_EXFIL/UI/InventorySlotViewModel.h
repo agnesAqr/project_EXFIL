@@ -63,7 +63,6 @@ protected:
     void SetIcon(TSoftObjectPtr<UTexture2D> NewValue);
     void SetItemSizeX(int32 NewValue);
     void SetItemSizeY(int32 NewValue);
-
 private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsEmpty", Setter = "SetEmpty",
               meta = (AllowPrivateAccess = true))
@@ -102,4 +101,5 @@ private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetItemSizeY", Setter = "SetItemSizeY",
               meta = (AllowPrivateAccess = true))
     int32 ItemSizeY = 1;
+
 };

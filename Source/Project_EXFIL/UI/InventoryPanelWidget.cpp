@@ -66,6 +66,7 @@ void UInventoryPanelWidget::NativeOnActivated()
     bNeedsCellSquareFix = true;
     bLayoutReady = false;
     CachedCellStride = FVector2D::ZeroVector;
+    CachedSquareCellSize = 0.f;
 }
 
 void UInventoryPanelWidget::NativeOnDeactivated()
@@ -121,7 +122,7 @@ FReply UInventoryPanelWidget::NativeOnMouseMove(const FGeometry& InGeometry,
 FReply UInventoryPanelWidget::NativeOnKeyDown(const FGeometry& InGeometry,
     const FKeyEvent& InKeyEvent)
 {
-    if (InKeyEvent.GetKey() == EKeys::I)
+    if (InKeyEvent.GetKey() == EKeys::Tab)
     {
         if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetOwningPlayer()))
         {
@@ -155,6 +156,7 @@ void UInventoryPanelWidget::BuildGrid()
 
     SlotWidgets.Reserve(Width * Height);
     bNeedsCellSquareFix = true;
+    CachedSquareCellSize = 0.f;
 
     for (int32 Y = 0; Y < Height; ++Y)
     {
@@ -194,14 +196,13 @@ void UInventoryPanelWidget::BuildGrid()
     bHasPendingOverlayRefresh = true;
 }
 
-bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition,
-                                                bool bNewRotated)
+bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition)
 {
     if (!ViewModel)
     {
         return false;
     }
-    ViewModel->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
+    ViewModel->RequestMoveItem(ItemInstanceID, NewPosition);
     return true;
 }
 
@@ -247,9 +248,21 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
 
 void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyIndices)
 {
-    PendingDirtyIndices.Append(DirtyIndices);
+    (void)DirtyIndices;
+
+    PendingDirtyIndices.Empty();
+    if (ViewModel)
+    {
+        const int32 Total = ViewModel->GetGridWidth() * ViewModel->GetGridHeight();
+        PendingDirtyIndices.Reserve(Total);
+        for (int32 i = 0; i < Total; ++i)
+        {
+            PendingDirtyIndices.Add(i);
+        }
+    }
+
     bHasPendingOverlayRefresh = true;
-    TryFlushOverlayRefresh(false);
+    TryFlushOverlayRefresh(true);
 }
 
 void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeometry)
@@ -321,16 +334,19 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
 
     // 셀 정사각형 보정 — 레이아웃 첫 유효 시점에 1회 실행
     // SetMinDesiredSlotHeight가 레이아웃을 무효화하므로 이번 프레임은 skip
-    if (bNeedsCellSquareFix && GridPanel && GridPanel->GetChildrenCount() > 0)
+    if (GridPanel && GridPanel->GetChildrenCount() > 0 && ViewModel)
     {
-        UWidget* FirstSlot = GridPanel->GetChildAt(0);
-        const float CellWidth = FirstSlot->GetCachedGeometry().GetLocalSize().X;
+        const int32 GridWidth = FMath::Max(1, ViewModel->GetGridWidth());
+        const float GridPixelWidth = GridPanel->GetCachedGeometry().GetLocalSize().X;
+        const float DesiredCellSize = GridPixelWidth / GridWidth;
 
-        if (CellWidth > 1.f)
+        if (DesiredCellSize > 1.f &&
+            (bNeedsCellSquareFix || !FMath::IsNearlyEqual(CachedSquareCellSize, DesiredCellSize, 0.5f)))
         {
             MutableThis->bNeedsCellSquareFix = false;
-            MutableThis->GridPanel->SetMinDesiredSlotHeight(CellWidth);
-            MutableThis->GridPanel->SetMinDesiredSlotWidth(0.f);
+            MutableThis->CachedSquareCellSize = DesiredCellSize;
+            MutableThis->GridPanel->SetMinDesiredSlotWidth(DesiredCellSize);
+            MutableThis->GridPanel->SetMinDesiredSlotHeight(DesiredCellSize);
             // 다음 프레임에 geometry가 확정된 후 HandleLayoutMeasured에서 처리
             return Result;
         }
