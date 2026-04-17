@@ -27,14 +27,14 @@
 
 AEXFILCharacter::AEXFILCharacter()
 {
-    // 리플리케이션 활성화 (ACharacter 기본값이 true이지만 명시)
+    // Replication is enabled by default on ACharacter, but keep it explicit here.
     bReplicates = true;
 
     InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
     CraftingComponent  = CreateDefaultSubobject<UCraftingComponent>(TEXT("CraftingComponent"));
     EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
 
-    // GAS — AttributeSet은 반드시 생성자에서 CreateDefaultSubobject
+    // GAS: the attribute set must be created in the constructor.
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
     AbilitySystemComponent->SetIsReplicated(true);
     
@@ -52,12 +52,12 @@ void AEXFILCharacter::PossessedBy(AController* NewController)
 {
     Super::PossessedBy(NewController);
 
-    // 서버 권위 초기화
+    // Initialize server-side GAS ownership.
     if (AbilitySystemComponent)
     {
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
 
-        // GA_Fire를 ASC에 부여 (서버)
+        // Grant the fire ability on the server.
         if (GA_FireClass)
         {
             FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
@@ -70,19 +70,19 @@ void AEXFILCharacter::BeginPlay()
 {
     Super::BeginPlay();
 
-    // SpringArm 기본값 캐싱 (에디터 설정값 보존)
+    // Cache editor-authored defaults before aim mode overrides them.
     if (USpringArmComponent* SpringArm = GetCameraBoom())
     {
         DefaultArmLength = SpringArm->TargetArmLength;
         DefaultSocketOffset = SpringArm->SocketOffset;
     }
 
-    // 단독 세션(Standalone)에서 PossessedBy 없이 BeginPlay만 오는 경우 대비
+    // Standalone sessions can reach BeginPlay before PossessedBy.
     if (AbilitySystemComponent && !AbilitySystemComponent->GetOwnerActor())
     {
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
 
-        // Standalone: GA_Fire 부여
+        // Grant the fire ability for standalone play.
         if (GA_FireClass)
         {
             FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
@@ -90,7 +90,7 @@ void AEXFILCharacter::BeginPlay()
         }
     }
 
-    // ===== 서버 전용: 아이템 초기 지급 =====
+    // Server-only starter loadout.
     if (HasAuthority())
     {
         if (InventoryComponent)
@@ -104,17 +104,17 @@ void AEXFILCharacter::BeginPlay()
         }
     }
 
-    // ===== 클라이언트 전용: ViewModel 생성 + UIManager 바인딩 =====
+    // Client-only view model creation and UI binding.
     if (IsLocallyControlled())
     {
-        // 1. InventoryViewModel 생성 (Model 의존이라 Character에서 생성)
+        // 1. Create the inventory view model on the owning character.
         if (InventoryComponent)
         {
             InventoryViewModel = NewObject<UInventoryViewModel>(this);
             InventoryViewModel->Initialize(InventoryComponent);
         }
 
-        // 2. UIManager에 Pawn UI 바인딩 (위젯 생성/소유는 UIManager가 담당)
+        // 2. Let the UI manager own and bind the pawn UI.
         if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
         {
             if (UEXFILUIManager* UIManager = PC->GetUIManager())
@@ -123,21 +123,16 @@ void AEXFILCharacter::BeginPlay()
             }
         }
 
-        // 3. SurvivalViewModel — Standalone에서는 BeginPlay에서 ASC가 이미 초기화됨
+        // 3. Initialize the survival view model once ASC is ready.
         InitializeViewModels();
     }
 }
 
-// ========== 인터랙션 입력 ==========
+// ========== Interaction Input ==========
 
 void AEXFILCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-    if (PlayerInputComponent)
-    {
-        PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AEXFILCharacter::OnToggleInventory);
-    }
 
     if (UEnhancedInputComponent* EnhancedInput =
             Cast<UEnhancedInputComponent>(PlayerInputComponent))
@@ -182,7 +177,7 @@ void AEXFILCharacter::OnInteractPressed()
 
 AWorldItem* AEXFILCharacter::TraceForWorldItem() const
 {
-    // 월드의 모든 WorldItem 중 InteractionDistance 이내에서 가장 가까운 것 반환
+    // Return the nearest world item within interaction range.
     AWorldItem* NearestItem = nullptr;
     float NearestDist = InteractionDistance;
 
@@ -199,7 +194,7 @@ AWorldItem* AEXFILCharacter::TraceForWorldItem() const
     return NearestItem;
 }
 
-// ========== 픽업 Server RPC ==========
+// ========== Pickup Server RPC ==========
 
 bool AEXFILCharacter::Server_RequestPickupItem_Validate(AWorldItem* TargetItem)
 {
@@ -218,19 +213,19 @@ void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
         return;
     }
 
-    // 1. WorldItem 유효성 검증 (다른 플레이어가 이미 주웠을 수 있음)
+    // 1. Validate the target item. Another player may have taken it already.
     if (!IsValid(TargetItem)) return;
 
-    // 2. 거리 검증 (치트 방지, 네트워크 지연 보상으로 여유값 부여)
+    // 2. Validate distance with a small buffer for latency compensation.
     const float Distance = FVector::Dist(GetActorLocation(), TargetItem->GetActorLocation());
     if (Distance > MaxPickupDistance)
     {
-        UE_LOG(LogEXFIL, Warning, TEXT("ExecutePickup: 거리 초과 — %.1fcm > %.1fcm"),
+        UE_LOG(LogEXFIL, Warning, TEXT("ExecutePickup: distance exceeded - %.1fcm > %.1fcm"),
             Distance, MaxPickupDistance);
         return;
     }
 
-    // 3. 인벤토리에 추가 시도
+    // 3. Try to add the item to the inventory.
     UInventoryComponent* Inventory = FindComponentByClass<UInventoryComponent>();
     if (!Inventory) return;
 
@@ -240,28 +235,28 @@ void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
     if (!bAdded)
     {
         Client_ShowNotification(FString::Printf(
-            TEXT("Inventory Full — Cannot pick up '%s'"),
+            TEXT("Inventory full - cannot pick up '%s'"),
             *TargetItem->GetItemDataID().ToString()));
         return;
     }
 
-    // 4. WorldItem 제거 (bReplicates=true Actor의 Destroy는 모든 클라이언트에 전파)
+    // 4. Destroy the replicated world item so every client sees it disappear.
     TargetItem->Destroy();
 }
 
-// ========== Dedicated Server: 클라이언트 ASC 초기화 ==========
+// ========== Dedicated Server: Client ASC Initialization ==========
 
 void AEXFILCharacter::OnRep_PlayerState()
 {
     Super::OnRep_PlayerState();
 
-    // 클라이언트에서 ASC 초기화
+    // Initialize ASC on the owning client.
     if (AbilitySystemComponent)
     {
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
     }
 
-    // ViewModel 초기화 (클라이언트 전용)
+    // Initialize view models on the owning client.
     if (IsLocallyControlled())
     {
         InitializeViewModels();
@@ -270,10 +265,10 @@ void AEXFILCharacter::OnRep_PlayerState()
 
 void AEXFILCharacter::InitializeViewModels()
 {
-    if (SurvivalViewModel) return; // 이미 초기화됨
+    if (SurvivalViewModel) return; // Already initialized.
     if (!AbilitySystemComponent) return;
 
-    // ASC에 AttributeSet이 있는지 확인
+    // Ensure the attribute set is available before binding the view model.
     const USurvivalAttributeSet* AttrSet = AbilitySystemComponent->GetSet<USurvivalAttributeSet>();
     if (!AttrSet)
     {
@@ -284,7 +279,7 @@ void AEXFILCharacter::InitializeViewModels()
     SurvivalViewModel = NewObject<USurvivalViewModel>(this);
     SurvivalViewModel->InitializeWithASC(AbilitySystemComponent);
 
-    // StatEntry 바인딩 (UIManager 경유)
+    // Bind the stat widgets through the UI manager.
     if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
     {
         if (UEXFILUIManager* UIManager = PC->GetUIManager())
@@ -340,14 +335,14 @@ void AEXFILCharacter::OnAimToggled()
 
     bIsAiming = !bIsAiming;
 
-    // Spring Arm 길이 + 어깨 너머 오프셋 조절
+    // Adjust the spring arm length and shoulder offset for aiming.
     if (USpringArmComponent* SpringArm = GetCameraBoom())
     {
         SpringArm->TargetArmLength = bIsAiming ? AimArmLength : DefaultArmLength;
         SpringArm->SocketOffset = bIsAiming ? AimSocketOffset : DefaultSocketOffset;
     }
 
-    // 카메라 FOV 조절
+    // Adjust camera FOV for aim mode.
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
         if (APlayerCameraManager* CM = PC->PlayerCameraManager)
@@ -356,15 +351,15 @@ void AEXFILCharacter::OnAimToggled()
         }
     }
 
-    // 조준 시: 캐릭터가 카메라(컨트롤러) 방향을 즉시 따라감
-    // 비조준 시: 이동 방향으로 회전 (기존 3인칭 동작)
+    // Aim mode snaps character yaw to the controller.
+    // Hip-fire mode restores standard orient-to-movement behavior.
     if (UCharacterMovementComponent* CMC = GetCharacterMovement())
     {
         bUseControllerRotationYaw = bIsAiming;
         CMC->bOrientRotationToMovement = !bIsAiming;
     }
 
-    // 크로스헤어 토글 (UIManager 경유)
+    // Toggle the crosshair through the UI manager.
     if (AEXFILPlayerController* AimPC = Cast<AEXFILPlayerController>(GetController()))
     {
         if (UEXFILUIManager* UIManager = AimPC->GetUIManager())
@@ -421,7 +416,8 @@ void AEXFILCharacter::Server_ConfirmHit_Implementation(
         }
     }
 
-    Multicast_PlayHitEffect(HitLocation, HitNormal);
+    // Multicast_PlayHitEffect is intentionally disabled until the effect is used again.
+    // Multicast_PlayHitEffect(HitLocation, HitNormal);
     TargetChar->Multicast_PlayHitReact();
 }
 
@@ -456,7 +452,7 @@ void AEXFILCharacter::Multicast_PlayHitReact_Implementation()
 void AEXFILCharacter::OnDeath()
 {
     if (!HasAuthority()) return;
-    if (RespawnPhase != ERespawnPhase::Alive) return; // 중복 진입 차단
+    if (RespawnPhase != ERespawnPhase::Alive) return; // Guard against duplicate death handling.
 
     RespawnPhase = ERespawnPhase::Dead;
     ApplyDeadState();
@@ -492,7 +488,7 @@ void AEXFILCharacter::Server_PrepareRespawn()
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::HiddenDead) return;
 
-    FVector RespawnLocation = GetActorLocation(); // 폴백: 현재 위치
+    FVector RespawnLocation = GetActorLocation(); // Fallback to the current location.
     FRotator RespawnRotation = GetActorRotation();
 
     if (AGameModeBase* GM = GetWorld()->GetAuthGameMode())
@@ -504,7 +500,7 @@ void AEXFILCharacter::Server_PrepareRespawn()
         }
         else
         {
-            UE_LOG(LogEXFIL, Warning, TEXT("Server_PrepareRespawn: FindPlayerStart failed — respawning at current location"));
+            UE_LOG(LogEXFIL, Warning, TEXT("Server_PrepareRespawn: FindPlayerStart failed - respawning at current location"));
         }
     }
 
@@ -701,7 +697,7 @@ void AEXFILCharacter::OnRep_RespawnPhase()
     switch (RespawnPhase)
     {
     case ERespawnPhase::Dead:
-        // late-joiner가 Dead 상태 캐릭터를 보면 래그돌 적용
+        // Apply ragdoll if a late joiner receives the dead state.
         ApplyDeadState();
         break;
 
@@ -710,13 +706,13 @@ void AEXFILCharacter::OnRep_RespawnPhase()
         break;
 
     case ERespawnPhase::Respawning:
-        // late-joiner가 Respawning 상태를 보면 숨김 처리
+        // Keep respawning characters hidden for late joiners.
         ApplyRespawningState();
         SnapToPendingRespawnTransform();
         break;
 
     case ERespawnPhase::Alive:
-        // late-joiner가 Alive 상태를 보면 정상 복구
+        // Restore the normal alive state for late joiners.
         ApplyAliveState();
         break;
     }

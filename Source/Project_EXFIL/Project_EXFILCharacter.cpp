@@ -120,14 +120,3 @@ void AProject_EXFILCharacter::DoLook(float Yaw, float Pitch)
 	}
 }
 
-void AProject_EXFILCharacter::DoJumpStart()
-{
-	// signal the character to jump
-	Jump();
-}
-
-void AProject_EXFILCharacter::DoJumpEnd()
-{
-	// signal the character to stop jumping
-	StopJumping();
-}
