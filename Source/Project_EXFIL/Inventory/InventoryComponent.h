@@ -1,5 +1,6 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// InventoryComponent.h ??洹몃━???몃깽?좊━ ?곗씠??愿由? ?꾩씠??異붽?/?쒓굅/?대룞, Bitmap 湲곕컲 諛곗튂, FastArray 由ы뵆由ъ??댁뀡
+// InventoryComponent.h - grid-based inventory state, item mutations,
+// bitmap placement helpers, and owner-only FastArray replication.
 
 #pragma once
 
@@ -48,7 +49,7 @@ class PROJECT_EXFIL_API UInventoryComponent : public UActorComponent
 public:
 	UInventoryComponent();
 
-	// ========== ?ㅼ젙 ==========
+	// ========== Configuration ==========
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridWidth = 10;
@@ -56,15 +57,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridHeight = 12;
 
-	/** ?꾩씠???쒕엻 ??罹먮┃???욎そ ?ㅽ봽??(cm) */
+	/** Forward offset used when dropping an item into the world. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropForwardOffset = 100.f;
 
-	/** ?꾩씠???쒕엻 ???꾩そ ?ㅽ봽??(cm) */
+	/** Upward offset used when dropping an item into the world. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropUpwardOffset = 50.f;
 
-	// ========== ?대씪?댁뼵???붿껌 API ==========
+	// ========== Public Request API ==========
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestRemoveItem(FGuid ItemInstanceID);
@@ -78,7 +79,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestDropItem(FGuid ItemInstanceID);
 
-	// ========== ?쒕쾭 吏곸젒 ?ㅽ뻾 API ==========
+	// ========== Server-only Mutation API ==========
 
 	bool AddItemByID_Internal(FName ItemDataID, int32 StackCount = 1);
 
@@ -91,13 +92,13 @@ public:
 	bool DropItem_Internal(FGuid ItemInstanceID);
 
 	/**
-	 * ?뱀젙 ?꾩씠???몄뒪?댁뒪??StackCount瑜?1 媛먯냼.
-	 * 0???섎㈃ ?먮룞 RemoveItem_Internal. ?쒕쾭 ?꾩슜 ?ы띁.
-	 * @return 媛먯냼 ???⑥? StackCount (?쒓굅?먯쑝硫?0)
+	 * Decrement a single stack by one.
+	 * Automatically removes the item when the stack reaches zero.
+	 * Returns the remaining stack count, or zero when removed.
 	 */
 	int32 DecrementStack_Internal(const FGuid& InstanceID);
 
-	// ========== 荑쇰━ API ==========
+	// ========== Query API ==========
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool CanPlaceItemAt(FIntPoint Position, FItemSize Size) const;
@@ -117,10 +118,7 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool IsEmpty() const;
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	int32 GetItemCount(FName ItemDataID) const;
-
-	// ========== ?щ옒?꾪똿/?λ퉬 ?곕룞 API ==========
+	// ========== Crafting / Equipment API ==========
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID(FName ItemDataID) const;
@@ -128,12 +126,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID_Cached(FName ItemDataID) const;
 
-	// ========== ?좏떥由ы떚 ==========
+	// ========== Utility ==========
 
-	UFUNCTION(BlueprintCallable, Category = "Inventory|Debug")
-	void DebugPrintGrid() const;
-
-	// ========== ?몃━寃뚯씠??==========
+	// ========== Delegates ==========
 	FOnInventoryUpdated OnInventoryUpdated;
 
 	// ========== Replication ==========
@@ -160,7 +155,10 @@ private:
 	UFUNCTION(Server, Reliable)
 	void Server_RequestDropItem(FGuid ItemInstanceID);
 
-	// ========== ?대? ?곌린 ?ы띁 ==========
+	// ========== Internal Helpers ==========
+
+	void HandleConsumeRequest_Internal(FName ItemDataID, int32 Count);
+	void ApplyConsumableEffect_Internal(FName ItemDataID);
 
 	bool AddItem_Internal(FName ItemDataID, FItemSize Size,
 		int32 StackCount = 1, int32 MaxStack = 1);
@@ -176,7 +174,7 @@ private:
 	void BroadcastFullInventoryRefresh();
 	void InitializeGridStorage();
 
-	// ========== Replicated ?곗씠??==========
+	// ========== Replicated Data ==========
 
 	UPROPERTY(Replicated)
 	FInventoryFastArray InventoryList;
@@ -184,7 +182,7 @@ private:
 	UPROPERTY(Transient)
 	TArray<FInventorySlot> GridSlots;
 
-	// ========== ?대? ?ы띁 ==========
+	// ========== Lookup Helpers ==========
 
 	bool IsValidGridPosition(FIntPoint Position) const;
 	int32 GridPositionToIndex(FIntPoint Position) const;

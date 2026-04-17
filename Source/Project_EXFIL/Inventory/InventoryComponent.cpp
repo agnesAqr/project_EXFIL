@@ -70,14 +70,14 @@ void UInventoryComponent::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPos
 {
 	if (GetOwner() && !GetOwner()->HasAuthority())
 	{
-		UE_LOG(LogProject_EXFIL, Log,
+		UE_LOG(LogProject_EXFIL, Verbose,
 			TEXT("RequestMoveItem(Client): Item=%s -> (%d,%d)"),
 			*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
 		Server_RequestMoveItem(ItemInstanceID, NewPosition);
 		return;
 	}
 
-	UE_LOG(LogProject_EXFIL, Log,
+	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("RequestMoveItem(ServerLocal): Item=%s -> (%d,%d)"),
 		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
 	MoveItem_Internal(ItemInstanceID, NewPosition);
@@ -91,7 +91,7 @@ void UInventoryComponent::RequestConsumeItemByID(FName ItemDataID, int32 Count)
 		return;
 	}
 
-	Server_RequestConsumeItemByID_Implementation(ItemDataID, Count);
+	HandleConsumeRequest_Internal(ItemDataID, Count);
 }
 
 void UInventoryComponent::RequestDropItem(FGuid ItemInstanceID)
@@ -125,19 +125,25 @@ void UInventoryComponent::Server_RequestMoveItem_Implementation(
 		return;
 	}
 
-	UE_LOG(LogProject_EXFIL, Log,
+	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("Server_RequestMoveItem: Item=%s -> (%d,%d)"),
 		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
 	MoveItem_Internal(ItemInstanceID, NewPosition);
 }
 
-void UInventoryComponent::Server_RequestConsumeItemByID_Implementation(FName ItemDataID, int32 Count)
+void UInventoryComponent::HandleConsumeRequest_Internal(FName ItemDataID, int32 Count)
 {
 	if (ItemDataID.IsNone() || Count <= 0)
 	{
 		return;
 	}
 
+	ApplyConsumableEffect_Internal(ItemDataID);
+	ConsumeItemByID_Internal(ItemDataID, Count);
+}
+
+void UInventoryComponent::ApplyConsumableEffect_Internal(FName ItemDataID)
+{
 	if (AActor* Owner = GetOwner())
 	{
 		if (UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>())
@@ -163,8 +169,11 @@ void UInventoryComponent::Server_RequestConsumeItemByID_Implementation(FName Ite
 			}
 		}
 	}
+}
 
-	ConsumeItemByID_Internal(ItemDataID, Count);
+void UInventoryComponent::Server_RequestConsumeItemByID_Implementation(FName ItemDataID, int32 Count)
+{
+	HandleConsumeRequest_Internal(ItemDataID, Count);
 }
 
 void UInventoryComponent::Server_RequestDropItem_Implementation(FGuid ItemInstanceID)
@@ -317,7 +326,7 @@ bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCoun
 			bMergedExistingStacks = true;
 			InventoryList.MarkItemDirty(Existing);
 
-			UE_LOG(LogProject_EXFIL, Log,
+			UE_LOG(LogProject_EXFIL, Verbose,
 				TEXT("AddItemByID_Internal: Merged %d into existing stack of '%s' (now %d/%d)"),
 				ToMerge, *ItemDataID.ToString(), Existing.StackCount, Existing.MaxStackCount);
 		}
@@ -364,7 +373,7 @@ bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
 
 	InventoryList.MarkItemDirty(NewItem);
 
-	UE_LOG(LogProject_EXFIL, Log,
+	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Stack:%d/%d"),
 		*ItemDataID.ToString(), *NewItem.InstanceID.ToString(),
 		Position.X, Position.Y, Size.Width, Size.Height,
@@ -390,7 +399,7 @@ bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
 	InventoryList.Items.RemoveAt(Index);
 	InventoryList.MarkArrayDirty();
 
-	UE_LOG(LogProject_EXFIL, Log, TEXT("Item removed: %s"), *InstanceID.ToString());
+	UE_LOG(LogProject_EXFIL, Verbose, TEXT("Item removed: %s"), *InstanceID.ToString());
 
 	HandleInventoryStateChanged();
 	return true;
@@ -413,7 +422,7 @@ bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint N
 	const FItemSize OldEffectiveSize = FoundItem->GetEffectiveSize();
 	const FItemSize NewEffectiveSize = FoundItem->ItemSize;
 
-	UE_LOG(LogProject_EXFIL, Log,
+	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("MoveItem_Internal: Attempt Item=%s From=(%d,%d) To=(%d,%d) Size=%dx%d"),
 		*InstanceID.ToString(),
 		OldPosition.X, OldPosition.Y,
@@ -503,7 +512,7 @@ bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint N
 	FoundItem->bIsRotated = false;
 	InventoryList.MarkItemDirty(*FoundItem);
 
-	UE_LOG(LogProject_EXFIL, Log,
+	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("Item moved: %s from (%d,%d) to (%d,%d)"),
 		*InstanceID.ToString(),
 		OldPosition.X, OldPosition.Y,
@@ -573,7 +582,7 @@ bool UInventoryComponent::ConsumeItemByID_Internal(FName ItemDataID, int32 Count
 		HandleInventoryStateChanged();
 	}
 
-	UE_LOG(LogProject_EXFIL, Log,
+	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("ConsumeItemByID_Internal: '%s' x%d consumed"), *ItemDataID.ToString(), Count);
 	return true;
 }
@@ -712,19 +721,6 @@ bool UInventoryComponent::IsEmpty() const
 	return InventoryList.Items.Num() == 0;
 }
 
-int32 UInventoryComponent::GetItemCount(FName ItemDataID) const
-{
-	int32 Count = 0;
-	for (const FInventoryItemInstance& Item : InventoryList.Items)
-	{
-		if (Item.ItemDataID == ItemDataID)
-		{
-			Count += Item.StackCount;
-		}
-	}
-	return Count;
-}
-
 // ========== Crafting / Equipment API ==========
 
 int32 UInventoryComponent::GetItemCountByID(FName ItemDataID) const
@@ -788,46 +784,9 @@ int32 UInventoryComponent::DecrementStack_Internal(const FGuid& InstanceID)
 	InventoryList.MarkItemDirty(*Item);
 	HandleInventoryStateChanged();
 
-	UE_LOG(LogProject_EXFIL, Log, TEXT("DecrementStack_Internal: '%s' now %d"),
+	UE_LOG(LogProject_EXFIL, Verbose, TEXT("DecrementStack_Internal: '%s' now %d"),
 		*Item->ItemDataID.ToString(), Item->StackCount);
 	return Item->StackCount;
-}
-
-// ========== Utility ==========
-
-void UInventoryComponent::DebugPrintGrid() const
-{
-	UE_LOG(LogProject_EXFIL, Log, TEXT("[Inventory Grid %dx%d]"), GridWidth, GridHeight);
-
-	for (int32 Y = 0; Y < GridHeight; Y++)
-	{
-		FString Row;
-		for (int32 X = 0; X < GridWidth; X++)
-		{
-			const int32 Index = Y * GridWidth + X;
-			if (!GridSlots.IsValidIndex(Index))
-			{
-				Row += TEXT("? ");
-				continue;
-			}
-
-			const FInventorySlot& Slot = GridSlots[Index];
-
-			if (Slot.IsEmpty())
-			{
-				Row += TEXT(". ");
-			}
-			else if (Slot.bIsRootSlot)
-			{
-				Row += TEXT("# ");
-			}
-			else
-			{
-				Row += TEXT("X ");
-			}
-		}
-		UE_LOG(LogProject_EXFIL, Log, TEXT("%s"), *Row);
-	}
 }
 
 // ========== Helpers ==========
