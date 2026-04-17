@@ -55,6 +55,9 @@ public:
     /** InventoryPanelWidget에서 BuildGrid 후 주입 — 드롭 라우팅에 필요 */
     void SetParentPanel(UInventoryPanelWidget* InPanel);
 
+    /** Toggle the active drag item's rotation and refresh the placement preview. */
+    bool RotateActiveDragItem();
+
 protected:
     virtual void NativeOnInitialized() override;
 

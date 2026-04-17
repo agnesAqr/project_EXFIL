@@ -27,6 +27,7 @@ struct PROJECT_EXFIL_API FItemSize
 
 	/** 회전 시 Width/Height 스왑된 사이즈 반환 */
 	FItemSize GetRotated() const { return FItemSize(Height, Width); }
+	bool IsSquare() const { return Width == Height; }
 
 	bool operator==(const FItemSize& Other) const
 	{
@@ -73,7 +74,7 @@ struct PROJECT_EXFIL_API FInventoryItemInstance : public FFastArraySerializerIte
 	/** 현재 적용 중인 크기 */
 	FItemSize GetEffectiveSize() const
 	{
-		return ItemSize;
+		return (bIsRotated && !ItemSize.IsSquare()) ? ItemSize.GetRotated() : ItemSize;
 	}
 
 	bool IsValid() const { return InstanceID.IsValid(); }

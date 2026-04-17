@@ -48,6 +48,9 @@ public:
     UFUNCTION(BlueprintPure, FieldNotify)
     int32 GetItemSizeY() const { return ItemSizeY; }
 
+    UFUNCTION(BlueprintPure, FieldNotify)
+    bool IsRotated() const { return bRotated; }
+
     // === Request (View → ViewModel → Model) ===
     UFUNCTION(BlueprintCallable, Category = "Inventory|Request")
     void RequestDrop();
@@ -63,6 +66,7 @@ protected:
     void SetIcon(TSoftObjectPtr<UTexture2D> NewValue);
     void SetItemSizeX(int32 NewValue);
     void SetItemSizeY(int32 NewValue);
+    void SetRotated(bool bNewValue);
 private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsEmpty", Setter = "SetEmpty",
               meta = (AllowPrivateAccess = true))
@@ -101,5 +105,9 @@ private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetItemSizeY", Setter = "SetItemSizeY",
               meta = (AllowPrivateAccess = true))
     int32 ItemSizeY = 1;
+
+    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsRotated", Setter = "SetRotated",
+              meta = (AllowPrivateAccess = true))
+    bool bRotated = false;
 
 };

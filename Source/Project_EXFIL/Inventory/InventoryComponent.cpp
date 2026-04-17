@@ -47,21 +47,23 @@ void UInventoryComponent::RequestRemoveItem(FGuid ItemInstanceID)
 	RemoveItem_Internal(ItemInstanceID);
 }
 
-void UInventoryComponent::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition)
+void UInventoryComponent::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
 	if (GetOwner() && !GetOwner()->HasAuthority())
 	{
 		UE_LOG(LogProject_EXFIL, Verbose,
-			TEXT("RequestMoveItem(Client): Item=%s -> (%d,%d)"),
-			*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
-		Server_RequestMoveItem(ItemInstanceID, NewPosition);
+			TEXT("RequestMoveItem(Client): Item=%s -> (%d,%d) Rotated=%s"),
+			*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y,
+			bNewRotated ? TEXT("true") : TEXT("false"));
+		Server_RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
 		return;
 	}
 
 	UE_LOG(LogProject_EXFIL, Verbose,
-		TEXT("RequestMoveItem(ServerLocal): Item=%s -> (%d,%d)"),
-		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
-	MoveItem_Internal(ItemInstanceID, NewPosition);
+		TEXT("RequestMoveItem(ServerLocal): Item=%s -> (%d,%d) Rotated=%s"),
+		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y,
+		bNewRotated ? TEXT("true") : TEXT("false"));
+	MoveItem_Internal(ItemInstanceID, NewPosition, bNewRotated);
 }
 
 void UInventoryComponent::RequestConsumeItemByID(FName ItemDataID, int32 Count)
@@ -187,7 +189,7 @@ bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
 	return true;
 }
 
-bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition)
+bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
 	checkf(GetOwner() && GetOwner()->HasAuthority(),
 		TEXT("MoveItem_Internal must run on the server."));
@@ -202,14 +204,18 @@ bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint N
 
 	const FIntPoint OldPosition = FoundItem->RootPosition;
 	const FItemSize OldEffectiveSize = FoundItem->GetEffectiveSize();
-	const FItemSize NewEffectiveSize = FoundItem->ItemSize;
+	bNewRotated = bNewRotated && !FoundItem->ItemSize.IsSquare();
+	const FItemSize NewEffectiveSize = bNewRotated
+		? FoundItem->ItemSize.GetRotated()
+		: FoundItem->ItemSize;
 
 	UE_LOG(LogProject_EXFIL, Verbose,
-		TEXT("MoveItem_Internal: Attempt Item=%s From=(%d,%d) To=(%d,%d) Size=%dx%d"),
+		TEXT("MoveItem_Internal: Attempt Item=%s From=(%d,%d) To=(%d,%d) Size=%dx%d Rotated=%s"),
 		*InstanceID.ToString(),
 		OldPosition.X, OldPosition.Y,
 		NewPosition.X, NewPosition.Y,
-		NewEffectiveSize.Width, NewEffectiveSize.Height);
+		NewEffectiveSize.Width, NewEffectiveSize.Height,
+		bNewRotated ? TEXT("true") : TEXT("false"));
 
 	FreeSlots(*FoundItem);
 
@@ -291,7 +297,7 @@ bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint N
 
 	OccupySlots(NewPosition, NewEffectiveSize, InstanceID);
 	FoundItem->RootPosition = NewPosition;
-	FoundItem->bIsRotated = false;
+	FoundItem->bIsRotated = bNewRotated;
 	InventoryList.MarkItemDirty(*FoundItem);
 
 	UE_LOG(LogProject_EXFIL, Verbose,
@@ -582,7 +588,7 @@ void UInventoryComponent::Server_RequestRemoveItem_Implementation(FGuid ItemInst
 }
 
 void UInventoryComponent::Server_RequestMoveItem_Implementation(
-	FGuid ItemInstanceID, FIntPoint NewPosition)
+	FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
 	if (!ItemInstanceID.IsValid() || NewPosition.X < 0 || NewPosition.Y < 0)
 	{
@@ -590,9 +596,10 @@ void UInventoryComponent::Server_RequestMoveItem_Implementation(
 	}
 
 	UE_LOG(LogProject_EXFIL, Verbose,
-		TEXT("Server_RequestMoveItem: Item=%s -> (%d,%d)"),
-		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
-	MoveItem_Internal(ItemInstanceID, NewPosition);
+		TEXT("Server_RequestMoveItem: Item=%s -> (%d,%d) Rotated=%s"),
+		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y,
+		bNewRotated ? TEXT("true") : TEXT("false"));
+	MoveItem_Internal(ItemInstanceID, NewPosition, bNewRotated);
 }
 
 void UInventoryComponent::Server_RequestConsumeItemByID_Implementation(FName ItemDataID, int32 Count)
@@ -663,24 +670,33 @@ bool UInventoryComponent::AddItem_Internal(FName ItemDataID, FItemSize Size,
 	FIntPoint FoundPosition;
 	if (!FindFirstAvailableSlot(Size, FoundPosition))
 	{
-		return false;
+		const FItemSize RotatedSize = Size.GetRotated();
+		if (RotatedSize == Size || !FindFirstAvailableSlot(RotatedSize, FoundPosition))
+		{
+			return false;
+		}
+
+		return AddItemAt_Internal(ItemDataID, Size, FoundPosition, true, StackCount, MaxStack);
 	}
 
-	return AddItemAt_Internal(ItemDataID, Size, FoundPosition, StackCount, MaxStack);
+	return AddItemAt_Internal(ItemDataID, Size, FoundPosition, false, StackCount, MaxStack);
 }
 
 bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
-	FIntPoint Position, int32 StackCount, int32 MaxStack)
+	FIntPoint Position, bool bRotated, int32 StackCount, int32 MaxStack)
 {
 	checkf(GetOwner() && GetOwner()->HasAuthority(),
 		TEXT("AddItemAt_Internal must run on the server."));
 
-	if (!AreSlotsFree(Position, Size))
+	bRotated = bRotated && !Size.IsSquare();
+	const FItemSize EffectiveSize = bRotated ? Size.GetRotated() : Size;
+	if (!AreSlotsFree(Position, EffectiveSize))
 	{
 		UE_LOG(LogProject_EXFIL, Warning,
-			TEXT("AddItemAt_Internal: Cannot place item '%s' at (%d,%d) Size:%dx%d"),
+			TEXT("AddItemAt_Internal: Cannot place item '%s' at (%d,%d) Size:%dx%d Rotated=%s"),
 			*ItemDataID.ToString(), Position.X, Position.Y,
-			Size.Width, Size.Height);
+			EffectiveSize.Width, EffectiveSize.Height,
+			bRotated ? TEXT("true") : TEXT("false"));
 		return false;
 	}
 
@@ -689,16 +705,17 @@ bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
 	NewItem.ItemDataID = ItemDataID;
 	NewItem.RootPosition = Position;
 	NewItem.ItemSize = Size;
-	NewItem.bIsRotated = false;
+	NewItem.bIsRotated = bRotated;
 	NewItem.StackCount = FMath::Clamp(StackCount, 1, MaxStack);
 	NewItem.MaxStackCount = MaxStack;
 
 	InventoryList.MarkItemDirty(NewItem);
 
 	UE_LOG(LogProject_EXFIL, Verbose,
-		TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Stack:%d/%d"),
+		TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Rotated=%s Stack:%d/%d"),
 		*ItemDataID.ToString(), *NewItem.InstanceID.ToString(),
-		Position.X, Position.Y, Size.Width, Size.Height,
+		Position.X, Position.Y, EffectiveSize.Width, EffectiveSize.Height,
+		bRotated ? TEXT("true") : TEXT("false"),
 		NewItem.StackCount, NewItem.MaxStackCount);
 
 	HandleInventoryStateChanged();

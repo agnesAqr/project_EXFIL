@@ -75,7 +75,7 @@ public:
 	void RequestRemoveItem(FGuid ItemInstanceID);
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition);
+	void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestConsumeItemByID(FName ItemDataID, int32 Count = 1);
@@ -89,7 +89,7 @@ public:
 
 	bool RemoveItem_Internal(const FGuid& InstanceID);
 
-	bool MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition);
+	bool MoveItem_Internal(const FGuid& InstanceID, FIntPoint NewPosition, bool bNewRotated = false);
 
 	bool ConsumeItemByID_Internal(FName ItemDataID, int32 Count = 1);
 
@@ -146,7 +146,7 @@ private:
 	void Server_RequestRemoveItem(FGuid ItemInstanceID);
 
 	UFUNCTION(Server, Reliable)
-	void Server_RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition);
+	void Server_RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated);
 
 	UFUNCTION(Server, Reliable)
 	void Server_RequestConsumeItemByID(FName ItemDataID, int32 Count);
@@ -165,7 +165,7 @@ private:
 		int32 StackCount = 1, int32 MaxStack = 1);
 
 	bool AddItemAt_Internal(FName ItemDataID, FItemSize Size,
-		FIntPoint Position,
+		FIntPoint Position, bool bRotated = false,
 		int32 StackCount = 1, int32 MaxStack = 1);
 #pragma endregion
 

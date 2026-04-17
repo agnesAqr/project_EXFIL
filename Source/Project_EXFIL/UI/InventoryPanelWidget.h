@@ -33,7 +33,7 @@ public:
      * SlotWidget → PanelWidget → ViewModel → Model 이동 요청 중계.
      * View에서 ViewModel을 직접 참조하지 않도록 PanelWidget이 중계.
      */
-    bool ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition);
+    bool ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
 
     /** 드래그 호버 시 영역 하이라이트 */
     void HighlightArea(FIntPoint RootPos, FItemSize ItemSize, bool bIsValid);

@@ -44,7 +44,7 @@ public:
     // === User Actions (View -> ViewModel -> Model) ===
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
-    void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition);
+    void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
     void RequestRemoveItem(FGuid ItemInstanceID);
@@ -56,6 +56,10 @@ public:
     /** Return the effective item size after rotation is applied. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     FItemSize GetItemEffectiveSize(FGuid ItemInstanceID) const;
+
+    /** Return whether the item is currently rotated in the inventory grid. */
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
+    bool IsItemRotated(FGuid ItemInstanceID) const;
 
     /** Broadcast after the cached slot state has been refreshed. */
     FOnInventoryViewModelRefreshed OnViewModelRefreshed;

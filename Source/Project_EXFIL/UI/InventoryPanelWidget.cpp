@@ -122,6 +122,11 @@ FReply UInventoryPanelWidget::NativeOnMouseMove(const FGeometry& InGeometry,
 FReply UInventoryPanelWidget::NativeOnKeyDown(const FGeometry& InGeometry,
     const FKeyEvent& InKeyEvent)
 {
+    if (InKeyEvent.GetKey() == EKeys::R && IconOverlay && IconOverlay->RotateActiveDragItem())
+    {
+        return FReply::Handled();
+    }
+
     if (InKeyEvent.GetKey() == EKeys::Tab)
     {
         if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetOwningPlayer()))
@@ -196,13 +201,13 @@ void UInventoryPanelWidget::BuildGrid()
     bHasPendingOverlayRefresh = true;
 }
 
-bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition)
+bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
     if (!ViewModel)
     {
         return false;
     }
-    ViewModel->RequestMoveItem(ItemInstanceID, NewPosition);
+    ViewModel->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
     return true;
 }
 

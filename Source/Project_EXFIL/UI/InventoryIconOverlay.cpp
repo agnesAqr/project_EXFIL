@@ -130,8 +130,11 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
             UTexture2D* IconTex = ItemSub ? ItemSub->GetCachedTexture(IconPtr) : IconPtr.LoadSynchronous();
             if (IconTex)
             {
+                const bool bRotated = RootSlotVM->IsRotated();
                 const FVector2D TexSize(IconTex->GetSizeX(), IconTex->GetSizeY());
-                const float Scale = FMath::Min(IconSize.X / TexSize.X, IconSize.Y / TexSize.Y);
+                const float Scale = bRotated
+                    ? FMath::Min(IconSize.X / TexSize.Y, IconSize.Y / TexSize.X)
+                    : FMath::Min(IconSize.X / TexSize.X, IconSize.Y / TexSize.Y);
                 const FVector2D FinalSize = TexSize * Scale;
                 const FVector2D Offset = (IconSize - FinalSize) * 0.5f;
 
@@ -142,6 +145,8 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
                     Brush.SetResourceObject(IconTex);
                     Brush.DrawAs = ESlateBrushDrawType::Image;
                     Img->SetBrush(Brush);
+                    Img->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+                    Img->SetRenderTransformAngle(bRotated ? 90.f : 0.f);
 
                     if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Img->Slot))
                     {
@@ -158,6 +163,8 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
                     Brush.SetResourceObject(IconTex);
                     Brush.DrawAs = ESlateBrushDrawType::Image;
                     IconImage->SetBrush(Brush);
+                    IconImage->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+                    IconImage->SetRenderTransformAngle(bRotated ? 90.f : 0.f);
 
                     UCanvasPanelSlot* CanvasSlot = IconCanvas->AddChildToCanvas(IconImage);
                     if (CanvasSlot)
@@ -334,12 +341,17 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
         return;
     }
 
+    const bool bCanRotate = !ItemInstance.ItemSize.IsSquare();
+    const bool bInitialRotated = bCanRotate ? ItemInstance.bIsRotated : false;
+
     UInventoryDragDropOp* DragOp = NewObject<UInventoryDragDropOp>(this);
     DragOp->DraggedItemInstanceID = ItemInstance.InstanceID;
     DragOp->ItemDataID             = ItemInstance.ItemDataID;
     DragOp->OriginalPosition       = ItemInstance.RootPosition;
+    DragOp->bOriginalRotated       = bInitialRotated;
     DragOp->ItemSize               = ItemInstance.ItemSize;
-    DragOp->DragItemSize           = ItemInstance.ItemSize;
+    DragOp->DragItemSize           = ItemInstance.GetEffectiveSize();
+    DragOp->bIsRotated             = bInitialRotated;
     DragOp->bFromEquipment         = false;
     DragOp->Pivot                  = EDragPivot::TopLeft;
 
@@ -415,6 +427,32 @@ bool UInventoryIconOverlay::FindItemAtPosition(const FVector2D& LocalPos,
 void UInventoryIconOverlay::SetParentPanel(UInventoryPanelWidget* InPanel)
 {
     ParentPanel = InPanel;
+}
+
+bool UInventoryIconOverlay::RotateActiveDragItem()
+{
+    if (!ActiveDragOperation || ActiveDragOperation->bFromEquipment ||
+        ActiveDragOperation->ItemSize.IsSquare())
+    {
+        return false;
+    }
+
+    ActiveDragOperation->bIsRotated = !ActiveDragOperation->bIsRotated;
+    ActiveDragOperation->DragItemSize = ActiveDragOperation->bIsRotated
+        ? ActiveDragOperation->ItemSize.GetRotated()
+        : ActiveDragOperation->ItemSize;
+
+    ActiveDragOperation->DragOffset.X = FMath::Clamp(
+        ActiveDragOperation->DragOffset.X,
+        0,
+        ActiveDragOperation->DragItemSize.Width - 1);
+    ActiveDragOperation->DragOffset.Y = FMath::Clamp(
+        ActiveDragOperation->DragOffset.Y,
+        0,
+        ActiveDragOperation->DragItemSize.Height - 1);
+
+    UpdateDragPreview(ActiveDragOperation, CachedDragLocalPos);
+    return true;
 }
 
 
@@ -531,13 +569,14 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     bHasCachedPreview = false;
     bCachedPreviewCanPlace = false;
 
-    if (NewRootPos == DragOp->OriginalPosition)
+    if (NewRootPos == DragOp->OriginalPosition &&
+        DragOp->bIsRotated == DragOp->bOriginalRotated)
     {
         return false;
     }
 
     return ParentPanel->ForwardMoveRequest(
-        DragOp->DraggedItemInstanceID, NewRootPos);
+        DragOp->DraggedItemInstanceID, NewRootPos, DragOp->bIsRotated);
 }
 
 bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,

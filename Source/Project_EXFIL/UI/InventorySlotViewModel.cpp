@@ -54,3 +54,8 @@ void UInventorySlotViewModel::SetItemSizeY(int32 NewValue)
 {
     UE_MVVM_SET_PROPERTY_VALUE(ItemSizeY, NewValue);
 }
+
+void UInventorySlotViewModel::SetRotated(bool bNewValue)
+{
+    UE_MVVM_SET_PROPERTY_VALUE(bRotated, bNewValue);
+}

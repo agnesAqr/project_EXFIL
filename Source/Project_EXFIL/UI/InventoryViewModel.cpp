@@ -51,13 +51,13 @@ const TArray<UInventorySlotViewModel*>& UInventoryViewModel::GetAllSlots() const
     return SlotViewModels;
 }
 
-void UInventoryViewModel::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition)
+void UInventoryViewModel::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
     if (!InventoryComp.IsValid())
     {
         return;
     }
-    InventoryComp->RequestMoveItem(ItemInstanceID, NewPosition);
+    InventoryComp->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
 }
 
 FIntPoint UInventoryViewModel::GetItemRootPosition(FGuid ItemInstanceID) const
@@ -83,9 +83,25 @@ FItemSize UInventoryViewModel::GetItemEffectiveSize(FGuid ItemInstanceID) const
     FInventoryItemInstance Item;
     if (InventoryComp->GetItemByID(ItemInstanceID, Item))
     {
-        return Item.ItemSize;
+        return Item.GetEffectiveSize();
     }
     return FItemSize(1, 1);
+}
+
+bool UInventoryViewModel::IsItemRotated(FGuid ItemInstanceID) const
+{
+    if (!InventoryComp.IsValid())
+    {
+        return false;
+    }
+
+    FInventoryItemInstance Item;
+    if (InventoryComp->GetItemByID(ItemInstanceID, Item))
+    {
+        return Item.bIsRotated && !Item.ItemSize.IsSquare();
+    }
+
+    return false;
 }
 
 void UInventoryViewModel::RequestRemoveItem(FGuid ItemInstanceID)
@@ -150,16 +166,18 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
         if (bHasItem)
         {
             const bool bIsRoot = (ItemInstance.RootPosition == Position);
+            const FItemSize EffectiveSize = ItemInstance.GetEffectiveSize();
             SlotVM->SetEmpty(false);
             SlotVM->SetItemDataID(ItemInstance.ItemDataID);
             SlotVM->SetStackCount(ItemInstance.StackCount);
             SlotVM->SetIsRootSlot(bIsRoot);
             SlotVM->SetItemInstanceID(ItemInstance.InstanceID);
+            SlotVM->SetRotated(ItemInstance.bIsRotated && !ItemInstance.ItemSize.IsSquare());
 
             if (bIsRoot)
             {
-                SlotVM->SetItemSizeX(ItemInstance.ItemSize.Width);
-                SlotVM->SetItemSizeY(ItemInstance.ItemSize.Height);
+                SlotVM->SetItemSizeX(EffectiveSize.Width);
+                SlotVM->SetItemSizeY(EffectiveSize.Height);
             }
             else
             {
@@ -182,6 +200,7 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
             SlotVM->SetItemInstanceID(FGuid());
             SlotVM->SetItemSizeX(1);
             SlotVM->SetItemSizeY(1);
+            SlotVM->SetRotated(false);
             SlotVM->SetIcon(TSoftObjectPtr<UTexture2D>());
         }
     }
