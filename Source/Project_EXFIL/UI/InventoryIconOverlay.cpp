@@ -21,8 +21,7 @@
 void UInventoryIconOverlay::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
-    // 마우스 이벤트(우클릭) 수신을 위해 Visible 필수
-    // HitTestInvisible/SelfHitTestInvisible 이면 NativeOnMouseButtonDown이 호출되지 않음
+    // The overlay must stay Visible so it can receive mouse events directly.
     SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -40,7 +39,7 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
                                           int32 InGridWidth, int32 InGridHeight,
                                           const TSet<int32>& DirtyIndices)
 {
-    // 우클릭 HitTest용 캐시 갱신
+    // Refresh caches used for hit testing and drag math.
     CachedViewModel  = InViewModel;
     CachedGridPanel  = InGridPanel;
     CachedGridWidth  = InGridWidth;
@@ -54,7 +53,7 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
     UWidget* FirstSlot = InGridPanel->GetChildAt(0);
     if (!FirstSlot)
     {
-        UE_LOG(LogEXFIL, Error, TEXT("RefreshIcons: FirstSlot null — GridPanel 자식 없음"));
+        UE_LOG(LogEXFIL, Error, TEXT("RefreshIcons: FirstSlot is null - grid panel has no children"));
         return;
     }
 
@@ -67,7 +66,7 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         return;
     }
 
-    // CellStride가 변경되면 전체 재생성
+    // Rebuild every icon when the slot stride changes.
     const bool bStrideChanged = !CachedCellStride.Equals(CellStride, 0.5f);
     if (bStrideChanged)
     {
@@ -77,16 +76,15 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         StackTextCache.Empty();
     }
 
-    // ItemDataSubsystem 캐시 조회용
+    // Resolve cached item icons through the item data subsystem.
     UItemDataSubsystem* ItemSub = nullptr;
     if (UGameInstance* GI = GetGameInstance())
     {
         ItemSub = GI->GetSubsystem<UItemDataSubsystem>();
     }
 
-    // ── dirty 슬롯에서 영향받는 루트 아이템 ID 수집 (중복 제거) ──
+    // Collect unique root items affected by the dirty slot set.
     TSet<FGuid> DirtyRootItems;
-    TSet<FGuid> RemovedFromDirty; // dirty 슬롯이 빈칸 → 이전에 있던 아이콘 제거 후보
 
     for (int32 SlotIndex : DirtyIndices)
     {
@@ -104,17 +102,16 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         }
         else
         {
-            // 빈 슬롯 — 캐시에 이 위치에 해당하는 아이템이 있었다면 제거 대상
-            // (아래에서 캐시 전체 대조로 처리)
+            // Empty dirty slots are handled during the cache reconciliation pass below.
         }
     }
 
-    // ── dirty root item 기준 아이콘 갱신 O(dirty root items) ──
+    // Refresh each dirty root item once.
     for (const FGuid& ItemID : DirtyRootItems)
     {
-        // 루트 슬롯 ViewModel 찾기 — InventoryComponent에서 루트 위치 조회
+        // Resolve the root slot for the item.
         const FIntPoint RootPos = InViewModel->GetItemRootPosition(ItemID);
-        if (RootPos.X < 0) continue; // 이미 제거된 아이템
+        if (RootPos.X < 0) continue;
 
         UInventorySlotViewModel* RootSlotVM = InViewModel->GetSlotAt(RootPos);
         if (!RootSlotVM || RootSlotVM->IsEmpty() || !RootSlotVM->IsRootSlot()) continue;
@@ -124,7 +121,7 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
             RootSlotVM->GetItemSizeX() * CellStride.X,
             RootSlotVM->GetItemSizeY() * CellStride.Y);
 
-        // ── 아이콘 이미지 ──
+        // Update the icon widget.
         const TSoftObjectPtr<UTexture2D> IconPtr = RootSlotVM->GetIcon();
         UImage** ExistingImage = IconImageCache.Find(ItemID);
 
@@ -179,7 +176,7 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
             IconImageCache.Remove(ItemID);
         }
 
-        // ── 스택 카운트 텍스트 ──
+        // Update the stack count widget.
         UTextBlock** ExistingText = StackTextCache.Find(ItemID);
 
         if (RootSlotVM->GetStackCount() > 1)
@@ -223,15 +220,14 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         }
     }
 
-    // ── 제거된 아이템 정리: 캐시에 있지만 ViewModel에 없는 아이콘 제거 ──
-    // dirty 슬롯이 빈칸이 된 경우 해당 아이템이 삭제된 것
+    // Remove stale widgets that no longer map to an item in the view model.
     TArray<FGuid> StaleIDs;
     for (auto& Pair : IconImageCache)
     {
         const FIntPoint RootPos = InViewModel->GetItemRootPosition(Pair.Key);
         if (RootPos.X < 0)
         {
-            // ViewModel에서 이 아이템을 찾을 수 없음 → 제거됨
+            // The view model no longer knows about this item.
             StaleIDs.Add(Pair.Key);
         }
     }
@@ -255,28 +251,28 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
     }
 }
 
-// ========== 우클릭 컨텍스트 메뉴 ==========
+// ========== Context Menu ==========
 
 FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometry,
     const FPointerEvent& InMouseEvent)
 {
     const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
 
-    // ── 우클릭: 컨텍스트 메뉴 ────────────────────────────────────────────────
+    // Right mouse button opens the context menu.
     if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
     {
         FGuid HitInstanceID;
         FName HitItemDataID;
         const bool bHitItem = FindItemAtPosition(LocalPos, HitInstanceID, HitItemDataID);
 
-        // 메뉴가 열려있으면 무조건 먼저 닫기
+        // Always close an existing menu before opening a new one.
         if (ContextMenuWidget &&
             ContextMenuWidget->GetVisibility() == ESlateVisibility::Visible)
         {
             ContextMenuWidget->CloseMenu();
         }
 
-        // 아이템 위 → 해당 아이템 메뉴 열기 (기존 메뉴가 닫힌 직후 포함)
+        // Open the menu when the cursor is over an item.
         if (bHitItem)
         {
             UItemContextMenuWidget* Menu = GetOrCreateContextMenu();
@@ -286,14 +282,12 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
                 Menu->SetMenuPosition(InMouseEvent.GetScreenSpacePosition());
             }
         }
-        // 빈 공간 → 닫기만 하고 끝 (위에서 이미 CloseMenu 호출됨)
+        // Empty space only closes the menu.
 
         return FReply::Handled();
     }
 
-    // ── 좌클릭: 드래그 감지 ──────────────────────────────────────────────────
-    // InventoryIconOverlay가 Visible이므로 아래 SlotWidget은 클릭을 받지 못함.
-    // Overlay가 직접 드래그를 시작해야 SlotWidget의 NativeOnDrop 체인이 동작.
+    // The overlay owns left-click drag detection because it intercepts hit tests.
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
         FGuid HitInstanceID;
@@ -302,9 +296,8 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
         if (bHit)
         {
             PendingDragInstanceID    = HitInstanceID;
-            PendingDragClickLocalPos = LocalPos; // DragOffset 계산용 클릭 좌표 캐시
-            // TakeWidget(): UWidget → SWidget 변환. GetCachedWidget()과 달리
-            // 위젯이 아직 빌드되지 않았을 때도 빌드를 강제하여 유효한 레퍼런스 반환.
+            PendingDragClickLocalPos = LocalPos;
+            // TakeWidget forces the underlying Slate widget to exist before drag detection.
             return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
         }
     }
@@ -317,11 +310,11 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
 {
     if (!PendingDragInstanceID.IsValid())
     {
-        UE_LOG(LogEXFIL, Error, TEXT("IconOverlay NativeOnDragDetected: PendingDragInstanceID 무효 — 드래그 취소"));
+        UE_LOG(LogEXFIL, Error, TEXT("IconOverlay NativeOnDragDetected: PendingDragInstanceID invalid - canceling drag"));
         return;
     }
 
-    // InventoryComponent에서 실제 아이템 인스턴스 조회 (회전/크기 정보 포함)
+    // Resolve the authoritative inventory item so drag math uses the true item size.
     APlayerController* PC = GetOwningPlayer();
     APawn* Pawn = PC ? PC->GetPawn() : nullptr;
     UInventoryComponent* InvComp = Pawn
@@ -350,7 +343,7 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
     DragOp->bFromEquipment         = false;
     DragOp->Pivot                  = EDragPivot::TopLeft;
 
-    // DragOffset: 클릭한 셀 - 아이템 루트 위치 (비루트 셀 클릭 시 자연스러운 배치)
+    // DragOffset keeps drops aligned when dragging from any occupied cell.
     if (CachedGridPanel.IsValid() && CachedGridWidth > 0 && CachedGridHeight > 0)
     {
         const FVector2D GridLocalSize = CachedGridPanel->GetCachedGeometry().GetLocalSize();
@@ -362,7 +355,7 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
                 FMath::FloorToInt(PendingDragClickLocalPos.X / CellStride.X),
                 FMath::FloorToInt(PendingDragClickLocalPos.Y / CellStride.Y));
             FIntPoint Offset = ClickedCell - ItemInstance.RootPosition;
-            // 아이템 크기 내로 클램프
+            // Clamp the offset inside the current item bounds.
             const FItemSize EffSize = ItemInstance.GetEffectiveSize();
             Offset.X = FMath::Clamp(Offset.X, 0, EffSize.Width  - 1);
             Offset.Y = FMath::Clamp(Offset.Y, 0, EffSize.Height - 1);
@@ -370,7 +363,7 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
         }
     }
 
-    // 드래그 비주얼 없음 — 초록색 배치 가능 표시만 사용
+    // Use highlight feedback only. No separate drag visual is spawned.
     DragOp->DefaultDragVisual = nullptr;
 
     ActiveDragOperation = DragOp;
@@ -397,7 +390,7 @@ bool UInventoryIconOverlay::FindItemAtPosition(const FVector2D& LocalPos,
     const FVector2D CellStride(GridLocalSize.X / CachedGridWidth,
                                 GridLocalSize.Y / CachedGridHeight);
 
-    // 좌표 → 셀 인덱스 O(1) 직접 접근
+    // Convert directly from local coordinates to a grid cell.
     const int32 Col = FMath::FloorToInt(LocalPos.X / CellStride.X);
     const int32 Row = FMath::FloorToInt(LocalPos.Y / CellStride.Y);
 
@@ -417,7 +410,7 @@ bool UInventoryIconOverlay::FindItemAtPosition(const FVector2D& LocalPos,
     return true;
 }
 
-// ========== ParentPanel 주입 ==========
+// ========== Parent Panel Wiring ==========
 
 void UInventoryIconOverlay::SetParentPanel(UInventoryPanelWidget* InPanel)
 {
@@ -425,9 +418,9 @@ void UInventoryIconOverlay::SetParentPanel(UInventoryPanelWidget* InPanel)
 }
 
 
-// ========== 드롭 / 하이라이트 ==========
+// ========== Drop / Highlight ==========
 
-/** 로컬 좌표 → 그리드 셀 인덱스 변환 헬퍼 */
+/** Convert local overlay coordinates into a grid cell index. */
 static FIntPoint LocalPosToGridCell(const FVector2D& LocalPos,
     const FVector2D& GridLocalSize, int32 GridW, int32 GridH)
 {
@@ -505,7 +498,7 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
         ParentPanel->StopDragAutoScroll();
     }
 
-    // ── 장비슬롯에서 온 드래그 → 해제 + 인벤토리 복귀 ──
+    // Equipment drag: request unequip and let the server return it to the inventory.
     if (DragOp->bFromEquipment)
     {
         APlayerController* PC = GetOwningPlayer();
@@ -517,7 +510,7 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
         return true;
     }
 
-    // ── 인벤토리 내부 이동 ──
+    // Inventory drag: compute the new root cell and forward the move request.
     if (!ParentPanel.IsValid() || !CachedGridPanel.IsValid()
         || CachedGridWidth <= 0 || CachedGridHeight <= 0)
     {
@@ -529,33 +522,18 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
 
     const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InDragDropEvent.GetScreenSpacePosition());
     CachedDragLocalPos = LocalPos;
-    const FIntPoint PreviewRootPos = CachedPreviewRootPos;
-    const bool bPreviewCanPlace = bHasCachedPreview && bCachedPreviewCanPlace;
-
-    // Drop 시점의 실제 마우스 위치를 authoritative input으로 사용한다.
-    // DragOver의 마지막 프리뷰 캐시는 하이라이트용일 뿐, 승인 근거로 쓰지 않는다.
+    // Use the actual pointer location at drop time as the authoritative input.
+    // The cached drag-over preview is only for highlight feedback.
     const FIntPoint DroppedCell = LocalPosToGridCell(LocalPos, GridLocalSize,
         CachedGridWidth, CachedGridHeight);
     const FIntPoint NewRootPos = DroppedCell - DragOp->DragOffset;
-
-    UE_LOG(LogEXFIL, Log,
-        TEXT("InventoryDrop(UI): Item=%s LocalPos=(%.1f,%.1f) DroppedCell=(%d,%d) NewRoot=(%d,%d) PreviewRoot=(%d,%d) PreviewCanPlace=%s DragOffset=(%d,%d) ItemSize=%dx%d Original=(%d,%d)"),
-        *DragOp->DraggedItemInstanceID.ToString(),
-        LocalPos.X, LocalPos.Y,
-        DroppedCell.X, DroppedCell.Y,
-        NewRootPos.X, NewRootPos.Y,
-        PreviewRootPos.X, PreviewRootPos.Y,
-        bPreviewCanPlace ? TEXT("true") : TEXT("false"),
-        DragOp->DragOffset.X, DragOp->DragOffset.Y,
-        DragOp->DragItemSize.Width, DragOp->DragItemSize.Height,
-        DragOp->OriginalPosition.X, DragOp->OriginalPosition.Y);
 
     bHasCachedPreview = false;
     bCachedPreviewCanPlace = false;
 
     if (NewRootPos == DragOp->OriginalPosition)
     {
-        return false; // 같은 위치 드롭 무시
+        return false;
     }
 
     return ParentPanel->ForwardMoveRequest(
@@ -577,54 +555,6 @@ bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,
     UpdateDragPreview(DragOp, LocalPos);
     ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
     return true;
-
-#if 0
-
-    const FVector2D GridLocalSize = CachedGridPanel->GetCachedGeometry().GetLocalSize();
-    if (GridLocalSize.IsNearlyZero()) return false;
-
-    const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InDragDropEvent.GetScreenSpacePosition());
-    const FIntPoint DroppedCell = LocalPosToGridCell(LocalPos, GridLocalSize,
-                                                       CachedGridWidth, CachedGridHeight);
-    const FIntPoint RootPos = DroppedCell - DragOp->DragOffset;
-
-    const int32 GridW = CachedViewModel->GetGridWidth();
-    const int32 GridH = CachedViewModel->GetGridHeight();
-
-    // 경계 초과 시 하이라이트 없이 리턴
-    if (RootPos.X < 0 || RootPos.Y < 0 ||
-        RootPos.X + DragOp->DragItemSize.Width  > GridW ||
-        RootPos.Y + DragOp->DragItemSize.Height > GridH)
-    {
-        ParentPanel->ClearAreaHighlights();
-        return true;
-    }
-
-    // 이전 하이라이트 초기화 후 새로 적용
-    ParentPanel->ClearAreaHighlights();
-
-    bool bCanPlace = true;
-    for (int32 Y = RootPos.Y; Y < RootPos.Y + DragOp->DragItemSize.Height && bCanPlace; ++Y)
-    {
-        for (int32 X = RootPos.X; X < RootPos.X + DragOp->DragItemSize.Width && bCanPlace; ++X)
-        {
-            UInventorySlotViewModel* TargetSlot = CachedViewModel->GetSlotAt(FIntPoint(X, Y));
-            if (!TargetSlot ||
-                (!TargetSlot->IsEmpty() &&
-                 TargetSlot->GetItemInstanceID() != DragOp->DraggedItemInstanceID))
-            {
-                bCanPlace = false;
-            }
-        }
-    }
-
-    ParentPanel->HighlightArea(RootPos, DragOp->DragItemSize, bCanPlace);
-
-    // 드래그 중 ScrollBox 가장자리 자동 스크롤
-    ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
-
-    return true;
-#endif
 }
 
 void UInventoryIconOverlay::NativeOnDragLeave(const FDragDropEvent& InDragDropEvent,
@@ -666,7 +596,7 @@ UItemContextMenuWidget* UInventoryIconOverlay::GetOrCreateContextMenu()
         ContextMenuWidget = CreateWidget<UItemContextMenuWidget>(PC, ContextMenuWidgetClass);
         if (ContextMenuWidget)
         {
-            ContextMenuWidget->AddToViewport(100); // 높은 ZOrder로 항상 최상단
+            ContextMenuWidget->AddToViewport(100); // Keep the menu above the inventory panel.
             ContextMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
         }
     }

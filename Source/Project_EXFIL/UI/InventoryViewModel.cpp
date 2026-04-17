@@ -15,11 +15,11 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
 
     InventoryComp = InInventoryComponent;
 
-    // 그리드 사이즈 캐시
+    // Cache the grid dimensions for the view model.
     UE_MVVM_SET_PROPERTY_VALUE(GridWidth, InInventoryComponent->GridWidth);
     UE_MVVM_SET_PROPERTY_VALUE(GridHeight, InInventoryComponent->GridHeight);
 
-    // SlotViewModel 배열 생성
+    // Create one slot view model per grid cell.
     const int32 TotalSlots = GridWidth * GridHeight;
     SlotViewModels.SetNum(TotalSlots);
 
@@ -30,10 +30,9 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
         SlotViewModels[i] = SlotVM;
     }
 
-    // Model 델리게이트 바인딩 (non-dynamic delegate)
+    // Bind the model delegate once and mirror the initial state immediately.
     InInventoryComponent->OnInventoryUpdated.AddUObject(
         this, &UInventoryViewModel::HandleInventoryUpdated);
-    // 초기 상태 동기화
     RefreshAllSlots();
 }
 
@@ -98,9 +97,8 @@ void UInventoryViewModel::RequestRemoveItem(FGuid ItemInstanceID)
     InventoryComp->RequestRemoveItem(ItemInstanceID);
 }
 
-void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& DirtyIndices)
+void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& /*DirtyIndices*/)
 {
-    (void)DirtyIndices;
     RefreshAllSlots();
 }
 
@@ -122,7 +120,7 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
         return;
     }
 
-    // ItemDataSubsystem — 아이콘 조회용
+    // Resolve item icons through the shared item data subsystem.
     UItemDataSubsystem* ItemSub = nullptr;
     if (UWorld* World = InventoryComp->GetWorld())
     {
@@ -188,7 +186,7 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
         }
     }
 
-    // 아이콘 오버레이 갱신 알림 (변경된 슬롯만 전달)
+    // Notify the overlay that these slots were refreshed.
     OnViewModelRefreshed.Broadcast(DirtyIndices);
 }
 

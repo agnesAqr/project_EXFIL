@@ -1,5 +1,6 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// InventoryViewModel.h — 인벤토리 MVVM ViewModel: 슬롯별 ViewModel 배열, 변경분만 갱신
+// InventoryViewModel.h - inventory MVVM view model that mirrors slot state
+// and forwards user actions to the model layer.
 
 #pragma once
 
@@ -11,7 +12,7 @@
 
 class UInventoryComponent;
 
-/** PanelWidget이 아이콘 오버레이 갱신 시점을 알기 위한 델리게이트 (변경된 슬롯 인덱스 전달) */
+/** Broadcasts the updated slot indices for overlay refreshes. */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryViewModelRefreshed, const TSet<int32>&);
 
 UCLASS()
@@ -20,27 +21,27 @@ class PROJECT_EXFIL_API UInventoryViewModel : public UMVVMViewModelBase
     GENERATED_BODY()
 
 public:
-    /** Model(UInventoryComponent)에 바인딩. 초기화 및 델리게이트 구독 */
+    /** Bind to the inventory model and subscribe to change notifications. */
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
     void Initialize(UInventoryComponent* InInventoryComponent);
 
-    /** 특정 위치의 슬롯 ViewModel 반환 */
+    /** Return the slot view model at the given grid position. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     UInventorySlotViewModel* GetSlotAt(FIntPoint Position) const;
 
-    /** 모든 슬롯 ViewModel 반환 */
+    /** Return every slot view model. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     const TArray<UInventorySlotViewModel*>& GetAllSlots() const;
 
-    /** 그리드 너비 */
+    /** Current grid width. */
     UFUNCTION(BlueprintPure, FieldNotify)
     int32 GetGridWidth() const { return GridWidth; }
 
-    /** 그리드 높이 */
+    /** Current grid height. */
     UFUNCTION(BlueprintPure, FieldNotify)
     int32 GetGridHeight() const { return GridHeight; }
 
-    // === 사용자 액션 (View → ViewModel → Model) ===
+    // === User Actions (View -> ViewModel -> Model) ===
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
     void RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition);
@@ -48,15 +49,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
     void RequestRemoveItem(FGuid ItemInstanceID);
 
-    /** 아이템 루트 위치 반환 (비루트 슬롯 드래그 오프셋 계산용) */
+    /** Return the root position for an item instance. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     FIntPoint GetItemRootPosition(FGuid ItemInstanceID) const;
 
-    /** 아이템의 유효 크기 반환 (회전 반영) */
+    /** Return the effective item size after rotation is applied. */
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     FItemSize GetItemEffectiveSize(FGuid ItemInstanceID) const;
 
-    /** 인벤토리 갱신 시 브로드캐스트 — IconOverlay 갱신용 */
+    /** Broadcast after the cached slot state has been refreshed. */
     FOnInventoryViewModelRefreshed OnViewModelRefreshed;
 
 private:
@@ -74,13 +75,13 @@ private:
               meta = (AllowPrivateAccess = true))
     int32 GridHeight = 0;
 
-    // Model 델리게이트 콜백
+    // Model delegate callback.
     void HandleInventoryUpdated(const TSet<int32>& DirtyIndices);
 
-    /** 전체 그리드 상태를 SlotViewModels에 동기화 (전체 슬롯 dirty로 브로드캐스트) */
+    /** Rebuild the entire slot cache and broadcast every index as dirty. */
     void RefreshAllSlots();
 
-    /** 변경된 슬롯만 갱신 후 해당 DirtyIndices 브로드캐스트 */
+    /** Refresh only the supplied indices and rebroadcast them. */
     void RefreshDirtySlots(const TSet<int32>& DirtyIndices);
 
     int32 PositionToIndex(FIntPoint Position) const;
