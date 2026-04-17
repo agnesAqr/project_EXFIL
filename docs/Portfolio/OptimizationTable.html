@@ -64,7 +64,7 @@
     <line x1="15" y1="230" x2="965" y2="230" stroke="#30363d" stroke-width="0.5"/>
     <text x="27" y="254" fill="#58a6ff" font-size="10" font-weight="600">ViewModel 갱신</text>
     <text x="27" y="276" fill="#8b949e" font-size="9">OnInventoryUpdated</text>
-    <text x="300" y="254" fill="#f85149" font-size="11" font-weight="600">130칸 전체</text>
+    <text x="300" y="254" fill="#f85149" font-size="11" font-weight="600">120칸 전체</text>
     <text x="300" y="276" fill="#8b949e" font-size="9">RefreshAllSlots() 매번 호출</text>
     <text x="560" y="254" fill="#3fb950" font-size="11" font-weight="600">변경 슬롯만</text>
     <text x="560" y="276" fill="#8b949e" font-size="9">TSet&lt;int32&gt; DirtyIndices 전파</text>
@@ -78,8 +78,8 @@
 
     <rect x="15" y="330" width="465" height="54" rx="5" fill="#161b22" stroke="#58a6ff44"/>
     <text x="27" y="346" fill="#58a6ff" font-size="10" font-weight="600">리플리케이션 + 캐시 분리</text>
-    <text x="27" y="360" fill="#8b949e" font-size="9">Replicated State(Items + GridSlots) + 로컬 캐시(TMap/Bitmap)</text>
-    <text x="27" y="374" fill="#8b949e" font-size="9">OnRep_Items에서 3개 캐시 자동 리빌드</text>
+    <text x="27" y="360" fill="#8b949e" font-size="9">Replicated State(InventoryList — FastArray) + 로컬 캐시(GridSlots/TMap/Bitmap)</text>
+    <text x="27" y="374" fill="#8b949e" font-size="9">PostReplicatedReceive에서 RebuildAllCachesFromItems 호출</text>
 
     <rect x="500" y="330" width="465" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
     <text x="512" y="346" fill="#3fb950" font-size="10" font-weight="600">이벤트 드리븐 갱신</text>

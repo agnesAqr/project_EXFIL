@@ -102,8 +102,8 @@
     <text x="17" y="134" fill="#3fb950" font-size="9" letter-spacing="2" font-weight="600">GAMEPLAY ABILITIES</text>
 
     <rect x="17" y="140" width="218" height="40" rx="5" fill="#161b22" stroke="#58a6ff44"/>
-    <text x="29" y="156" fill="#58a6ff" font-size="10" font-weight="600">GA_UseItem</text>
-    <text x="29" y="170" fill="#8b949e" font-size="9">DecrementStack → Apply GE</text>
+    <text x="29" y="156" fill="#58a6ff" font-size="10" font-weight="600">RequestConsumeItemByID</text>
+    <text x="29" y="170" fill="#8b949e" font-size="9">HandleConsumeRequest_Internal (GA 미사용)</text>
 
     <rect x="249" y="140" width="218" height="40" rx="5" fill="#161b22" stroke="#3fb95044"/>
     <text x="261" y="156" fill="#3fb950" font-size="10" font-weight="600">EquipmentComponent</text>
@@ -133,7 +133,7 @@
 
     <rect x="481" y="240" width="218" height="54" rx="5" fill="#161b22" stroke="#d2992244"/>
     <text x="493" y="256" fill="#d29922" font-size="10" font-weight="600">결과물 생성</text>
-    <text x="493" y="270" fill="#8b949e" font-size="9">TryAddItemByID(ResultItemID)</text>
+    <text x="493" y="270" fill="#8b949e" font-size="9">AddItemByID_Internal(ResultItemID, ResultCount)</text>
     <text x="493" y="284" fill="#8b949e" font-size="9">GE 미사용 — 인벤토리 직접 추가</text>
 
     <rect x="713" y="240" width="250" height="54" rx="5" fill="#161b22" stroke="#f8514944"/>
@@ -175,7 +175,7 @@
 
     <rect x="653" y="658" width="310" height="36" rx="5" fill="#161b22" stroke="#f8514944"/>
     <text x="665" y="674" fill="#f85149" font-size="10" font-weight="600">OnDeath()</text>
-    <text x="665" y="688" fill="#8b949e" font-size="9">래그돌 → 6초 후 Respawn → 부활</text>
+    <text x="665" y="688" fill="#8b949e" font-size="9">ERespawnPhase: Dead → HiddenDead → Respawning → Alive</text>
 
 
     <!-- ============================================ -->
@@ -201,7 +201,7 @@
     <rect x="645" y="718" width="10" height="10" rx="2" fill="#bc8cff33" stroke="#bc8cff66"/>
     <text x="661" y="728" fill="#8b949e" font-size="9">PostExecute</text>
 
-    <text x="780" y="728" fill="#8b949e" font-size="9">GA 3종 + GE 2종 실동작 + AttributeSet 8속성</text>
+    <text x="780" y="728" fill="#8b949e" font-size="9">GA 2종 + GE 2종 실동작 + AttributeSet 8속성</text>
 
   </svg>
 </div>

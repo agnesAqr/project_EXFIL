@@ -106,7 +106,7 @@
     <!-- Step 1: BeginPlay (VM 안 함) -->
     <rect x="695" y="60" width="255" height="40" rx="5" fill="#161b22" stroke="#58a6ff44"/>
     <text x="707" y="76" fill="#58a6ff" font-size="10" font-weight="600">BeginPlay()</text>
-    <text x="707" y="90" fill="#8b949e" font-size="9">캐릭터 스폰 (VM 바인딩 안 함)</text>
+    <text x="707" y="90" fill="#8b949e" font-size="9">InitializeViewModels() 시도 → AttrSet null → early return</text>
 
     <line x1="822" y1="100" x2="822" y2="118" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
 
@@ -141,9 +141,9 @@
     <text x="27" y="403" fill="#8b949e" font-size="9">Listen Server에서는 호스트=서버라 타이밍 차이 없음 → 문제 미발생</text>
 
     <rect x="500" y="345" width="465" height="68" rx="5" fill="#161b22" stroke="#3fb95044"/>
-    <text x="512" y="361" fill="#3fb950" font-size="10" font-weight="600">해결: 바인딩 시점 이동</text>
-    <text x="512" y="375" fill="#e6edf3" font-size="9">BeginPlay에서 InitializeViewModels() 제거</text>
-    <text x="512" y="389" fill="#e6edf3" font-size="9">OnRep_PlayerState에서 InitAbilityActorInfo() 후 호출</text>
+    <text x="512" y="361" fill="#3fb950" font-size="10" font-weight="600">해결: 양쪽 호출 + 중복 가드</text>
+    <text x="512" y="375" fill="#e6edf3" font-size="9">BeginPlay와 OnRep_PlayerState 양쪽에서 호출</text>
+    <text x="512" y="389" fill="#e6edf3" font-size="9">중복 가드 (if SurvivalViewModel return) + AttrSet null 체크</text>
     <text x="512" y="403" fill="#8b949e" font-size="9">ASC 준비 완료가 보장된 시점에서만 ViewModel 바인딩</text>
 
 

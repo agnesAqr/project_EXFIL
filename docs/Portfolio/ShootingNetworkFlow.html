@@ -50,7 +50,7 @@
 
     <!-- ===== Arrow: Client → Server ===== -->
     <text x="262" y="136" fill="#58a6ff" font-size="9">Server_ConfirmHit</text>
-    <text x="262" y="148" fill="#8b949e" font-size="8">Server, Reliable, WithValidation</text>
+    <text x="262" y="148" fill="#8b949e" font-size="8">Server, Reliable</text>
     <line x1="245" y1="156" x2="368" y2="178" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#ab)"/>
 
 
@@ -82,9 +82,9 @@
 
     <!-- Target: HitReact (3줄, h=54) y=330 -->
     <rect x="770" y="330" width="200" height="54" rx="5" fill="#161b22" stroke="#3fb95033"/>
-    <text x="782" y="346" fill="#3fb950" font-size="10" font-weight="600">피격 Overlay 플래시</text>
-    <text x="782" y="360" fill="#d29922" font-size="10">SetOverlayMaterial(M_HitOverlay)</text>
-    <text x="782" y="374" fill="#8b949e" font-size="9">0.2초 후 Material 해제</text>
+    <text x="782" y="346" fill="#3fb950" font-size="10" font-weight="600">피격 반응 (애니메이션/사운드)</text>
+    <text x="782" y="360" fill="#d29922" font-size="10">Multicast_PlayHitReact 단독 활성</text>
+    <text x="782" y="374" fill="#8b949e" font-size="9">PlayHitEffect (Overlay) 현재 비활성</text>
 
 
     <!-- ===== OnRep arrow + StatsBar box (y=400) ===== -->
@@ -107,8 +107,8 @@
 
 
     <!-- ===== Multicast_OnDeath arrows (y=515) ===== -->
-    <text x="500" y="516" fill="#d29922" font-size="9" text-anchor="middle">Multicast_OnDeath</text>
-    <text x="500" y="528" fill="#8b949e" font-size="8" text-anchor="middle">NetMulticast, Reliable — 즉시</text>
+    <text x="500" y="516" fill="#d29922" font-size="9" text-anchor="middle">OnRep_RespawnPhase (Dead)</text>
+    <text x="500" y="528" fill="#8b949e" font-size="8" text-anchor="middle">Replicated ERespawnPhase enum</text>
     <line x1="370" y1="536" x2="232" y2="548" stroke="#d29922" stroke-width="1.5" marker-end="url(#ao)"/>
     <line x1="630" y1="536" x2="768" y2="548" stroke="#d29922" stroke-width="1.5" marker-end="url(#ao)"/>
 
@@ -128,13 +128,13 @@
     <!-- STEP 05 (2줄, h=40) y=625                    -->
     <!-- ============================================ -->
     <rect x="370" y="625" width="260" height="40" rx="5" fill="#161b22" stroke="#3fb95044"/>
-    <text x="382" y="641" fill="#8b949e" font-size="9" letter-spacing="1">STEP 05 — RESPAWN (6초 후)</text>
-    <text x="382" y="655" fill="#e6edf3" font-size="11" font-weight="600">HP 회복 → 스폰 지점 텔레포트</text>
+    <text x="382" y="641" fill="#8b949e" font-size="9" letter-spacing="1">STEP 05 — RESPAWN (~5.3초 후)</text>
+    <text x="382" y="655" fill="#e6edf3" font-size="11" font-weight="600">Corpse 2.5s + Hidden 2.5s + Reveal 0.3s</text>
 
 
     <!-- ===== Multicast_Respawn arrows (y=680) ===== -->
-    <text x="500" y="681" fill="#3fb950" font-size="9" text-anchor="middle">Multicast_Respawn</text>
-    <text x="500" y="693" fill="#8b949e" font-size="8" text-anchor="middle">NetMulticast, Reliable</text>
+    <text x="500" y="681" fill="#3fb950" font-size="9" text-anchor="middle">OnRep_RespawnPhase (Alive)</text>
+    <text x="500" y="693" fill="#8b949e" font-size="8" text-anchor="middle">Replicated ERespawnPhase enum</text>
     <line x1="370" y1="701" x2="232" y2="711" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ag)"/>
     <line x1="630" y1="701" x2="768" y2="711" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ag)"/>
 
@@ -163,7 +163,7 @@
     <text x="205" y="804" fill="#8b949e" font-size="9">Multicast (Unreliable)</text>
 
     <line x1="380" y1="800" x2="404" y2="800" stroke="#d29922" stroke-width="2"/>
-    <text x="410" y="804" fill="#8b949e" font-size="9">Multicast (Reliable)</text>
+    <text x="410" y="804" fill="#8b949e" font-size="9">OnRep (RespawnPhase)</text>
 
     <line x1="575" y1="800" x2="599" y2="800" stroke="#bc8cff" stroke-width="2"/>
     <text x="605" y="804" fill="#8b949e" font-size="9">OnRep (GAS Mixed)</text>
