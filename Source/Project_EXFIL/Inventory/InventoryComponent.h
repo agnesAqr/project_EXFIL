@@ -49,8 +49,7 @@ class PROJECT_EXFIL_API UInventoryComponent : public UActorComponent
 public:
 	UInventoryComponent();
 
-	// ========== Configuration ==========
-
+#pragma region Config
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridWidth = 10;
 
@@ -64,9 +63,14 @@ public:
 	/** Upward offset used when dropping an item into the world. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropUpwardOffset = 50.f;
+#pragma endregion
 
-	// ========== Public Request API ==========
+#pragma region Engine Lifecycle / Replication
+	virtual void GetLifetimeReplicatedProps(
+		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+#pragma endregion
 
+#pragma region External Entry: Request API
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestRemoveItem(FGuid ItemInstanceID);
 
@@ -78,9 +82,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void RequestDropItem(FGuid ItemInstanceID);
+#pragma endregion
 
-	// ========== Server-only Mutation API ==========
-
+#pragma region Server Authority: Mutation API
 	bool AddItemByID_Internal(FName ItemDataID, int32 StackCount = 1);
 
 	bool RemoveItem_Internal(const FGuid& InstanceID);
@@ -97,9 +101,9 @@ public:
 	 * Returns the remaining stack count, or zero when removed.
 	 */
 	int32 DecrementStack_Internal(const FGuid& InstanceID);
+#pragma endregion
 
-	// ========== Query API ==========
-
+#pragma region Read Only: Query API
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool CanPlaceItemAt(FIntPoint Position, FItemSize Size) const;
 
@@ -118,31 +122,26 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool IsEmpty() const;
 
-	// ========== Crafting / Equipment API ==========
-
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID(FName ItemDataID) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID_Cached(FName ItemDataID) const;
+#pragma endregion
 
-	// ========== Utility ==========
-
-	// ========== Delegates ==========
+#pragma region Delegates
 	FOnInventoryUpdated OnInventoryUpdated;
-
-	// ========== Replication ==========
-	virtual void GetLifetimeReplicatedProps(
-		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+#pragma endregion
 
 protected:
+#pragma region Engine Lifecycle
 	virtual void BeginPlay() override;
+#pragma endregion
 
 private:
 	friend struct FInventoryFastArray;
 
-	// ========== Server RPCs ==========
-
+#pragma region Network Bridge: Server RPC
 	UFUNCTION(Server, Reliable)
 	void Server_RequestRemoveItem(FGuid ItemInstanceID);
 
@@ -154,36 +153,40 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void Server_RequestDropItem(FGuid ItemInstanceID);
+#pragma endregion
 
-	// ========== Internal Helpers ==========
-
+#pragma region Gameplay Integration: Consumable / World Interaction
 	void HandleConsumeRequest_Internal(FName ItemDataID, int32 Count);
 	void ApplyConsumableEffect_Internal(FName ItemDataID);
+#pragma endregion
 
+#pragma region Server Authority: Mutation Helpers
 	bool AddItem_Internal(FName ItemDataID, FItemSize Size,
 		int32 StackCount = 1, int32 MaxStack = 1);
 
 	bool AddItemAt_Internal(FName ItemDataID, FItemSize Size,
 		FIntPoint Position,
 		int32 StackCount = 1, int32 MaxStack = 1);
+#pragma endregion
 
+#pragma region State Sync / Cache Rebuild
 	void HandleInventoryStateChanged();
 	void HandleReplicatedInventoryReceived();
 	void RebuildGridSlotsFromItems();
 	void RebuildAllCachesFromItems();
 	void BroadcastFullInventoryRefresh();
 	void InitializeGridStorage();
+#pragma endregion
 
-	// ========== Replicated Data ==========
-
+#pragma region Replicated Data
 	UPROPERTY(Replicated)
 	FInventoryFastArray InventoryList;
 
 	UPROPERTY(Transient)
 	TArray<FInventorySlot> GridSlots;
+#pragma endregion
 
-	// ========== Lookup Helpers ==========
-
+#pragma region 2D Grid Helpers
 	bool IsValidGridPosition(FIntPoint Position) const;
 	int32 GridPositionToIndex(FIntPoint Position) const;
 	FIntPoint IndexToGridPosition(int32 Index) const;
@@ -191,7 +194,9 @@ private:
 	bool AreSlotsFree(FIntPoint Position, FItemSize Size) const;
 	void OccupySlots(FIntPoint Position, FItemSize Size, const FGuid& ItemID);
 	void FreeSlots(const FInventoryItemInstance& Item);
+#pragma endregion
 
+#pragma region Cache / Lookup Data
 	UPROPERTY()
 	TObjectPtr<class UItemDataSubsystem> CachedItemSub;
 
@@ -203,8 +208,11 @@ private:
 	TArray<uint16> RowBitmap;
 	void RebuildItemCountCache();
 	void SetBit(int32 Col, int32 Row, bool bOccupied);
+#pragma endregion
 
+#pragma region Item Lookup Helpers
 	FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID);
 	const FInventoryItemInstance* FindItemByInstanceID(const FGuid& InstanceID) const;
 	int32 FindItemIndexByInstanceID(const FGuid& InstanceID) const;
+#pragma endregion
 };

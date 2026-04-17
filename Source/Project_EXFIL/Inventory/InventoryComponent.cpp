@@ -26,35 +26,16 @@ UInventoryComponent::UInventoryComponent()
 	InventoryList.OwnerComponent = this;
 }
 
-void UInventoryComponent::BeginPlay()
-{
-	Super::BeginPlay();
-
-	InventoryList.OwnerComponent = this;
-
-	if (UWorld* World = GetWorld())
-	{
-		if (UGameInstance* GI = World->GetGameInstance())
-		{
-			CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
-		}
-	}
-
-	InitializeGridStorage();
-	RebuildAllCachesFromItems();
-}
-
-// ========== Replication ==========
-
+#pragma region Engine Lifecycle / Replication
 void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME_CONDITION(UInventoryComponent, InventoryList, COND_OwnerOnly);
 }
+#pragma endregion
 
-// ========== Request API ==========
-
+#pragma region External Entry: Request API
 void UInventoryComponent::RequestRemoveItem(FGuid ItemInstanceID)
 {
 	if (GetOwner() && !GetOwner()->HasAuthority())
@@ -104,172 +85,9 @@ void UInventoryComponent::RequestDropItem(FGuid ItemInstanceID)
 
 	DropItem_Internal(ItemInstanceID);
 }
+#pragma endregion
 
-// ========== Server RPCs ==========
-
-void UInventoryComponent::Server_RequestRemoveItem_Implementation(FGuid ItemInstanceID)
-{
-	if (!ItemInstanceID.IsValid())
-	{
-		return;
-	}
-
-	RemoveItem_Internal(ItemInstanceID);
-}
-
-void UInventoryComponent::Server_RequestMoveItem_Implementation(
-	FGuid ItemInstanceID, FIntPoint NewPosition)
-{
-	if (!ItemInstanceID.IsValid() || NewPosition.X < 0 || NewPosition.Y < 0)
-	{
-		return;
-	}
-
-	UE_LOG(LogProject_EXFIL, Verbose,
-		TEXT("Server_RequestMoveItem: Item=%s -> (%d,%d)"),
-		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
-	MoveItem_Internal(ItemInstanceID, NewPosition);
-}
-
-void UInventoryComponent::HandleConsumeRequest_Internal(FName ItemDataID, int32 Count)
-{
-	if (ItemDataID.IsNone() || Count <= 0)
-	{
-		return;
-	}
-
-	ApplyConsumableEffect_Internal(ItemDataID);
-	ConsumeItemByID_Internal(ItemDataID, Count);
-}
-
-void UInventoryComponent::ApplyConsumableEffect_Internal(FName ItemDataID)
-{
-	if (AActor* Owner = GetOwner())
-	{
-		if (UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>())
-		{
-			if (CachedItemSub)
-			{
-				const FItemData* ItemData = CachedItemSub->GetItemData(ItemDataID);
-				if (ItemData && !ItemData->ConsumableEffect.IsNull())
-				{
-					TSubclassOf<UGameplayEffect> GEClass =
-						CachedItemSub->GetCachedEffect(ItemData->ConsumableEffect);
-					if (GEClass)
-					{
-						FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext();
-						FGameplayEffectSpecHandle Spec =
-							ASC->MakeOutgoingSpec(GEClass, 1.f, Ctx);
-						if (Spec.IsValid())
-						{
-							ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-void UInventoryComponent::Server_RequestConsumeItemByID_Implementation(FName ItemDataID, int32 Count)
-{
-	HandleConsumeRequest_Internal(ItemDataID, Count);
-}
-
-void UInventoryComponent::Server_RequestDropItem_Implementation(FGuid ItemInstanceID)
-{
-	if (!ItemInstanceID.IsValid())
-	{
-		return;
-	}
-
-	DropItem_Internal(ItemInstanceID);
-}
-
-// ========== State Change ==========
-
-void UInventoryComponent::HandleInventoryStateChanged()
-{
-	RebuildAllCachesFromItems();
-	BroadcastFullInventoryRefresh();
-}
-
-void UInventoryComponent::HandleReplicatedInventoryReceived()
-{
-	RebuildAllCachesFromItems();
-	BroadcastFullInventoryRefresh();
-}
-
-void UInventoryComponent::BroadcastFullInventoryRefresh()
-{
-	TSet<int32> AllIndices;
-	AllIndices.Reserve(GridSlots.Num());
-	for (int32 i = 0; i < GridSlots.Num(); ++i)
-	{
-		AllIndices.Add(i);
-	}
-
-	OnInventoryUpdated.Broadcast(AllIndices);
-}
-
-// ========== Initialize / Cache Rebuild ==========
-
-void UInventoryComponent::InitializeGridStorage()
-{
-	if (GridWidth <= 0)
-	{
-		GridWidth = 1;
-	}
-
-	if (GridHeight <= 0)
-	{
-		GridHeight = 1;
-	}
-
-	GridSlots.SetNum(GridWidth * GridHeight);
-	for (FInventorySlot& Slot : GridSlots)
-	{
-		Slot.Clear();
-	}
-
-	// Rebuild paths must clear every row bit even when the array size is unchanged.
-	RowBitmap.Init(0, GridHeight);
-}
-
-void UInventoryComponent::RebuildGridSlotsFromItems()
-{
-	InitializeGridStorage();
-
-	for (const FInventoryItemInstance& Item : InventoryList.Items)
-	{
-		OccupySlots(Item.RootPosition, Item.GetEffectiveSize(), Item.InstanceID);
-	}
-}
-
-void UInventoryComponent::RebuildAllCachesFromItems()
-{
-	RebuildGridSlotsFromItems();
-	RebuildItemIndexMap();
-	RebuildItemCountCache();
-}
-
-// ========== Internal Write API ==========
-
-bool UInventoryComponent::AddItem_Internal(FName ItemDataID, FItemSize Size,
-	int32 StackCount, int32 MaxStack)
-{
-	checkf(GetOwner() && GetOwner()->HasAuthority(),
-		TEXT("AddItem_Internal must run on the server."));
-
-	FIntPoint FoundPosition;
-	if (!FindFirstAvailableSlot(Size, FoundPosition))
-	{
-		return false;
-	}
-
-	return AddItemAt_Internal(ItemDataID, Size, FoundPosition, StackCount, MaxStack);
-}
-
+#pragma region Server Authority: Mutation API
 bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCount)
 {
 	checkf(GetOwner() && GetOwner()->HasAuthority(),
@@ -345,42 +163,6 @@ bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCoun
 	}
 
 	return bAddedNewStack;
-}
-
-bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
-	FIntPoint Position, int32 StackCount, int32 MaxStack)
-{
-	checkf(GetOwner() && GetOwner()->HasAuthority(),
-		TEXT("AddItemAt_Internal must run on the server."));
-
-	if (!AreSlotsFree(Position, Size))
-	{
-		UE_LOG(LogProject_EXFIL, Warning,
-			TEXT("AddItemAt_Internal: Cannot place item '%s' at (%d,%d) Size:%dx%d"),
-			*ItemDataID.ToString(), Position.X, Position.Y,
-			Size.Width, Size.Height);
-		return false;
-	}
-
-	FInventoryItemInstance& NewItem = InventoryList.Items.AddDefaulted_GetRef();
-	NewItem.InstanceID = FGuid::NewGuid();
-	NewItem.ItemDataID = ItemDataID;
-	NewItem.RootPosition = Position;
-	NewItem.ItemSize = Size;
-	NewItem.bIsRotated = false;
-	NewItem.StackCount = FMath::Clamp(StackCount, 1, MaxStack);
-	NewItem.MaxStackCount = MaxStack;
-
-	InventoryList.MarkItemDirty(NewItem);
-
-	UE_LOG(LogProject_EXFIL, Verbose,
-		TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Stack:%d/%d"),
-		*ItemDataID.ToString(), *NewItem.InstanceID.ToString(),
-		Position.X, Position.Y, Size.Width, Size.Height,
-		NewItem.StackCount, NewItem.MaxStackCount);
-
-	HandleInventoryStateChanged();
-	return true;
 }
 
 bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
@@ -637,8 +419,35 @@ bool UInventoryComponent::DropItem_Internal(FGuid ItemInstanceID)
 	return DroppedItem != nullptr;
 }
 
-// ========== Query API ==========
+int32 UInventoryComponent::DecrementStack_Internal(const FGuid& InstanceID)
+{
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("DecrementStack_Internal must run on the server."));
 
+	FInventoryItemInstance* Item = FindItemByInstanceID(InstanceID);
+	if (!Item)
+	{
+		return 0;
+	}
+
+	Item->StackCount--;
+
+	if (Item->StackCount <= 0)
+	{
+		RemoveItem_Internal(InstanceID);
+		return 0;
+	}
+
+	InventoryList.MarkItemDirty(*Item);
+	HandleInventoryStateChanged();
+
+	UE_LOG(LogProject_EXFIL, Verbose, TEXT("DecrementStack_Internal: '%s' now %d"),
+		*Item->ItemDataID.ToString(), Item->StackCount);
+	return Item->StackCount;
+}
+#pragma endregion
+
+#pragma region Read Only: Query API
 bool UInventoryComponent::CanPlaceItemAt(FIntPoint Position, FItemSize Size) const
 {
 	return AreSlotsFree(Position, Size);
@@ -721,8 +530,6 @@ bool UInventoryComponent::IsEmpty() const
 	return InventoryList.Items.Num() == 0;
 }
 
-// ========== Crafting / Equipment API ==========
-
 int32 UInventoryComponent::GetItemCountByID(FName ItemDataID) const
 {
 	int32 Total = 0;
@@ -740,6 +547,227 @@ int32 UInventoryComponent::GetItemCountByID_Cached(FName ItemDataID) const
 {
 	const int32* Count = ItemCountCache.Find(ItemDataID);
 	return Count ? *Count : 0;
+}
+#pragma endregion
+
+#pragma region Engine Lifecycle
+void UInventoryComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	InventoryList.OwnerComponent = this;
+
+	if (UWorld* World = GetWorld())
+	{
+		if (UGameInstance* GI = World->GetGameInstance())
+		{
+			CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+		}
+	}
+
+	InitializeGridStorage();
+	RebuildAllCachesFromItems();
+}
+#pragma endregion
+
+#pragma region Network Bridge: Server RPC
+void UInventoryComponent::Server_RequestRemoveItem_Implementation(FGuid ItemInstanceID)
+{
+	if (!ItemInstanceID.IsValid())
+	{
+		return;
+	}
+
+	RemoveItem_Internal(ItemInstanceID);
+}
+
+void UInventoryComponent::Server_RequestMoveItem_Implementation(
+	FGuid ItemInstanceID, FIntPoint NewPosition)
+{
+	if (!ItemInstanceID.IsValid() || NewPosition.X < 0 || NewPosition.Y < 0)
+	{
+		return;
+	}
+
+	UE_LOG(LogProject_EXFIL, Verbose,
+		TEXT("Server_RequestMoveItem: Item=%s -> (%d,%d)"),
+		*ItemInstanceID.ToString(), NewPosition.X, NewPosition.Y);
+	MoveItem_Internal(ItemInstanceID, NewPosition);
+}
+
+void UInventoryComponent::Server_RequestConsumeItemByID_Implementation(FName ItemDataID, int32 Count)
+{
+	HandleConsumeRequest_Internal(ItemDataID, Count);
+}
+
+void UInventoryComponent::Server_RequestDropItem_Implementation(FGuid ItemInstanceID)
+{
+	if (!ItemInstanceID.IsValid())
+	{
+		return;
+	}
+
+	DropItem_Internal(ItemInstanceID);
+}
+#pragma endregion
+
+#pragma region Gameplay Integration: Consumable / World Interaction
+void UInventoryComponent::HandleConsumeRequest_Internal(FName ItemDataID, int32 Count)
+{
+	if (ItemDataID.IsNone() || Count <= 0)
+	{
+		return;
+	}
+
+	ApplyConsumableEffect_Internal(ItemDataID);
+	ConsumeItemByID_Internal(ItemDataID, Count);
+}
+
+void UInventoryComponent::ApplyConsumableEffect_Internal(FName ItemDataID)
+{
+	if (AActor* Owner = GetOwner())
+	{
+		if (UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>())
+		{
+			if (CachedItemSub)
+			{
+				const FItemData* ItemData = CachedItemSub->GetItemData(ItemDataID);
+				if (ItemData && !ItemData->ConsumableEffect.IsNull())
+				{
+					TSubclassOf<UGameplayEffect> GEClass =
+						CachedItemSub->GetCachedEffect(ItemData->ConsumableEffect);
+					if (GEClass)
+					{
+						FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext();
+						FGameplayEffectSpecHandle Spec =
+							ASC->MakeOutgoingSpec(GEClass, 1.f, Ctx);
+						if (Spec.IsValid())
+						{
+							ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+						}
+					}
+				}
+			}
+		}
+	}
+}
+#pragma endregion
+
+#pragma region Server Authority: Mutation Helpers
+bool UInventoryComponent::AddItem_Internal(FName ItemDataID, FItemSize Size,
+	int32 StackCount, int32 MaxStack)
+{
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("AddItem_Internal must run on the server."));
+
+	FIntPoint FoundPosition;
+	if (!FindFirstAvailableSlot(Size, FoundPosition))
+	{
+		return false;
+	}
+
+	return AddItemAt_Internal(ItemDataID, Size, FoundPosition, StackCount, MaxStack);
+}
+
+bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
+	FIntPoint Position, int32 StackCount, int32 MaxStack)
+{
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("AddItemAt_Internal must run on the server."));
+
+	if (!AreSlotsFree(Position, Size))
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+			TEXT("AddItemAt_Internal: Cannot place item '%s' at (%d,%d) Size:%dx%d"),
+			*ItemDataID.ToString(), Position.X, Position.Y,
+			Size.Width, Size.Height);
+		return false;
+	}
+
+	FInventoryItemInstance& NewItem = InventoryList.Items.AddDefaulted_GetRef();
+	NewItem.InstanceID = FGuid::NewGuid();
+	NewItem.ItemDataID = ItemDataID;
+	NewItem.RootPosition = Position;
+	NewItem.ItemSize = Size;
+	NewItem.bIsRotated = false;
+	NewItem.StackCount = FMath::Clamp(StackCount, 1, MaxStack);
+	NewItem.MaxStackCount = MaxStack;
+
+	InventoryList.MarkItemDirty(NewItem);
+
+	UE_LOG(LogProject_EXFIL, Verbose,
+		TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Stack:%d/%d"),
+		*ItemDataID.ToString(), *NewItem.InstanceID.ToString(),
+		Position.X, Position.Y, Size.Width, Size.Height,
+		NewItem.StackCount, NewItem.MaxStackCount);
+
+	HandleInventoryStateChanged();
+	return true;
+}
+#pragma endregion
+
+#pragma region State Sync / Cache Rebuild
+void UInventoryComponent::HandleInventoryStateChanged()
+{
+	RebuildAllCachesFromItems();
+	BroadcastFullInventoryRefresh();
+}
+
+void UInventoryComponent::HandleReplicatedInventoryReceived()
+{
+	RebuildAllCachesFromItems();
+	BroadcastFullInventoryRefresh();
+}
+
+void UInventoryComponent::BroadcastFullInventoryRefresh()
+{
+	TSet<int32> AllIndices;
+	AllIndices.Reserve(GridSlots.Num());
+	for (int32 i = 0; i < GridSlots.Num(); ++i)
+	{
+		AllIndices.Add(i);
+	}
+
+	OnInventoryUpdated.Broadcast(AllIndices);
+}
+
+void UInventoryComponent::InitializeGridStorage()
+{
+	if (GridWidth <= 0)
+	{
+		GridWidth = 1;
+	}
+
+	if (GridHeight <= 0)
+	{
+		GridHeight = 1;
+	}
+
+	GridSlots.SetNum(GridWidth * GridHeight);
+	for (FInventorySlot& Slot : GridSlots)
+	{
+		Slot.Clear();
+	}
+
+	// Rebuild paths must clear every row bit even when the array size is unchanged.
+	RowBitmap.Init(0, GridHeight);
+}
+
+void UInventoryComponent::RebuildGridSlotsFromItems()
+{
+	InitializeGridStorage();
+
+	for (const FInventoryItemInstance& Item : InventoryList.Items)
+	{
+		OccupySlots(Item.RootPosition, Item.GetEffectiveSize(), Item.InstanceID);
+	}
+}
+
+void UInventoryComponent::RebuildAllCachesFromItems()
+{
+	RebuildGridSlotsFromItems();
+	RebuildItemIndexMap();
+	RebuildItemCountCache();
 }
 
 void UInventoryComponent::RebuildItemCountCache()
@@ -759,38 +787,9 @@ void UInventoryComponent::RebuildItemIndexMap()
 		ItemIndexMap.Add(InventoryList.Items[i].InstanceID, i);
 	}
 }
+#pragma endregion
 
-// ========== Stack Helper ==========
-
-int32 UInventoryComponent::DecrementStack_Internal(const FGuid& InstanceID)
-{
-	checkf(GetOwner() && GetOwner()->HasAuthority(),
-		TEXT("DecrementStack_Internal must run on the server."));
-
-	FInventoryItemInstance* Item = FindItemByInstanceID(InstanceID);
-	if (!Item)
-	{
-		return 0;
-	}
-
-	Item->StackCount--;
-
-	if (Item->StackCount <= 0)
-	{
-		RemoveItem_Internal(InstanceID);
-		return 0;
-	}
-
-	InventoryList.MarkItemDirty(*Item);
-	HandleInventoryStateChanged();
-
-	UE_LOG(LogProject_EXFIL, Verbose, TEXT("DecrementStack_Internal: '%s' now %d"),
-		*Item->ItemDataID.ToString(), Item->StackCount);
-	return Item->StackCount;
-}
-
-// ========== Helpers ==========
-
+#pragma region 2D Grid Helpers
 bool UInventoryComponent::IsValidGridPosition(FIntPoint Position) const
 {
 	return Position.X >= 0 && Position.X < GridWidth
@@ -881,9 +880,9 @@ void UInventoryComponent::SetBit(int32 Col, int32 Row, bool bOccupied)
 		RowBitmap[Row] &= ~(1 << Col);
 	}
 }
+#pragma endregion
 
-// ========== Item Lookup ==========
-
+#pragma region Item Lookup Helpers
 FInventoryItemInstance* UInventoryComponent::FindItemByInstanceID(const FGuid& InstanceID)
 {
 	if (const int32* Index = ItemIndexMap.Find(InstanceID))
@@ -919,3 +918,4 @@ int32 UInventoryComponent::FindItemIndexByInstanceID(const FGuid& InstanceID) co
 	}
 	return INDEX_NONE;
 }
+#pragma endregion
