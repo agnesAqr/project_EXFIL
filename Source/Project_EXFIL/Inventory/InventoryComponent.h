@@ -181,9 +181,6 @@ private:
 #pragma region Replicated Data
 	UPROPERTY(Replicated)
 	FInventoryFastArray InventoryList;
-
-	UPROPERTY(Transient)
-	TArray<FInventorySlot> GridSlots;
 #pragma endregion
 
 #pragma region 2D Grid Helpers
@@ -200,6 +197,8 @@ private:
 	UPROPERTY()
 	TObjectPtr<class UItemDataSubsystem> CachedItemSub;
 
+	// Derived runtime caches rebuilt from InventoryList.Items.
+	TArray<FInventorySlot> GridSlots;
 	TMap<FName, int32> ItemCountCache;
 	TMap<FGuid, int32> ItemIndexMap;
 

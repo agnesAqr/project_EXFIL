@@ -750,23 +750,13 @@ void UInventoryComponent::BroadcastFullInventoryRefresh()
 
 void UInventoryComponent::InitializeGridStorage()
 {
-	if (GridWidth <= 0)
-	{
-		GridWidth = 1;
-	}
+	const int32 SafeGridWidth = FMath::Max(1, GridWidth);
+	const int32 SafeGridHeight = FMath::Max(1, GridHeight);
 
-	if (GridHeight <= 0)
-	{
-		GridHeight = 1;
-	}
-
-	GridSlots.SetNum(GridWidth * GridHeight);
+	GridSlots.SetNum(SafeGridWidth * SafeGridHeight);
 	for (FInventorySlot& Slot : GridSlots)
-	{
 		Slot.Clear();
-	}
 
-	// Rebuild paths must clear every row bit even when the array size is unchanged.
 	RowBitmap.Init(0, GridHeight);
 }
 
