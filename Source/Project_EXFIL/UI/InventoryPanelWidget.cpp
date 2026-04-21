@@ -17,6 +17,32 @@
 #include "GAS/SurvivalViewModel.h"
 #include "Input/CommonUIInputTypes.h"
 #include "Components/ScrollBox.h"
+#include "Project_EXFIL.h"
+
+namespace InventoryPanelDebug
+{
+    static FString FormatDirtyIndices(const TSet<int32>& DirtyIndices)
+    {
+        TArray<int32> SortedIndices = DirtyIndices.Array();
+        SortedIndices.Sort();
+
+        TArray<FString> Parts;
+        const int32 PreviewCount = FMath::Min(SortedIndices.Num(), 16);
+        Parts.Reserve(PreviewCount + 1);
+
+        for (int32 i = 0; i < PreviewCount; ++i)
+        {
+            Parts.Add(FString::FromInt(SortedIndices[i]));
+        }
+
+        if (SortedIndices.Num() > PreviewCount)
+        {
+            Parts.Add(TEXT("..."));
+        }
+
+        return FString::Printf(TEXT("[%s]"), *FString::Join(Parts, TEXT(",")));
+    }
+}
 
 void UInventoryPanelWidget::NativeOnInitialized()
 {
@@ -58,6 +84,39 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
     }
 }
 
+void UInventoryPanelWidget::NotifyPanelShown()
+{
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryPanel] NotifyPanelShown ActiveTab=%d"),
+        WidgetSwitcher_Content ? WidgetSwitcher_Content->GetActiveWidgetIndex() : INDEX_NONE);
+
+    if (!CraftingPanel)
+    {
+        return;
+    }
+
+    const bool bCraftingTabActive =
+        WidgetSwitcher_Content && WidgetSwitcher_Content->GetActiveWidgetIndex() == 1;
+    if (bCraftingTabActive)
+    {
+        CraftingPanel->NotifyPanelShown();
+    }
+    else
+    {
+        CraftingPanel->NotifyPanelHidden();
+    }
+}
+
+void UInventoryPanelWidget::NotifyPanelHidden()
+{
+    UE_LOG(LogProject_EXFIL, Log, TEXT("[InventoryPanel] NotifyPanelHidden"));
+
+    if (CraftingPanel)
+    {
+        CraftingPanel->NotifyPanelHidden();
+    }
+}
+
 void UInventoryPanelWidget::NativeOnActivated()
 {
     Super::NativeOnActivated();
@@ -67,11 +126,13 @@ void UInventoryPanelWidget::NativeOnActivated()
     bLayoutReady = false;
     CachedCellStride = FVector2D::ZeroVector;
     CachedSquareCellSize = 0.f;
+    NotifyPanelShown();
 }
 
 void UInventoryPanelWidget::NativeOnDeactivated()
 {
     Super::NativeOnDeactivated();
+    NotifyPanelHidden();
 }
 
 bool UInventoryPanelWidget::NativeOnHandleBackAction()
@@ -199,6 +260,10 @@ void UInventoryPanelWidget::BuildGrid()
         PendingDirtyIndices.Add(i);
     }
     bHasPendingOverlayRefresh = true;
+
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryPanel] BuildGrid Grid=%dx%d InitialDirtyCount=%d"),
+        Width, Height, PendingDirtyIndices.Num());
 }
 
 bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
@@ -253,21 +318,21 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
 
 void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyIndices)
 {
-    (void)DirtyIndices;
-
-    PendingDirtyIndices.Empty();
-    if (ViewModel)
+    if (DirtyIndices.Num() == 0)
     {
-        const int32 Total = ViewModel->GetGridWidth() * ViewModel->GetGridHeight();
-        PendingDirtyIndices.Reserve(Total);
-        for (int32 i = 0; i < Total; ++i)
-        {
-            PendingDirtyIndices.Add(i);
-        }
+        return;
     }
 
+    PendingDirtyIndices.Append(DirtyIndices);
     bHasPendingOverlayRefresh = true;
-    TryFlushOverlayRefresh(true);
+
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryPanel] HandleViewModelRefreshed IncomingDirty=%d PendingDirty=%d Dirty=%s"),
+        DirtyIndices.Num(),
+        PendingDirtyIndices.Num(),
+        *InventoryPanelDebug::FormatDirtyIndices(PendingDirtyIndices));
+
+    FlushOverlayDelta();
 }
 
 void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeometry)
@@ -289,23 +354,33 @@ void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeomet
     if (bStrideChanged)
     {
         CachedCellStride = NewStride;
-        TryFlushOverlayRefresh(true);
+        UE_LOG(LogProject_EXFIL, Log,
+            TEXT("[InventoryPanel] HandleLayoutMeasured StrideChanged NewStride=(%.2f,%.2f)"),
+            NewStride.X, NewStride.Y);
+        RebuildOverlayFull();
         return;
     }
 
-    TryFlushOverlayRefresh(false);
+    FlushOverlayDelta();
 }
 
-void UInventoryPanelWidget::TryFlushOverlayRefresh(bool bForceFull)
+void UInventoryPanelWidget::FlushOverlayDelta()
 {
     if (!bLayoutReady) return;
-    if (!bForceFull && !bHasPendingOverlayRefresh) return;
+    if (!bHasPendingOverlayRefresh || PendingDirtyIndices.Num() == 0) return;
     if (!IconOverlay || !ViewModel || !GridPanel) return;
 
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
 
-    if (bForceFull)
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryPanel] FlushOverlayDelta DirtyCount=%d Dirty=%s"),
+        PendingDirtyIndices.Num(),
+        *InventoryPanelDebug::FormatDirtyIndices(PendingDirtyIndices));
+
+    IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, PendingDirtyIndices);
+
+/*
     {
         // 전체 슬롯 갱신 (stride 변경 → 모든 아이콘 좌표 재계산)
         TSet<int32> AllIndices;
@@ -322,7 +397,33 @@ void UInventoryPanelWidget::TryFlushOverlayRefresh(bool bForceFull)
         // dirty 슬롯만 갱신
         IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, PendingDirtyIndices);
     }
+*/
 
+    PendingDirtyIndices.Empty();
+    bHasPendingOverlayRefresh = false;
+}
+
+void UInventoryPanelWidget::RebuildOverlayFull()
+{
+    if (!bLayoutReady) return;
+    if (!IconOverlay || !ViewModel || !GridPanel) return;
+
+    const int32 GridW = ViewModel->GetGridWidth();
+    const int32 GridH = ViewModel->GetGridHeight();
+    const int32 Total = GridW * GridH;
+
+    TSet<int32> AllIndices;
+    AllIndices.Reserve(Total);
+    for (int32 i = 0; i < Total; ++i)
+    {
+        AllIndices.Add(i);
+    }
+
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryPanel] RebuildOverlayFull DirtyCount=%d"),
+        AllIndices.Num());
+
+    IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, AllIndices);
     PendingDirtyIndices.Empty();
     bHasPendingOverlayRefresh = false;
 }
@@ -391,6 +492,9 @@ void UInventoryPanelWidget::OnInventoryTabClicked()
         WidgetSwitcher_Content->SetActiveWidgetIndex(0);
     }
     UpdateTabStyles(0);
+    NotifyPanelHidden();
+
+    UE_LOG(LogProject_EXFIL, Log, TEXT("[InventoryPanel] SwitchedTo=Inventory"));
 }
 
 void UInventoryPanelWidget::OnCraftingTabClicked()
@@ -404,8 +508,10 @@ void UInventoryPanelWidget::OnCraftingTabClicked()
     // 크래프팅 패널 레시피 목록 갱신
     if (CraftingPanel)
     {
-        CraftingPanel->RefreshRecipeList();
+        CraftingPanel->NotifyPanelShown();
     }
+
+    UE_LOG(LogProject_EXFIL, Log, TEXT("[InventoryPanel] SwitchedTo=Crafting"));
 }
 
 void UInventoryPanelWidget::UpdateTabStyles(int32 ActiveIndex)

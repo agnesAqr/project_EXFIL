@@ -100,7 +100,9 @@ void AEXFILCharacter::BeginPlay()
             InventoryComponent->AddItemByID_Internal(FName("BodyArmor"));
             InventoryComponent->AddItemByID_Internal(FName("Painkillers"), 5);
             InventoryComponent->AddItemByID_Internal(FName("Medkit"));
-
+            // Push the starter loadout to the owning client immediately so the first
+            // inventory open reflects replicated data instead of waiting for another change.
+            ForceNetUpdate();
         }
     }
 
@@ -158,13 +160,10 @@ void AEXFILCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
                 &AEXFILCharacter::OnAimToggled);
         }
 
-        if (IA_ToggleInventory)
-        {
-            EnhancedInput->BindAction(
-                IA_ToggleInventory, ETriggerEvent::Started, this,
-                &AEXFILCharacter::OnToggleInventory);
-        }
     }
+
+    PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this,
+        &AEXFILCharacter::OnToggleInventory);
 }
 
 void AEXFILCharacter::OnInteractPressed()

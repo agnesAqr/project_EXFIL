@@ -50,9 +50,31 @@ void UEquipmentComponent::GetLifetimeReplicatedProps(
 void UEquipmentComponent::OnRep_Slots()
 {
     RebuildSlotIndexMap();
+    int32 ChangedSlotCount = 0;
 
     for (const FEquipmentSlotData& SlotData : ReplicatedSlots)
     {
+        const FEquipmentSlotData* PrevSlot = PrevReplicatedSlots.FindByPredicate(
+            [&](const FEquipmentSlotData& Candidate)
+            {
+                return Candidate.SlotType == SlotData.SlotType;
+            });
+
+        const FGuid PrevID = PrevSlot ? PrevSlot->ItemInstance.InstanceID : FGuid();
+        const FGuid CurrID = SlotData.ItemInstance.InstanceID;
+        if (PrevID == CurrID)
+        {
+            continue;
+        }
+
+        ++ChangedSlotCount;
+        UE_LOG(LogEXFIL, Log,
+            TEXT("[EquipmentRep][Client] SlotChanged Slot=%d Prev=%s Curr=%s Empty=%s"),
+            static_cast<int32>(SlotData.SlotType),
+            *PrevID.ToString(),
+            *CurrID.ToString(),
+            SlotData.IsEmpty() ? TEXT("true") : TEXT("false"));
+
         if (!SlotData.IsEmpty())
         {
             OnItemEquipped.Broadcast(SlotData.SlotType, SlotData.ItemInstance);
@@ -62,6 +84,13 @@ void UEquipmentComponent::OnRep_Slots()
             OnItemUnequipped.Broadcast(SlotData.SlotType, FInventoryItemInstance());
         }
     }
+
+    PrevReplicatedSlots = ReplicatedSlots;
+
+    UE_LOG(LogEXFIL, Log,
+        TEXT("[EquipmentRep][Client] OnRep_Slots ChangedSlotCount=%d TotalSlots=%d"),
+        ChangedSlotCount,
+        ReplicatedSlots.Num());
 }
 
 // ========== Request API ==========
@@ -86,6 +115,18 @@ void UEquipmentComponent::RequestUnequipToInventory(EEquipmentSlot Slot)
     }
 
     UnequipToInventory_Internal(Slot);
+}
+
+void UEquipmentComponent::RequestUnequipToInventoryAt(
+    EEquipmentSlot Slot, FIntPoint Position, bool bRotated)
+{
+    if (GetOwner() && !GetOwner()->HasAuthority())
+    {
+        Server_RequestUnequipToInventoryAt(Slot, Position, bRotated);
+        return;
+    }
+
+    UnequipToInventoryAt_Internal(Slot, Position, bRotated);
 }
 
 void UEquipmentComponent::RequestDropEquippedItem(EEquipmentSlot Slot)
@@ -120,6 +161,17 @@ void UEquipmentComponent::Server_RequestUnequipToInventory_Implementation(EEquip
     }
 
     UnequipToInventory_Internal(Slot);
+}
+
+void UEquipmentComponent::Server_RequestUnequipToInventoryAt_Implementation(
+    EEquipmentSlot Slot, FIntPoint Position, bool bRotated)
+{
+    if (Slot == EEquipmentSlot::None)
+    {
+        return;
+    }
+
+    UnequipToInventoryAt_Internal(Slot, Position, bRotated);
 }
 
 void UEquipmentComponent::Server_RequestDropEquippedItem_Implementation(EEquipmentSlot Slot)
@@ -186,7 +238,6 @@ bool UEquipmentComponent::EquipItem_Internal(
     SlotData->ItemInstance = ItemInstance;
     ApplyEquipmentEffect(*SlotData, ItemInstance);
 
-    OnItemEquipped.Broadcast(Slot, ItemInstance);
     return true;
 }
 
@@ -207,7 +258,6 @@ bool UEquipmentComponent::UnequipItem_Internal(EEquipmentSlot Slot)
     SlotData->EquippedItemID.Invalidate();
     SlotData->ItemInstance = FInventoryItemInstance();
 
-    OnItemUnequipped.Broadcast(Slot, Item);
     return true;
 }
 
@@ -348,6 +398,45 @@ bool UEquipmentComponent::UnequipToInventory_Internal(EEquipmentSlot Slot)
     return UnequipItem_Internal(Slot);
 }
 
+bool UEquipmentComponent::UnequipToInventoryAt_Internal(
+    EEquipmentSlot Slot, FIntPoint Position, bool bRotated)
+{
+    checkf(GetOwner() && GetOwner()->HasAuthority(),
+        TEXT("UnequipToInventoryAt_Internal must run on the server."));
+
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return false;
+    }
+
+    FInventoryItemInstance EquippedItem;
+    if (!GetEquippedItem(Slot, EquippedItem))
+    {
+        return false;
+    }
+
+    UInventoryComponent* InvComp = Owner->FindComponentByClass<UInventoryComponent>();
+    if (!InvComp)
+    {
+        return false;
+    }
+
+    if (!InvComp->AddItemByIDAt_Internal(
+            EquippedItem.ItemDataID, Position, bRotated, EquippedItem.StackCount))
+    {
+        UE_LOG(LogEXFIL, Warning,
+            TEXT("UnequipToInventoryAt_Internal: Failed to return '%s' to (%d,%d) Rotated=%s"),
+            *EquippedItem.ItemDataID.ToString(),
+            Position.X,
+            Position.Y,
+            bRotated ? TEXT("true") : TEXT("false"));
+        return false;
+    }
+
+    return UnequipItem_Internal(Slot);
+}
+
 bool UEquipmentComponent::DropEquippedItem_Internal(EEquipmentSlot Slot)
 {
     checkf(GetOwner() && GetOwner()->HasAuthority(),
@@ -364,7 +453,6 @@ bool UEquipmentComponent::DropEquippedItem_Internal(EEquipmentSlot Slot)
     RemoveEquipmentEffect(*SlotData);
     SlotData->EquippedItemID.Invalidate();
     SlotData->ItemInstance = FInventoryItemInstance();
-    OnItemUnequipped.Broadcast(Slot, FInventoryItemInstance());
 
     AActor* Owner = GetOwner();
     if (!Owner)

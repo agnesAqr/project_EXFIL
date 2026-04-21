@@ -33,6 +33,9 @@ public:
     void RequestUnequipToInventory(EEquipmentSlot Slot);
 
     UFUNCTION(BlueprintCallable, Category = "Equipment")
+    void RequestUnequipToInventoryAt(EEquipmentSlot Slot, FIntPoint Position, bool bRotated = false);
+
+    UFUNCTION(BlueprintCallable, Category = "Equipment")
     void RequestDropEquippedItem(EEquipmentSlot Slot);
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
@@ -71,6 +74,9 @@ private:
     void Server_RequestUnequipToInventory(EEquipmentSlot Slot);
 
     UFUNCTION(Server, Reliable)
+    void Server_RequestUnequipToInventoryAt(EEquipmentSlot Slot, FIntPoint Position, bool bRotated);
+
+    UFUNCTION(Server, Reliable)
     void Server_RequestDropEquippedItem(EEquipmentSlot Slot);
 
     // ========== Internal Write API ==========
@@ -79,6 +85,7 @@ private:
     bool UnequipItem_Internal(EEquipmentSlot Slot);
     bool EquipFromInventory_Internal(EEquipmentSlot Slot, FGuid ItemInstanceID);
     bool UnequipToInventory_Internal(EEquipmentSlot Slot);
+    bool UnequipToInventoryAt_Internal(EEquipmentSlot Slot, FIntPoint Position, bool bRotated);
     bool DropEquippedItem_Internal(EEquipmentSlot Slot);
 
     UPROPERTY(ReplicatedUsing = OnRep_Slots)
@@ -96,6 +103,7 @@ private:
     const FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType) const;
 
     TMap<EEquipmentSlot, int32> SlotIndexMap;
+    TArray<FEquipmentSlotData> PrevReplicatedSlots;
 
     void RebuildSlotIndexMap();
     void ApplyEquipmentEffect(FEquipmentSlotData& SlotData, const FInventoryItemInstance& Item);

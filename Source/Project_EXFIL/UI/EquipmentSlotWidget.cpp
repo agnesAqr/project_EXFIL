@@ -292,10 +292,17 @@ void UEquipmentSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry,
     }
 
     UInventoryDragDropOp* DragOp = NewObject<UInventoryDragDropOp>(this);
+    const bool bInitialRotated =
+        CachedSlotData.ItemInstance.bIsRotated &&
+        !CachedSlotData.ItemInstance.ItemSize.IsSquare();
     DragOp->DraggedItemInstanceID = CachedSlotData.ItemInstance.InstanceID;
     DragOp->ItemDataID             = CachedSlotData.ItemInstance.ItemDataID;
     DragOp->ItemSize               = CachedSlotData.ItemInstance.ItemSize;
-    DragOp->DragItemSize           = CachedSlotData.ItemInstance.ItemSize;
+    DragOp->DragItemSize           = bInitialRotated
+        ? CachedSlotData.ItemInstance.ItemSize.GetRotated()
+        : CachedSlotData.ItemInstance.ItemSize;
+    DragOp->bOriginalRotated       = bInitialRotated;
+    DragOp->bIsRotated             = bInitialRotated;
     DragOp->bFromEquipment         = true;
     DragOp->SourceEquipmentSlot    = SlotType;
     OutOperation = DragOp;

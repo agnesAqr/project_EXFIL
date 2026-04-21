@@ -89,6 +89,7 @@ void UEXFILUIManager::ShowInventory()
 	if (!InventoryPanel) return;
 
 	InventoryPanel->SetVisibility(ESlateVisibility::Visible);
+	InventoryPanel->NotifyPanelShown();
 	InventoryPanel->SetKeyboardFocus();
 	SetInputModeGameAndUI();
 	UpdateCrosshairVisibility();
@@ -98,6 +99,7 @@ void UEXFILUIManager::HideInventory()
 {
 	if (!InventoryPanel) return;
 
+	InventoryPanel->NotifyPanelHidden();
 	InventoryPanel->SetVisibility(ESlateVisibility::Collapsed);
 	SetInputModeGame();
 	UpdateCrosshairVisibility();

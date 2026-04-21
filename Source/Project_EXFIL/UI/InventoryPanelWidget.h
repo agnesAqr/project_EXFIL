@@ -46,6 +46,8 @@ public:
 
     /** CraftingPanel 접근용 (Character BeginPlay에서 Initialize 호출) */
     UCraftingPanelWidget* GetCraftingPanel() const { return CraftingPanel; }
+    void NotifyPanelShown();
+    void NotifyPanelHidden();
 
     /**
      * 내부의 StatEntry 4개를 SurvivalViewModel에 바인딩.
@@ -152,7 +154,8 @@ private:
      * 데이터 + 레이아웃 모두 준비됐을 때 실제 아이콘 갱신 실행.
      * @param bForceFull  stride 변경 등 전체 재배치가 필요한 경우 true
      */
-    void TryFlushOverlayRefresh(bool bForceFull);
+    void FlushOverlayDelta();
+    void RebuildOverlayFull();
 
     /** 누적된 dirty 슬롯 인덱스 (데이터 변경마다 Append) */
     TSet<int32> PendingDirtyIndices;

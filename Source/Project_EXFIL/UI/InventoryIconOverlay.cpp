@@ -263,14 +263,22 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
 FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometry,
     const FPointerEvent& InMouseEvent)
 {
-    const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
+    (void)InGeometry;
+
+    if (!CachedGridPanel.IsValid())
+    {
+        return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+    }
+
+    const FVector2D GridLocalPos = CachedGridPanel->GetCachedGeometry().AbsoluteToLocal(
+        InMouseEvent.GetScreenSpacePosition());
 
     // Right mouse button opens the context menu.
     if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
     {
         FGuid HitInstanceID;
         FName HitItemDataID;
-        const bool bHitItem = FindItemAtPosition(LocalPos, HitInstanceID, HitItemDataID);
+        const bool bHitItem = FindItemAtPosition(GridLocalPos, HitInstanceID, HitItemDataID);
 
         // Always close an existing menu before opening a new one.
         if (ContextMenuWidget &&
@@ -299,11 +307,11 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
     {
         FGuid HitInstanceID;
         FName HitItemDataID;
-        const bool bHit = FindItemAtPosition(LocalPos, HitInstanceID, HitItemDataID);
+        const bool bHit = FindItemAtPosition(GridLocalPos, HitInstanceID, HitItemDataID);
         if (bHit)
         {
             PendingDragInstanceID    = HitInstanceID;
-            PendingDragClickLocalPos = LocalPos;
+            PendingDragClickLocalPos = GridLocalPos;
             // TakeWidget forces the underlying Slate widget to exist before drag detection.
             return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
         }
@@ -383,6 +391,16 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
     CachedPreviewRootPos = ItemInstance.RootPosition;
     bCachedPreviewCanPlace = true;
     bHasCachedPreview = false;
+
+    UE_LOG(LogEXFIL, Log,
+        TEXT("[InventoryDrag] Begin Item=%s DataID=%s Root=(%d,%d) DragOffset=(%d,%d) Rotated=%s"),
+        *ItemInstance.InstanceID.ToString(),
+        *ItemInstance.ItemDataID.ToString(),
+        ItemInstance.RootPosition.X,
+        ItemInstance.RootPosition.Y,
+        DragOp->DragOffset.X,
+        DragOp->DragOffset.Y,
+        DragOp->bIsRotated ? TEXT("true") : TEXT("false"));
 
     OutOperation = DragOp;
     PendingDragInstanceID.Invalidate();
@@ -525,6 +543,8 @@ void UInventoryIconOverlay::UpdateDragPreview(UInventoryDragDropOp* DragOp, cons
 bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+    (void)InGeometry;
+
     UInventoryDragDropOp* DragOp = Cast<UInventoryDragDropOp>(InOperation);
     if (!DragOp) return false;
 
@@ -536,19 +556,6 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
         ParentPanel->StopDragAutoScroll();
     }
 
-    // Equipment drag: request unequip and let the server return it to the inventory.
-    if (DragOp->bFromEquipment)
-    {
-        APlayerController* PC = GetOwningPlayer();
-        APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-        UEquipmentComponent* EquipComp = Pawn
-            ? Pawn->FindComponentByClass<UEquipmentComponent>() : nullptr;
-        if (!EquipComp) return false;
-        EquipComp->RequestUnequipToInventory(DragOp->SourceEquipmentSlot);
-        return true;
-    }
-
-    // Inventory drag: compute the new root cell and forward the move request.
     if (!ParentPanel.IsValid() || !CachedGridPanel.IsValid()
         || CachedGridWidth <= 0 || CachedGridHeight <= 0)
     {
@@ -558,22 +565,56 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     const FVector2D GridLocalSize = CachedGridPanel->GetCachedGeometry().GetLocalSize();
     if (GridLocalSize.IsNearlyZero()) return false;
 
-    const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InDragDropEvent.GetScreenSpacePosition());
-    CachedDragLocalPos = LocalPos;
+    const FVector2D GridLocalPos = CachedGridPanel->GetCachedGeometry().AbsoluteToLocal(
+        InDragDropEvent.GetScreenSpacePosition());
+    CachedDragLocalPos = GridLocalPos;
     // Use the actual pointer location at drop time as the authoritative input.
     // The cached drag-over preview is only for highlight feedback.
-    const FIntPoint DroppedCell = LocalPosToGridCell(LocalPos, GridLocalSize,
+    const FIntPoint DroppedCell = LocalPosToGridCell(GridLocalPos, GridLocalSize,
         CachedGridWidth, CachedGridHeight);
     const FIntPoint NewRootPos = DroppedCell - DragOp->DragOffset;
 
     bHasCachedPreview = false;
     bCachedPreviewCanPlace = false;
 
+    if (DragOp->bFromEquipment)
+    {
+        APlayerController* PC = GetOwningPlayer();
+        APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+        UEquipmentComponent* EquipComp = Pawn
+            ? Pawn->FindComponentByClass<UEquipmentComponent>() : nullptr;
+        if (!EquipComp)
+        {
+            return false;
+        }
+
+        UE_LOG(LogEXFIL, Log,
+            TEXT("[InventoryDrag] UnequipDrop Item=%s Slot=%d To=(%d,%d) Rotated=%s"),
+            *DragOp->DraggedItemInstanceID.ToString(),
+            static_cast<int32>(DragOp->SourceEquipmentSlot),
+            NewRootPos.X,
+            NewRootPos.Y,
+            DragOp->bIsRotated ? TEXT("true") : TEXT("false"));
+
+        EquipComp->RequestUnequipToInventoryAt(
+            DragOp->SourceEquipmentSlot, NewRootPos, DragOp->bIsRotated);
+        return true;
+    }
+
     if (NewRootPos == DragOp->OriginalPosition &&
         DragOp->bIsRotated == DragOp->bOriginalRotated)
     {
         return false;
     }
+
+    UE_LOG(LogEXFIL, Log,
+        TEXT("[InventoryDrag] Drop Item=%s From=(%d,%d) To=(%d,%d) Rotated=%s"),
+        *DragOp->DraggedItemInstanceID.ToString(),
+        DragOp->OriginalPosition.X,
+        DragOp->OriginalPosition.Y,
+        NewRootPos.X,
+        NewRootPos.Y,
+        DragOp->bIsRotated ? TEXT("true") : TEXT("false"));
 
     return ParentPanel->ForwardMoveRequest(
         DragOp->DraggedItemInstanceID, NewRootPos, DragOp->bIsRotated);
@@ -582,6 +623,8 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
 bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,
     const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+    (void)InGeometry;
+
     UInventoryDragDropOp* DragOp = Cast<UInventoryDragDropOp>(InOperation);
     if (!DragOp || !ParentPanel.IsValid()
         || !CachedViewModel || !CachedGridPanel.IsValid()
@@ -590,8 +633,9 @@ bool UInventoryIconOverlay::NativeOnDragOver(const FGeometry& InGeometry,
         return false;
     }
 
-    const FVector2D LocalPos = InGeometry.AbsoluteToLocal(InDragDropEvent.GetScreenSpacePosition());
-    UpdateDragPreview(DragOp, LocalPos);
+    const FVector2D GridLocalPos = CachedGridPanel->GetCachedGeometry().AbsoluteToLocal(
+        InDragDropEvent.GetScreenSpacePosition());
+    UpdateDragPreview(DragOp, GridLocalPos);
     ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
     return true;
 }

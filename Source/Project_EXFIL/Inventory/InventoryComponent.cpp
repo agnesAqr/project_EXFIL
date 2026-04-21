@@ -10,12 +10,330 @@
 #include "World/WorldItem.h"
 #include "Project_EXFIL.h"
 
+namespace InventoryDebug
+{
+	static bool ShouldHandleReplicationCallbacks(const UInventoryComponent* Component)
+	{
+		if (!Component)
+		{
+			return false;
+		}
+
+		const AActor* Owner = Component->GetOwner();
+		return Owner && !Owner->HasAuthority();
+	}
+
+	static FString GetSideLabel(const UInventoryComponent* Component)
+	{
+		if (!Component)
+		{
+			return TEXT("Unknown");
+		}
+
+		const AActor* Owner = Component->GetOwner();
+		if (!Owner)
+		{
+			return TEXT("NoOwner");
+		}
+
+		return Owner->HasAuthority() ? TEXT("Server") : TEXT("Client");
+	}
+
+	static FString FormatDirtyIndices(const TSet<int32>& DirtyIndices)
+	{
+		TArray<int32> SortedIndices = DirtyIndices.Array();
+		SortedIndices.Sort();
+
+		TArray<FString> Parts;
+		const int32 PreviewCount = FMath::Min(SortedIndices.Num(), 16);
+		Parts.Reserve(PreviewCount + 1);
+
+		for (int32 i = 0; i < PreviewCount; ++i)
+		{
+			Parts.Add(FString::FromInt(SortedIndices[i]));
+		}
+
+		if (SortedIndices.Num() > PreviewCount)
+		{
+			Parts.Add(TEXT("..."));
+		}
+
+		return FString::Printf(TEXT("[%s]"), *FString::Join(Parts, TEXT(",")));
+	}
+
+	static FString FormatIndicesView(const TArrayView<int32>& Indices)
+	{
+		TSet<int32> UniqueIndices;
+		for (const int32 Index : Indices)
+		{
+			UniqueIndices.Add(Index);
+		}
+
+		return FormatDirtyIndices(UniqueIndices);
+	}
+
+	static FString FormatChangedItemDataIDs(const TSet<FName>& ChangedItemDataIDs)
+	{
+		TArray<FName> SortedIDs = ChangedItemDataIDs.Array();
+		SortedIDs.Sort(FNameLexicalLess());
+
+		TArray<FString> Parts;
+		const int32 PreviewCount = FMath::Min(SortedIDs.Num(), 16);
+		Parts.Reserve(PreviewCount + 1);
+
+		for (int32 i = 0; i < PreviewCount; ++i)
+		{
+			Parts.Add(SortedIDs[i].ToString());
+		}
+
+		if (SortedIDs.Num() > PreviewCount)
+		{
+			Parts.Add(TEXT("..."));
+		}
+
+		return FString::Printf(TEXT("[%s]"), *FString::Join(Parts, TEXT(",")));
+	}
+
+	static void LogPatch(UInventoryComponent* Component, const TCHAR* Phase,
+		const FInventoryItemInstance& Item, const TSet<int32>& DirtyIndices)
+	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryPatch][%s] %s Item=%s DataID=%s Root=(%d,%d) Size=%dx%d Stack=%d DirtyCount=%d Dirty=%s"),
+			*GetSideLabel(Component),
+			Phase,
+			*Item.InstanceID.ToString(),
+			*Item.ItemDataID.ToString(),
+			Item.RootPosition.X,
+			Item.RootPosition.Y,
+			Item.GetEffectiveSize().Width,
+			Item.GetEffectiveSize().Height,
+			Item.StackCount,
+			DirtyIndices.Num(),
+			*FormatDirtyIndices(DirtyIndices));
+	}
+
+	static void LogBroadcast(UInventoryComponent* Component, const TCHAR* Source,
+		const TSet<int32>& DirtyIndices)
+	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryBroadcast][%s] %s DirtyCount=%d Dirty=%s"),
+			*GetSideLabel(Component),
+			Source,
+			DirtyIndices.Num(),
+			*FormatDirtyIndices(DirtyIndices));
+	}
+
+	static void LogCacheSummary(UInventoryComponent* Component, const TCHAR* Source)
+	{
+		if (!Component)
+		{
+			return;
+		}
+
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryCache][%s] %s Items=%d Grid=%dx%d TotalCells=%d"),
+			*GetSideLabel(Component),
+			Source,
+			Component->GetAllItems().Num(),
+			Component->GridWidth,
+			Component->GridHeight,
+			Component->GridWidth * Component->GridHeight);
+	}
+
+	static void LogCountBroadcast(UInventoryComponent* Component, const TCHAR* Source,
+		const TSet<FName>& ChangedItemDataIDs)
+	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryBroadcast][%s] %s ChangedItemCount=%d IDs=%s"),
+			*GetSideLabel(Component),
+			Source,
+			ChangedItemDataIDs.Num(),
+			*FormatChangedItemDataIDs(ChangedItemDataIDs));
+	}
+}
+
+void FInventoryFastArray::PreReplicatedRemove(
+	const TArrayView<int32>& RemovedIndices, int32 /*FinalSize*/)
+{
+	if (!OwnerComponent)
+	{
+		return;
+	}
+
+	if (!InventoryDebug::ShouldHandleReplicationCallbacks(OwnerComponent))
+	{
+		return;
+	}
+
+	if (!OwnerComponent->bCachesInitialized)
+	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryRep][Client] PreReplicatedRemove skipped during initial sync Count=%d Indices=%s"),
+			RemovedIndices.Num(),
+			*InventoryDebug::FormatIndicesView(RemovedIndices));
+		return;
+	}
+
+	UE_LOG(LogProject_EXFIL, Log,
+		TEXT("[InventoryRep][Client] PreReplicatedRemove Count=%d Indices=%s"),
+		RemovedIndices.Num(),
+		*InventoryDebug::FormatIndicesView(RemovedIndices));
+
+	for (int32 ArrayIdx = RemovedIndices.Num() - 1; ArrayIdx >= 0; --ArrayIdx)
+	{
+		const int32 RemovedIndex = RemovedIndices[ArrayIdx];
+		if (!Items.IsValidIndex(RemovedIndex))
+		{
+			continue;
+		}
+
+		OwnerComponent->ApplyItemRemoved_Local(
+			Items[RemovedIndex], RemovedIndex, PendingDirtyIndices);
+		PendingChangedItemDataIDs.Add(Items[RemovedIndex].ItemDataID);
+	}
+}
+
+void FInventoryFastArray::PostReplicatedAdd(
+	const TArrayView<int32>& AddedIndices, int32 /*FinalSize*/)
+{
+	if (!OwnerComponent)
+	{
+		return;
+	}
+
+	if (!InventoryDebug::ShouldHandleReplicationCallbacks(OwnerComponent))
+	{
+		return;
+	}
+
+	if (!OwnerComponent->bCachesInitialized)
+	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryRep][Client] PostReplicatedAdd skipped during initial sync Count=%d Indices=%s"),
+			AddedIndices.Num(),
+			*InventoryDebug::FormatIndicesView(AddedIndices));
+		return;
+	}
+
+	UE_LOG(LogProject_EXFIL, Log,
+		TEXT("[InventoryRep][Client] PostReplicatedAdd Count=%d Indices=%s"),
+		AddedIndices.Num(),
+		*InventoryDebug::FormatIndicesView(AddedIndices));
+
+	for (const int32 AddedIndex : AddedIndices)
+	{
+		if (!Items.IsValidIndex(AddedIndex))
+		{
+			continue;
+		}
+
+		OwnerComponent->ApplyItemAdded_Local(
+			Items[AddedIndex], AddedIndex, PendingDirtyIndices);
+		PendingChangedItemDataIDs.Add(Items[AddedIndex].ItemDataID);
+	}
+}
+
+void FInventoryFastArray::PostReplicatedChange(
+	const TArrayView<int32>& ChangedIndices, int32 /*FinalSize*/)
+{
+	if (!OwnerComponent)
+	{
+		return;
+	}
+
+	if (!InventoryDebug::ShouldHandleReplicationCallbacks(OwnerComponent))
+	{
+		return;
+	}
+
+	if (!OwnerComponent->bCachesInitialized)
+	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryRep][Client] PostReplicatedChange skipped during initial sync Count=%d Indices=%s"),
+			ChangedIndices.Num(),
+			*InventoryDebug::FormatIndicesView(ChangedIndices));
+		return;
+	}
+
+	UE_LOG(LogProject_EXFIL, Log,
+		TEXT("[InventoryRep][Client] PostReplicatedChange Count=%d Indices=%s"),
+		ChangedIndices.Num(),
+		*InventoryDebug::FormatIndicesView(ChangedIndices));
+
+	for (const int32 ChangedIndex : ChangedIndices)
+	{
+		if (!Items.IsValidIndex(ChangedIndex))
+		{
+			continue;
+		}
+
+		const FInventoryItemInstance& Item = Items[ChangedIndex];
+		int32* ExistingIndex = OwnerComponent->ItemIndexMap.Find(Item.InstanceID);
+		if (!ExistingIndex || *ExistingIndex != ChangedIndex)
+		{
+			OwnerComponent->ItemIndexMap.FindOrAdd(Item.InstanceID) = ChangedIndex;
+		}
+
+		if (!OwnerComponent->DoesGridMatchItemFootprint(Item))
+		{
+			OwnerComponent->ApplyItemMovedByScan_Local(Item, PendingDirtyIndices);
+		}
+		else
+		{
+			OwnerComponent->CollectFootprintIndices(
+				Item.RootPosition, Item.GetEffectiveSize(), PendingDirtyIndices);
+		}
+
+		const int32 OldCount = OwnerComponent->GetItemCountByID_Cached(Item.ItemDataID);
+		OwnerComponent->RecalculateItemCountForID(Item.ItemDataID);
+		const int32 NewCount = OwnerComponent->GetItemCountByID_Cached(Item.ItemDataID);
+		if (OldCount != NewCount)
+		{
+			PendingChangedItemDataIDs.Add(Item.ItemDataID);
+		}
+	}
+}
+
 void FInventoryFastArray::PostReplicatedReceive(
 	const FFastArraySerializer::FPostReplicatedReceiveParameters& /*Parameters*/)
 {
-	if (OwnerComponent)
+	if (!OwnerComponent)
 	{
+		return;
+	}
+
+	if (!InventoryDebug::ShouldHandleReplicationCallbacks(OwnerComponent))
+	{
+		PendingDirtyIndices.Reset();
+		PendingChangedItemDataIDs.Reset();
+		return;
+	}
+
+	if (!OwnerComponent->bCachesInitialized)
+	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryRep][Client] PostReplicatedReceive -> InitialFullSync"));
 		OwnerComponent->HandleReplicatedInventoryReceived();
+		PendingDirtyIndices.Reset();
+		PendingChangedItemDataIDs.Reset();
+		return;
+	}
+
+	if (PendingDirtyIndices.Num() > 0)
+	{
+		InventoryDebug::LogBroadcast(
+			OwnerComponent, TEXT("PostReplicatedReceive(PacketFlush)"), PendingDirtyIndices);
+		OwnerComponent->OnInventoryUpdated.Broadcast(PendingDirtyIndices);
+		PendingDirtyIndices.Reset();
+	}
+	
+
+	if (PendingChangedItemDataIDs.Num() > 0)
+	{
+		InventoryDebug::LogCountBroadcast(
+			OwnerComponent, TEXT("PostReplicatedReceive(ItemCountFlush)"), PendingChangedItemDataIDs);
+		OwnerComponent->OnInventoryItemCountsChanged.Broadcast(PendingChangedItemDataIDs);
+		PendingChangedItemDataIDs.Reset();
 	}
 }
 
@@ -118,7 +436,7 @@ bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCoun
 
 	const int32 MaxStack = ItemData->MaxStackCount;
 	int32 Remaining = StackCount;
-	bool bMergedExistingStacks = false;
+	TSet<int32> Affected;
 
 	if (MaxStack > 1)
 	{
@@ -141,30 +459,64 @@ bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCoun
 			}
 
 			const int32 ToMerge = FMath::Min(Remaining, Space);
+			const int32 OldStackCount = Existing.StackCount;
 			Existing.StackCount += ToMerge;
 			Remaining -= ToMerge;
-			bMergedExistingStacks = true;
 			InventoryList.MarkItemDirty(Existing);
+			ApplyItemStackChanged_Local(Existing, OldStackCount, Affected);
 
 			UE_LOG(LogProject_EXFIL, Verbose,
 				TEXT("AddItemByID_Internal: Merged %d into existing stack of '%s' (now %d/%d)"),
 				ToMerge, *ItemDataID.ToString(), Existing.StackCount, Existing.MaxStackCount);
 		}
-
-		if (Remaining <= 0)
-		{
-			HandleInventoryStateChanged();
-			return true;
-		}
 	}
 
-	const bool bAddedNewStack = AddItem_Internal(ItemDataID, ItemData->GetItemSize(), Remaining, MaxStack);
-	if (!bAddedNewStack && bMergedExistingStacks)
+	bool bAddedNewStack = true;
+	if (Remaining > 0)
 	{
-		HandleInventoryStateChanged();
+		bAddedNewStack = AddItem_Internal(
+			ItemDataID, ItemData->GetItemSize(), Remaining, MaxStack, Affected);
 	}
 
-	return bAddedNewStack;
+	return Remaining <= 0 || bAddedNewStack;
+}
+
+bool UInventoryComponent::AddItemByIDAt_Internal(FName ItemDataID, FIntPoint Position,
+	bool bRotated, int32 StackCount)
+{
+	checkf(GetOwner() && GetOwner()->HasAuthority(),
+		TEXT("AddItemByIDAt_Internal must run on the server."));
+
+	if (ItemDataID.IsNone() || StackCount <= 0)
+	{
+		return false;
+	}
+
+	if (!CachedItemSub)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+			TEXT("AddItemByIDAt_Internal: UItemDataSubsystem not found."));
+		return false;
+	}
+
+	const FItemData* ItemData = CachedItemSub->GetItemData(ItemDataID);
+	if (!ItemData)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+			TEXT("AddItemByIDAt_Internal: ItemDataID '%s' not found."),
+			*ItemDataID.ToString());
+		return false;
+	}
+
+	TSet<int32> Affected;
+	return AddItemAt_Internal(
+		ItemDataID,
+		ItemData->GetItemSize(),
+		Position,
+		bRotated,
+		StackCount,
+		ItemData->MaxStackCount,
+		Affected);
 }
 
 bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
@@ -180,12 +532,14 @@ bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
 		return false;
 	}
 
+	TSet<int32> Affected;
+	const FInventoryItemInstance RemovedItem = InventoryList.Items[Index];
 	InventoryList.Items.RemoveAt(Index);
 	InventoryList.MarkArrayDirty();
+	ApplyItemRemoved_Local(RemovedItem, Index, Affected);
 
 	UE_LOG(LogProject_EXFIL, Verbose, TEXT("Item removed: %s"), *InstanceID.ToString());
 
-	HandleInventoryStateChanged();
 	return true;
 }
 
@@ -217,9 +571,7 @@ bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint N
 		NewEffectiveSize.Width, NewEffectiveSize.Height,
 		bNewRotated ? TEXT("true") : TEXT("false"));
 
-	FreeSlots(*FoundItem);
-
-	if (!AreSlotsFree(NewPosition, NewEffectiveSize))
+	if (!AreSlotsFreeForItem(NewPosition, NewEffectiveSize, InstanceID))
 	{
 		const bool bOutOfBounds =
 			NewPosition.X < 0 || NewPosition.Y < 0 ||
@@ -283,22 +635,14 @@ bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint N
 				}
 			}
 		}
-
-		OccupySlots(OldPosition, OldEffectiveSize, InstanceID);
-
-		UE_LOG(LogProject_EXFIL, Warning,
-			TEXT("MoveItem_Internal: Cannot move %s to (%d,%d) Size:%dx%d. Rolling back to (%d,%d)"),
-			*InstanceID.ToString(),
-			NewPosition.X, NewPosition.Y,
-			NewEffectiveSize.Width, NewEffectiveSize.Height,
-			OldPosition.X, OldPosition.Y);
 		return false;
 	}
 
-	OccupySlots(NewPosition, NewEffectiveSize, InstanceID);
 	FoundItem->RootPosition = NewPosition;
 	FoundItem->bIsRotated = bNewRotated;
 	InventoryList.MarkItemDirty(*FoundItem);
+	TSet<int32> Affected;
+	ApplyItemMoved_Local(*FoundItem, OldPosition, OldEffectiveSize, Affected);
 
 	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("Item moved: %s from (%d,%d) to (%d,%d)"),
@@ -306,7 +650,6 @@ bool UInventoryComponent::MoveItem_Internal(const FGuid& InstanceID, FIntPoint N
 		OldPosition.X, OldPosition.Y,
 		NewPosition.X, NewPosition.Y);
 
-	HandleInventoryStateChanged();
 	return true;
 }
 
@@ -329,7 +672,13 @@ bool UInventoryComponent::ConsumeItemByID_Internal(FName ItemDataID, int32 Count
 	}
 
 	int32 Remaining = Count;
-	TArray<int32> IndicesToRemove;
+	TSet<int32> Affected;
+	struct FPendingRemoval
+	{
+		FInventoryItemInstance Item;
+		int32 Index = INDEX_NONE;
+	};
+	TArray<FPendingRemoval> PendingRemovals;
 	bool bModifiedAny = false;
 
 	for (int32 i = 0; i < InventoryList.Items.Num() && Remaining > 0; ++i)
@@ -343,31 +692,32 @@ bool UInventoryComponent::ConsumeItemByID_Internal(FName ItemDataID, int32 Count
 		if (Item.StackCount <= Remaining)
 		{
 			Remaining -= Item.StackCount;
-			IndicesToRemove.Add(i);
+			FPendingRemoval PendingRemoval;
+			PendingRemoval.Item = Item;
+			PendingRemoval.Index = i;
+			PendingRemovals.Add(PendingRemoval);
 			bModifiedAny = true;
 		}
 		else
 		{
+			const int32 OldStackCount = Item.StackCount;
 			Item.StackCount -= Remaining;
 			Remaining = 0;
 			bModifiedAny = true;
 			InventoryList.MarkItemDirty(Item);
+			ApplyItemStackChanged_Local(Item, OldStackCount, Affected);
 		}
 	}
 
-	for (int32 i = IndicesToRemove.Num() - 1; i >= 0; --i)
+	for (int32 i = PendingRemovals.Num() - 1; i >= 0; --i)
 	{
-		InventoryList.Items.RemoveAt(IndicesToRemove[i]);
+		InventoryList.Items.RemoveAt(PendingRemovals[i].Index);
+		ApplyItemRemoved_Local(PendingRemovals[i].Item, PendingRemovals[i].Index, Affected);
 	}
 
-	if (IndicesToRemove.Num() > 0)
+	if (PendingRemovals.Num() > 0)
 	{
 		InventoryList.MarkArrayDirty();
-	}
-
-	if (bModifiedAny)
-	{
-		HandleInventoryStateChanged();
 	}
 
 	UE_LOG(LogProject_EXFIL, Verbose,
@@ -391,10 +741,18 @@ bool UInventoryComponent::DropItem_Internal(FGuid ItemInstanceID)
 
 	if (CurrentStack > 1)
 	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryDrop][Server] Item=%s DataID=%s Path=DecrementStack"),
+			*ItemInstanceID.ToString(),
+			*DropItemDataID.ToString());
 		DecrementStack_Internal(ItemInstanceID);
 	}
 	else
 	{
+		UE_LOG(LogProject_EXFIL, Log,
+			TEXT("[InventoryDrop][Server] Item=%s DataID=%s Path=RemoveItem"),
+			*ItemInstanceID.ToString(),
+			*DropItemDataID.ToString());
 		RemoveItem_Internal(ItemInstanceID);
 	}
 
@@ -422,6 +780,11 @@ bool UInventoryComponent::DropItem_Internal(FGuid ItemInstanceID)
 		DroppedItem->InitializeItem(DropItemDataID, 1);
 	}
 
+	UE_LOG(LogProject_EXFIL, Log,
+		TEXT("[InventoryDrop][Server] SpawnResult=%s ItemDataID=%s"),
+		DroppedItem ? TEXT("Success") : TEXT("Failed"),
+		*DropItemDataID.ToString());
+
 	return DroppedItem != nullptr;
 }
 
@@ -436,6 +799,7 @@ int32 UInventoryComponent::DecrementStack_Internal(const FGuid& InstanceID)
 		return 0;
 	}
 
+	const int32 OldStackCount = Item->StackCount;
 	Item->StackCount--;
 
 	if (Item->StackCount <= 0)
@@ -445,7 +809,8 @@ int32 UInventoryComponent::DecrementStack_Internal(const FGuid& InstanceID)
 	}
 
 	InventoryList.MarkItemDirty(*Item);
-	HandleInventoryStateChanged();
+	TSet<int32> Affected;
+	ApplyItemStackChanged_Local(*Item, OldStackCount, Affected);
 
 	UE_LOG(LogProject_EXFIL, Verbose, TEXT("DecrementStack_Internal: '%s' now %d"),
 		*Item->ItemDataID.ToString(), Item->StackCount);
@@ -457,6 +822,37 @@ int32 UInventoryComponent::DecrementStack_Internal(const FGuid& InstanceID)
 bool UInventoryComponent::CanPlaceItemAt(FIntPoint Position, FItemSize Size) const
 {
 	return AreSlotsFree(Position, Size);
+}
+
+void UInventoryComponent::EnsureReplicatedCachesReady()
+{
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		return;
+	}
+
+	if (InventoryList.Items.Num() == 0)
+	{
+		return;
+	}
+
+	bool bHasOccupiedSlot = false;
+	for (const FInventorySlot& Slot : GridSlots)
+	{
+		if (!Slot.IsEmpty())
+		{
+			bHasOccupiedSlot = true;
+			break;
+		}
+	}
+
+	const bool bIndexMapReady = (ItemIndexMap.Num() == InventoryList.Items.Num());
+	if (bHasOccupiedSlot && bIndexMapReady)
+	{
+		return;
+	}
+
+	RebuildAllCachesFromItems();
 }
 
 bool UInventoryComponent::FindFirstAvailableSlot(FItemSize Size, FIntPoint& OutPosition) const
@@ -572,7 +968,11 @@ void UInventoryComponent::BeginPlay()
 	}
 
 	InitializeGridStorage();
-	RebuildAllCachesFromItems();
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		RebuildAllCachesFromItems();
+		bCachesInitialized = true;
+	}
 }
 #pragma endregion
 
@@ -662,7 +1062,7 @@ void UInventoryComponent::ApplyConsumableEffect_Internal(FName ItemDataID)
 
 #pragma region Server Authority: Mutation Helpers
 bool UInventoryComponent::AddItem_Internal(FName ItemDataID, FItemSize Size,
-	int32 StackCount, int32 MaxStack)
+	int32 StackCount, int32 MaxStack, TSet<int32>& OutAffected)
 {
 	checkf(GetOwner() && GetOwner()->HasAuthority(),
 		TEXT("AddItem_Internal must run on the server."));
@@ -676,14 +1076,17 @@ bool UInventoryComponent::AddItem_Internal(FName ItemDataID, FItemSize Size,
 			return false;
 		}
 
-		return AddItemAt_Internal(ItemDataID, Size, FoundPosition, true, StackCount, MaxStack);
+		return AddItemAt_Internal(
+			ItemDataID, Size, FoundPosition, true, StackCount, MaxStack, OutAffected);
 	}
 
-	return AddItemAt_Internal(ItemDataID, Size, FoundPosition, false, StackCount, MaxStack);
+	return AddItemAt_Internal(
+		ItemDataID, Size, FoundPosition, false, StackCount, MaxStack, OutAffected);
 }
 
 bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
-	FIntPoint Position, bool bRotated, int32 StackCount, int32 MaxStack)
+	FIntPoint Position, bool bRotated, int32 StackCount, int32 MaxStack,
+	TSet<int32>& OutAffected)
 {
 	checkf(GetOwner() && GetOwner()->HasAuthority(),
 		TEXT("AddItemAt_Internal must run on the server."));
@@ -709,7 +1112,11 @@ bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
 	NewItem.StackCount = FMath::Clamp(StackCount, 1, MaxStack);
 	NewItem.MaxStackCount = MaxStack;
 
+	// New FastArray entries should mark the container dirty so the initial owner sync
+	// is not delayed until a later mutation touches an existing item.
+	InventoryList.MarkArrayDirty();
 	InventoryList.MarkItemDirty(NewItem);
+	ApplyItemAdded_Local(NewItem, InventoryList.Items.Num() - 1, OutAffected);
 
 	UE_LOG(LogProject_EXFIL, Verbose,
 		TEXT("Item added: '%s' ID=%s at (%d,%d) Size:%dx%d Rotated=%s Stack:%d/%d"),
@@ -718,26 +1125,24 @@ bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
 		bRotated ? TEXT("true") : TEXT("false"),
 		NewItem.StackCount, NewItem.MaxStackCount);
 
-	HandleInventoryStateChanged();
 	return true;
 }
 #pragma endregion
 
 #pragma region State Sync / Cache Rebuild
-void UInventoryComponent::HandleInventoryStateChanged()
-{
-	RebuildAllCachesFromItems();
-	BroadcastFullInventoryRefresh();
-}
-
 void UInventoryComponent::HandleReplicatedInventoryReceived()
 {
 	RebuildAllCachesFromItems();
+	InventoryDebug::LogCacheSummary(this, TEXT("HandleReplicatedInventoryReceived(AfterRebuild)"));
 	BroadcastFullInventoryRefresh();
+	bCachesInitialized = true;
 }
 
 void UInventoryComponent::BroadcastFullInventoryRefresh()
 {
+	ensureAlwaysMsgf(!bCachesInitialized,
+		TEXT("BroadcastFullInventoryRefresh called after cache initialization."));
+
 	TSet<int32> AllIndices;
 	AllIndices.Reserve(GridSlots.Num());
 	for (int32 i = 0; i < GridSlots.Num(); ++i)
@@ -745,6 +1150,7 @@ void UInventoryComponent::BroadcastFullInventoryRefresh()
 		AllIndices.Add(i);
 	}
 
+	InventoryDebug::LogBroadcast(this, TEXT("BroadcastFullInventoryRefresh"), AllIndices);
 	OnInventoryUpdated.Broadcast(AllIndices);
 }
 
@@ -757,7 +1163,193 @@ void UInventoryComponent::InitializeGridStorage()
 	for (FInventorySlot& Slot : GridSlots)
 		Slot.Clear();
 
-	RowBitmap.Init(0, GridHeight);
+	RowBitmap.Init(0, SafeGridHeight);
+}
+
+void UInventoryComponent::ApplyItemAdded_Local(const FInventoryItemInstance& Item, int32 ItemIndex,
+	TSet<int32>& OutAffected)
+{
+	OccupySlots(Item.RootPosition, Item.GetEffectiveSize(), Item.InstanceID);
+	ItemIndexMap.FindOrAdd(Item.InstanceID) = ItemIndex;
+	ItemCountCache.FindOrAdd(Item.ItemDataID) += Item.StackCount;
+	CollectFootprintIndices(Item.RootPosition, Item.GetEffectiveSize(), OutAffected);
+	InventoryDebug::LogPatch(this, TEXT("Added"), Item, OutAffected);
+}
+
+void UInventoryComponent::ApplyItemRemoved_Local(const FInventoryItemInstance& Item, int32 RemovedIndex,
+	TSet<int32>& OutAffected)
+{
+	CollectFootprintIndices(Item.RootPosition, Item.GetEffectiveSize(), OutAffected);
+	FreeSlots(Item);
+	ItemIndexMap.Remove(Item.InstanceID);
+
+	for (TPair<FGuid, int32>& Pair : ItemIndexMap)
+	{
+		if (Pair.Value > RemovedIndex)
+		{
+			--Pair.Value;
+		}
+	}
+
+	int32* CachedCount = ItemCountCache.Find(Item.ItemDataID);
+	if (CachedCount)
+	{
+		*CachedCount -= Item.StackCount;
+		if (*CachedCount <= 0)
+		{
+			ItemCountCache.Remove(Item.ItemDataID);
+		}
+	}
+
+	InventoryDebug::LogPatch(this, TEXT("Removed"), Item, OutAffected);
+}
+
+void UInventoryComponent::ApplyItemMoved_Local(const FInventoryItemInstance& NewItem, FIntPoint OldPos,
+	FItemSize OldEffSize, TSet<int32>& OutAffected)
+{
+	CollectFootprintIndices(OldPos, OldEffSize, OutAffected);
+	FreeSlotsAt(OldPos, OldEffSize);
+	OccupySlots(NewItem.RootPosition, NewItem.GetEffectiveSize(), NewItem.InstanceID);
+	CollectFootprintIndices(NewItem.RootPosition, NewItem.GetEffectiveSize(), OutAffected);
+	InventoryDebug::LogPatch(this, TEXT("Moved"), NewItem, OutAffected);
+}
+
+void UInventoryComponent::ApplyItemStackChanged_Local(const FInventoryItemInstance& NewItem,
+	int32 OldStackCount, TSet<int32>& OutAffected)
+{
+	const int32 Delta = NewItem.StackCount - OldStackCount;
+	if (Delta != 0)
+	{
+		int32& CachedCount = ItemCountCache.FindOrAdd(NewItem.ItemDataID);
+		CachedCount += Delta;
+		if (CachedCount <= 0)
+		{
+			ItemCountCache.Remove(NewItem.ItemDataID);
+		}
+	}
+
+	CollectFootprintIndices(NewItem.RootPosition, NewItem.GetEffectiveSize(), OutAffected);
+	InventoryDebug::LogPatch(this, TEXT("StackChanged"), NewItem, OutAffected);
+}
+
+void UInventoryComponent::ApplyItemMovedByScan_Local(const FInventoryItemInstance& NewItem,
+	TSet<int32>& OutAffected)
+{
+	for (int32 Index = 0; Index < GridSlots.Num(); ++Index)
+	{
+		if (GridSlots[Index].OccupyingItemID != NewItem.InstanceID)
+		{
+			continue;
+		}
+
+		GridSlots[Index].Clear();
+		OutAffected.Add(Index);
+
+		const FIntPoint Position = IndexToGridPosition(Index);
+		SetBit(Position.X, Position.Y, false);
+	}
+
+	OccupySlots(NewItem.RootPosition, NewItem.GetEffectiveSize(), NewItem.InstanceID);
+	CollectFootprintIndices(NewItem.RootPosition, NewItem.GetEffectiveSize(), OutAffected);
+	InventoryDebug::LogPatch(this, TEXT("MovedByScan"), NewItem, OutAffected);
+}
+
+bool UInventoryComponent::DoesGridMatchItemFootprint(const FInventoryItemInstance& Item) const
+{
+	const FItemSize EffectiveSize = Item.GetEffectiveSize();
+	int32 OccupiedCellCount = 0;
+
+	for (int32 Index = 0; Index < GridSlots.Num(); ++Index)
+	{
+		const bool bOccupiedByItem = (GridSlots[Index].OccupyingItemID == Item.InstanceID);
+		if (!bOccupiedByItem)
+		{
+			continue;
+		}
+
+		++OccupiedCellCount;
+
+		const FIntPoint Position = IndexToGridPosition(Index);
+		const bool bWithinExpectedFootprint =
+			Position.X >= Item.RootPosition.X &&
+			Position.Y >= Item.RootPosition.Y &&
+			Position.X < Item.RootPosition.X + EffectiveSize.Width &&
+			Position.Y < Item.RootPosition.Y + EffectiveSize.Height;
+
+		if (!bWithinExpectedFootprint)
+		{
+			return false;
+		}
+	}
+
+	for (int32 Y = Item.RootPosition.Y; Y < Item.RootPosition.Y + EffectiveSize.Height; ++Y)
+	{
+		for (int32 X = Item.RootPosition.X; X < Item.RootPosition.X + EffectiveSize.Width; ++X)
+		{
+			const FIntPoint Position(X, Y);
+			if (!IsValidGridPosition(Position))
+			{
+				return false;
+			}
+
+			const int32 Index = GridPositionToIndex(Position);
+			if (!GridSlots.IsValidIndex(Index) || GridSlots[Index].OccupyingItemID != Item.InstanceID)
+			{
+				return false;
+			}
+		}
+	}
+
+	return OccupiedCellCount == (EffectiveSize.Width * EffectiveSize.Height);
+}
+
+void UInventoryComponent::RecalculateItemCountForID(FName ItemDataID)
+{
+	int32 RecalculatedCount = 0;
+	for (const FInventoryItemInstance& Item : InventoryList.Items)
+	{
+		if (Item.ItemDataID == ItemDataID)
+		{
+			RecalculatedCount += Item.StackCount;
+		}
+	}
+
+	if (RecalculatedCount > 0)
+	{
+		ItemCountCache.FindOrAdd(ItemDataID) = RecalculatedCount;
+	}
+	else
+	{
+		ItemCountCache.Remove(ItemDataID);
+	}
+
+	UE_LOG(LogProject_EXFIL, Log,
+		TEXT("[InventoryCache][%s] RecalculateItemCountForID ItemDataID=%s Total=%d"),
+		*InventoryDebug::GetSideLabel(this),
+		*ItemDataID.ToString(),
+		RecalculatedCount);
+}
+
+void UInventoryComponent::CollectFootprintIndices(FIntPoint Position, FItemSize Size,
+	TSet<int32>& OutAffected) const
+{
+	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; ++Y)
+	{
+		for (int32 X = Position.X; X < Position.X + Size.Width; ++X)
+		{
+			const FIntPoint GridPosition(X, Y);
+			if (!IsValidGridPosition(GridPosition))
+			{
+				continue;
+			}
+
+			const int32 Index = GridPositionToIndex(GridPosition);
+			if (GridSlots.IsValidIndex(Index))
+			{
+				OutAffected.Add(Index);
+			}
+		}
+	}
 }
 
 void UInventoryComponent::RebuildGridSlotsFromItems()
@@ -833,6 +1425,37 @@ bool UInventoryComponent::AreSlotsFree(FIntPoint Position, FItemSize Size) const
 	return true;
 }
 
+bool UInventoryComponent::AreSlotsFreeForItem(FIntPoint Position, FItemSize Size,
+	const FGuid& IgnoreInstanceID) const
+{
+	if (Position.X < 0 || Position.Y < 0
+		|| Position.X + Size.Width > GridWidth
+		|| Position.Y + Size.Height > GridHeight)
+	{
+		return false;
+	}
+
+	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; ++Y)
+	{
+		for (int32 X = Position.X; X < Position.X + Size.Width; ++X)
+		{
+			const int32 Index = GridPositionToIndex(FIntPoint(X, Y));
+			if (!GridSlots.IsValidIndex(Index))
+			{
+				return false;
+			}
+
+			const FInventorySlot& Slot = GridSlots[Index];
+			if (!Slot.IsEmpty() && Slot.OccupyingItemID != IgnoreInstanceID)
+			{
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
 void UInventoryComponent::OccupySlots(FIntPoint Position, FItemSize Size, const FGuid& ItemID)
 {
 	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; Y++)
@@ -854,12 +1477,14 @@ void UInventoryComponent::OccupySlots(FIntPoint Position, FItemSize Size, const 
 
 void UInventoryComponent::FreeSlots(const FInventoryItemInstance& Item)
 {
-	const FItemSize EffectiveSize = Item.GetEffectiveSize();
-	const FIntPoint& RootPos = Item.RootPosition;
+	FreeSlotsAt(Item.RootPosition, Item.GetEffectiveSize());
+}
 
-	for (int32 Y = RootPos.Y; Y < RootPos.Y + EffectiveSize.Height; Y++)
+void UInventoryComponent::FreeSlotsAt(FIntPoint Position, FItemSize EffectiveSize)
+{
+	for (int32 Y = Position.Y; Y < Position.Y + EffectiveSize.Height; Y++)
 	{
-		for (int32 X = RootPos.X; X < RootPos.X + EffectiveSize.Width; X++)
+		for (int32 X = Position.X; X < Position.X + EffectiveSize.Width; X++)
 		{
 			const int32 Index = Y * GridWidth + X;
 			if (GridSlots.IsValidIndex(Index))

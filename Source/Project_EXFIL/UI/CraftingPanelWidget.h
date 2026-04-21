@@ -52,8 +52,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Crafting|UI")
     void RefreshRecipeList();
 
+    void NotifyPanelShown();
+    void NotifyPanelHidden();
+
 protected:
     virtual void NativeOnInitialized() override;
+    virtual void NativeDestruct() override;
 
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UScrollBox> ScrollBox_Recipes;
@@ -84,17 +88,24 @@ private:
 
     /** 레시피 위젯 초기 생성 여부 */
     bool bRecipesInitialized = false;
+    bool bRecipeDependencyIndexBuilt = false;
+    bool bPanelVisible = false;
+    bool bHasPendingRecipeRefresh = false;
+
+    TMap<FName, TSet<FName>> IngredientToRecipeIDs;
+    TSet<FName> PendingDirtyItemIDs;
+    FDelegateHandle InventoryItemCountsChangedHandle;
 
     /** 크래프팅 상태 변경 콜백 */
     UFUNCTION()
     void OnCraftingStateChanged(bool bIsCrafting, float RemainingTime);
 
-    /** 크래프팅 완료 콜백 */
-    UFUNCTION()
-    void OnCraftingCompleted(FName CompletedRecipeID);
-
     /** non-dynamic OnInventoryUpdated 콜백 → RefreshRecipeList 전달 */
-    void OnInventoryChanged(const TSet<int32>& DirtyIndices);
+    void OnInventoryItemCountsChanged(const TSet<FName>& ChangedItemDataIDs);
+
+    void BuildRecipeDependencyIndex();
+    void RefreshRecipesByItemChanges(const TSet<FName>& ChangedItemDataIDs);
+    void FlushPendingRecipeRefresh();
 
     /** 레시피 버튼 클릭 콜백 */
     void OnRecipeSelected(FName ClickedRecipeID);

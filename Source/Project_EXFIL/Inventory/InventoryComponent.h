@@ -20,6 +20,12 @@ struct PROJECT_EXFIL_API FInventoryFastArray : public FFastArraySerializer
 	TArray<FInventoryItemInstance> Items;
 
 	UInventoryComponent* OwnerComponent = nullptr;
+	TSet<int32> PendingDirtyIndices;
+	TSet<FName> PendingChangedItemDataIDs;
+
+	void PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
+	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
+	void PostReplicatedChange(const TArrayView<int32>& ChangedIndices, int32 FinalSize);
 
 	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
 	{
@@ -40,6 +46,7 @@ struct TStructOpsTypeTraits<FInventoryFastArray> : public TStructOpsTypeTraitsBa
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryUpdated, const TSet<int32>&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnInventoryItemCountsChanged, const TSet<FName>&);
 
 UCLASS(ClassGroup=(Inventory), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UInventoryComponent : public UActorComponent
@@ -86,6 +93,8 @@ public:
 
 #pragma region Server Authority: Mutation API
 	bool AddItemByID_Internal(FName ItemDataID, int32 StackCount = 1);
+	bool AddItemByIDAt_Internal(FName ItemDataID, FIntPoint Position,
+		bool bRotated = false, int32 StackCount = 1);
 
 	bool RemoveItem_Internal(const FGuid& InstanceID);
 
@@ -106,6 +115,9 @@ public:
 #pragma region Read Only: Query API
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool CanPlaceItemAt(FIntPoint Position, FItemSize Size) const;
+
+	/** Rebuild client-side lookup caches from already replicated items when UI binds late. */
+	void EnsureReplicatedCachesReady();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool FindFirstAvailableSlot(FItemSize Size, FIntPoint& OutPosition) const;
@@ -131,6 +143,7 @@ public:
 
 #pragma region Delegates
 	FOnInventoryUpdated OnInventoryUpdated;
+	FOnInventoryItemCountsChanged OnInventoryItemCountsChanged;
 #pragma endregion
 
 protected:
@@ -162,20 +175,38 @@ private:
 
 #pragma region Server Authority: Mutation Helpers
 	bool AddItem_Internal(FName ItemDataID, FItemSize Size,
-		int32 StackCount = 1, int32 MaxStack = 1);
+		int32 StackCount, int32 MaxStack,
+		TSet<int32>& OutAffected);
 
 	bool AddItemAt_Internal(FName ItemDataID, FItemSize Size,
-		FIntPoint Position, bool bRotated = false,
-		int32 StackCount = 1, int32 MaxStack = 1);
+		FIntPoint Position, bool bRotated,
+		int32 StackCount, int32 MaxStack,
+		TSet<int32>& OutAffected);
 #pragma endregion
 
 #pragma region State Sync / Cache Rebuild
-	void HandleInventoryStateChanged();
 	void HandleReplicatedInventoryReceived();
 	void RebuildGridSlotsFromItems();
 	void RebuildAllCachesFromItems();
 	void BroadcastFullInventoryRefresh();
 	void InitializeGridStorage();
+#pragma endregion
+
+#pragma region Incremental Cache Patch
+	void ApplyItemAdded_Local(const FInventoryItemInstance& Item, int32 ItemIndex,
+		TSet<int32>& OutAffected);
+	void ApplyItemRemoved_Local(const FInventoryItemInstance& Item, int32 RemovedIndex,
+		TSet<int32>& OutAffected);
+	void ApplyItemMoved_Local(const FInventoryItemInstance& NewItem, FIntPoint OldPos,
+		FItemSize OldEffSize, TSet<int32>& OutAffected);
+	void ApplyItemStackChanged_Local(const FInventoryItemInstance& NewItem, int32 OldStackCount,
+		TSet<int32>& OutAffected);
+	void ApplyItemMovedByScan_Local(const FInventoryItemInstance& NewItem,
+		TSet<int32>& OutAffected);
+	bool DoesGridMatchItemFootprint(const FInventoryItemInstance& Item) const;
+	void RecalculateItemCountForID(FName ItemDataID);
+	void CollectFootprintIndices(FIntPoint Position, FItemSize Size,
+		TSet<int32>& OutAffected) const;
 #pragma endregion
 
 #pragma region Replicated Data
@@ -189,8 +220,11 @@ private:
 	FIntPoint IndexToGridPosition(int32 Index) const;
 
 	bool AreSlotsFree(FIntPoint Position, FItemSize Size) const;
+	bool AreSlotsFreeForItem(FIntPoint Position, FItemSize Size,
+		const FGuid& IgnoreInstanceID) const;
 	void OccupySlots(FIntPoint Position, FItemSize Size, const FGuid& ItemID);
 	void FreeSlots(const FInventoryItemInstance& Item);
+	void FreeSlotsAt(FIntPoint Position, FItemSize EffectiveSize);
 #pragma endregion
 
 #pragma region Cache / Lookup Data
@@ -207,6 +241,7 @@ private:
 	TArray<uint16> RowBitmap;
 	void RebuildItemCountCache();
 	void SetBit(int32 Col, int32 Row, bool bOccupied);
+	bool bCachesInitialized = false;
 #pragma endregion
 
 #pragma region Item Lookup Helpers

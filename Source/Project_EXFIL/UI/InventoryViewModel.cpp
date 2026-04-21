@@ -5,6 +5,7 @@
 #include "Engine/GameInstance.h"
 #include "Inventory/InventoryComponent.h"
 #include "Data/ItemDataSubsystem.h"
+#include "Project_EXFIL.h"
 
 void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
 {
@@ -13,11 +14,12 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
         return;
     }
 
-    InventoryComp = InInventoryComponent;
+	InventoryComp = InInventoryComponent;
+    InInventoryComponent->EnsureReplicatedCachesReady();
 
-    // Cache the grid dimensions for the view model.
-    UE_MVVM_SET_PROPERTY_VALUE(GridWidth, InInventoryComponent->GridWidth);
-    UE_MVVM_SET_PROPERTY_VALUE(GridHeight, InInventoryComponent->GridHeight);
+	// Cache the grid dimensions for the view model.
+	UE_MVVM_SET_PROPERTY_VALUE(GridWidth, InInventoryComponent->GridWidth);
+	UE_MVVM_SET_PROPERTY_VALUE(GridHeight, InInventoryComponent->GridHeight);
 
     // Create one slot view model per grid cell.
     const int32 TotalSlots = GridWidth * GridHeight;
@@ -113,9 +115,23 @@ void UInventoryViewModel::RequestRemoveItem(FGuid ItemInstanceID)
     InventoryComp->RequestRemoveItem(ItemInstanceID);
 }
 
-void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& /*DirtyIndices*/)
+void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& DirtyIndices)
 {
-    RefreshAllSlots();
+    if (DirtyIndices.Num() == 0)
+    {
+        return;
+    }
+
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryVM] HandleInventoryUpdated DirtyCount=%d"),
+        DirtyIndices.Num());
+
+    if (UInventoryComponent* Inventory = InventoryComp.Get())
+    {
+        Inventory->EnsureReplicatedCachesReady();
+    }
+
+    RefreshDirtySlots(DirtyIndices);
 }
 
 void UInventoryViewModel::RefreshAllSlots()
@@ -126,6 +142,10 @@ void UInventoryViewModel::RefreshAllSlots()
     {
         AllIndices.Add(i);
     }
+
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryVM] RefreshAllSlots Total=%d"),
+        AllIndices.Num());
     RefreshDirtySlots(AllIndices);
 }
 
@@ -204,6 +224,10 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
             SlotVM->SetIcon(TSoftObjectPtr<UTexture2D>());
         }
     }
+
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[InventoryVM] RefreshDirtySlots DirtyCount=%d"),
+        DirtyIndices.Num());
 
     // Notify the overlay that these slots were refreshed.
     OnViewModelRefreshed.Broadcast(DirtyIndices);

@@ -48,6 +48,11 @@ void UCraftingComponent::GetLifetimeReplicatedProps(
 
 void UCraftingComponent::OnRep_CraftingState()
 {
+    UE_LOG(LogProject_EXFIL, Log,
+        TEXT("[CraftingRep][Client] OnRep_CraftingState bIsCrafting=%s RecipeID=%s"),
+        bIsCrafting ? TEXT("true") : TEXT("false"),
+        *CurrentRecipeID.ToString());
+
     if (bIsCrafting)
     {
         UItemDataSubsystem* Sub = GetItemDataSubsystem();
@@ -218,8 +223,6 @@ bool UCraftingComponent::StartCraft_Internal(FName RecipeID)
         Recipe->CraftDuration,
         false);
 
-    OnCraftingStateChanged.Broadcast(true, Recipe->CraftDuration);
-
     UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' started (%.1fs)"),
         *RecipeID.ToString(), Recipe->CraftDuration);
     return true;
@@ -249,8 +252,6 @@ void UCraftingComponent::CancelCraft_Internal()
     bIsCrafting = false;
     const FName CancelledRecipe = CurrentRecipeID;
     CurrentRecipeID = NAME_None;
-
-    OnCraftingStateChanged.Broadcast(false, 0.f);
 
     UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' canceled"),
         *CancelledRecipe.ToString());
@@ -324,7 +325,6 @@ void UCraftingComponent::OnCraftTimerComplete()
     ConsumedIngredients.Empty();
 
     OnCraftingCompleted.Broadcast(CompletedRecipe);
-    OnCraftingStateChanged.Broadcast(false, 0.f);
 
     UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' completed"),
         *CompletedRecipe.ToString());
