@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// InventoryDragPreviewWidget.h — 드래그 미리보기 위젯: 그리드 크기 반영 드래그 비주얼
 
 #pragma once
 #include "CoreMinimal.h"
@@ -11,6 +10,6 @@ class PROJECT_EXFIL_API UInventoryDragPreviewWidget : public UUserWidget
 {
     GENERATED_BODY()
 public:
-    /** CreateWidget 직후 호출 — Width×Height 크기의 드래그 프리뷰 그리드 빌드 */
+    
     void BuildPreview(int32 Width, int32 Height);
 };

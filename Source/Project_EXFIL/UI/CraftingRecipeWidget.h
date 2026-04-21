@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// CraftingRecipeWidget.h — 개별 레시피 위젯: 재료/결과 아이콘, 제작 가능 여부 표시
 
 #pragma once
 
@@ -12,43 +11,23 @@ class UButton;
 class UImage;
 class UTextBlock;
 class UInventoryComponent;
+class UItemDataSubsystem;
 
-/**
- * UCraftingRecipeWidget — 크래프팅 레시피 엔트리 위젯 (하나의 레시피)
- *
- * WBP_CraftingRecipe 레이아웃:
- *   Border_Recipe (root)
- *   └── HorizontalBox_Content
- *       ├── Image_ResultIcon    (36×36, BindWidget)
- *       ├── VerticalBox_Info (Fill 1.0)
- *       │   ├── TextBlock_RecipeName  (BindWidget)
- *       │   └── TextBlock_Ingredients (BindWidget)
- *       ├── TextBlock_CraftTime (BindWidgetOptional)
- *       └── Button_Craft        (BindWidget)
- *
- * SetRecipe() 호출 후 UI 갱신.
- * Button 클릭 → OnRecipeClicked 델리게이트 실행.
- */
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UCraftingRecipeWidget : public UUserWidget
 {
     GENERATED_BODY()
 
 public:
-    /**
-     * 레시피 데이터와 재료 보유 여부로 UI 갱신.
-     * @param InRecipeID    레시피 RowName
-     * @param InInventory   재료 보유량 조회용 인벤토리 (nullptr 허용)
-     * @param bCanCraft     현재 크래프팅 가능 여부
-     */
+    
     UFUNCTION(BlueprintCallable, Category = "Crafting|UI")
     void SetRecipe(FName InRecipeID, UInventoryComponent* InInventory, bool bCanCraft);
 
-    /** 크래프팅 중 상태로 버튼 텍스트/스타일 변경 */
+    
     UFUNCTION(BlueprintCallable, Category = "Crafting|UI")
-    void SetCraftingInProgress(bool bInProgress);
+    void SetCraftingInProgress(bool bInProgress, bool bIsCurrentRecipe);
 
-    /** 버튼 클릭 시 브로드캐스트 — UCraftingPanelWidget에서 바인딩 */
+    
     DECLARE_DELEGATE_OneParam(FOnRecipeClicked, FName);
     FOnRecipeClicked OnRecipeClicked;
 
@@ -76,10 +55,15 @@ protected:
 private:
     FName RecipeID;
     bool bCanCraftCached = false;
+    bool bIsCraftingCached = false;
+    bool bIsCurrentCraftRecipe = false;
+
+    UPROPERTY()
+    TWeakObjectPtr<UItemDataSubsystem> CachedItemSub;
 
     UFUNCTION()
     void OnButtonClicked();
 
-    /** bCanCraft에 따른 버튼 스타일 적용 */
-    void ApplyButtonStyle(bool bCanCraft, bool bInProgress);
+    
+    void RefreshVisualState();
 };

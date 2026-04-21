@@ -15,6 +15,11 @@ void UCraftingRecipeWidget::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
 
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+    }
+
     if (Button_Craft)
     {
         Button_Craft->OnClicked.AddDynamic(this, &UCraftingRecipeWidget::OnButtonClicked);
@@ -27,15 +32,7 @@ void UCraftingRecipeWidget::SetRecipe(FName InRecipeID, UInventoryComponent* InI
     RecipeID = InRecipeID;
     bCanCraftCached = bCanCraft;
 
-    UItemDataSubsystem* Sub = nullptr;
-    if (UWorld* World = GetWorld())
-    {
-        if (UGameInstance* GI = World->GetGameInstance())
-        {
-            Sub = GI->GetSubsystem<UItemDataSubsystem>();
-        }
-    }
-
+    UItemDataSubsystem* Sub = CachedItemSub.Get();
     if (!Sub)
     {
         return;
@@ -46,15 +43,11 @@ void UCraftingRecipeWidget::SetRecipe(FName InRecipeID, UInventoryComponent* InI
     {
         return;
     }
-
-    // 레시피 이름
     if (TextBlock_RecipeName)
     {
         TextBlock_RecipeName->SetText(Recipe->RecipeName);
         TextBlock_RecipeName->SetColorAndOpacity(FLinearColor(1.f, 1.f, 1.f, 0.75f));
     }
-
-    // 재료 텍스트 조립
     if (TextBlock_Ingredients)
     {
         FString IngredientsStr;
@@ -70,22 +63,16 @@ void UCraftingRecipeWidget::SetRecipe(FName InRecipeID, UInventoryComponent* InI
             }
         }
         TextBlock_Ingredients->SetText(FText::FromString(IngredientsStr));
-
-        // 단순 구현: 전체 텍스트를 bCanCraft에 따라 초록/빨강
         const FLinearColor IngColor = bCanCraft
-            ? FLinearColor(0.12f, 0.63f, 0.43f, 0.8f)  // 초록
-            : FLinearColor(0.87f, 0.18f, 0.18f, 0.8f); // 빨강
+            ? FLinearColor(0.12f, 0.63f, 0.43f, 0.8f)
+            : FLinearColor(0.87f, 0.18f, 0.18f, 0.8f);
         TextBlock_Ingredients->SetColorAndOpacity(IngColor);
     }
-
-    // 크래프팅 시간
     if (TextBlock_CraftTime)
     {
         TextBlock_CraftTime->SetText(FText::FromString(
             FString::Printf(TEXT("%.1fs"), Recipe->CraftDuration)));
     }
-
-    // 결과물 아이콘 (텍스처가 없으면 배경 색만 표시)
     if (Image_ResultIcon)
     {
         const FItemData* ResultItem = Sub->GetItemData(Recipe->ResultItemID);
@@ -98,65 +85,52 @@ void UCraftingRecipeWidget::SetRecipe(FName InRecipeID, UInventoryComponent* InI
             }
         }
     }
-
-    // 크래프팅 불가 시 전체 위젯 반투명 + 버튼 비활성화
-    if (!bCanCraft)
-    {
-        SetRenderOpacity(0.45f);
-        if (Button_Craft)
-        {
-            Button_Craft->SetIsEnabled(false);
-        }
-    }
-    else
-    {
-        SetRenderOpacity(1.f);
-        if (Button_Craft)
-        {
-            Button_Craft->SetIsEnabled(true);
-        }
-    }
-
-    ApplyButtonStyle(bCanCraft, false);
+    RefreshVisualState();
 }
 
-void UCraftingRecipeWidget::SetCraftingInProgress(bool bInProgress)
+void UCraftingRecipeWidget::SetCraftingInProgress(bool bInProgress, bool bIsCurrentRecipe)
 {
-    ApplyButtonStyle(bCanCraftCached, bInProgress);
+    bIsCraftingCached = bInProgress;
+    bIsCurrentCraftRecipe = bInProgress && bIsCurrentRecipe;
+    RefreshVisualState();
 }
 
 void UCraftingRecipeWidget::OnButtonClicked()
 {
-    // bCanCraftCached와 무관하게 클릭 자체는 허용 (CraftingPanel에서 Cancel 처리)
     OnRecipeClicked.ExecuteIfBound(RecipeID);
 }
 
-void UCraftingRecipeWidget::ApplyButtonStyle(bool bCanCraft, bool bInProgress)
+void UCraftingRecipeWidget::RefreshVisualState()
 {
     if (!Button_Craft)
     {
         return;
     }
 
-    // 버튼 내부 TextBlock 탐색
+    const bool bShowCancel = bIsCurrentCraftRecipe;
+    const bool bEnableCraft = !bIsCraftingCached && bCanCraftCached;
+    const bool bEnableButton = bShowCancel || bEnableCraft;
+    const float TargetOpacity = bEnableButton ? 1.f : 0.45f;
+
+    SetRenderOpacity(TargetOpacity);
+    Button_Craft->SetIsEnabled(bEnableButton);
+
     UTextBlock* CraftLabel = nullptr;
     if (UWidget* Child = Button_Craft->GetChildAt(0))
     {
         CraftLabel = Cast<UTextBlock>(Child);
     }
 
-    if (bInProgress)
+    if (bShowCancel)
     {
-        // Crafting in progress: Amber
         if (CraftLabel)
         {
             CraftLabel->SetText(NSLOCTEXT("Crafting", "Cancel", "CANCEL"));
             CraftLabel->SetColorAndOpacity(FLinearColor(0.94f, 0.62f, 0.15f, 0.9f));
         }
     }
-    else if (bCanCraft)
+    else if (bEnableCraft)
     {
-        // Can craft: 초록
         if (CraftLabel)
         {
             CraftLabel->SetText(NSLOCTEXT("Crafting", "Craft", "CRAFT"));
@@ -165,7 +139,6 @@ void UCraftingRecipeWidget::ApplyButtonStyle(bool bCanCraft, bool bInProgress)
     }
     else
     {
-        // Cannot craft: 비활성
         if (CraftLabel)
         {
             CraftLabel->SetText(NSLOCTEXT("Crafting", "Craft", "CRAFT"));

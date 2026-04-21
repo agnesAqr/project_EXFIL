@@ -31,13 +31,16 @@ void UEquipmentComponent::BeginPlay()
         }
     }
 
+    if (AActor* Owner = GetOwner())
+    {
+        CachedInventoryComp = Owner->FindComponentByClass<UInventoryComponent>();
+    }
+
     if (GetOwner() && GetOwner()->HasAuthority())
     {
         InitializeSlots();
     }
 }
-
-// ========== Replication ==========
 
 void UEquipmentComponent::GetLifetimeReplicatedProps(
     TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -51,16 +54,17 @@ void UEquipmentComponent::OnRep_Slots()
 {
     RebuildSlotIndexMap();
     int32 ChangedSlotCount = 0;
+    TMap<EEquipmentSlot, FGuid> PrevSlotItemIDs;
+    PrevSlotItemIDs.Reserve(PrevReplicatedSlots.Num());
+
+    for (const FEquipmentSlotData& PrevSlotData : PrevReplicatedSlots)
+    {
+        PrevSlotItemIDs.Add(PrevSlotData.SlotType, PrevSlotData.ItemInstance.InstanceID);
+    }
 
     for (const FEquipmentSlotData& SlotData : ReplicatedSlots)
     {
-        const FEquipmentSlotData* PrevSlot = PrevReplicatedSlots.FindByPredicate(
-            [&](const FEquipmentSlotData& Candidate)
-            {
-                return Candidate.SlotType == SlotData.SlotType;
-            });
-
-        const FGuid PrevID = PrevSlot ? PrevSlot->ItemInstance.InstanceID : FGuid();
+        const FGuid PrevID = PrevSlotItemIDs.FindRef(SlotData.SlotType);
         const FGuid CurrID = SlotData.ItemInstance.InstanceID;
         if (PrevID == CurrID)
         {
@@ -68,12 +72,6 @@ void UEquipmentComponent::OnRep_Slots()
         }
 
         ++ChangedSlotCount;
-        UE_LOG(LogEXFIL, Log,
-            TEXT("[EquipmentRep][Client] SlotChanged Slot=%d Prev=%s Curr=%s Empty=%s"),
-            static_cast<int32>(SlotData.SlotType),
-            *PrevID.ToString(),
-            *CurrID.ToString(),
-            SlotData.IsEmpty() ? TEXT("true") : TEXT("false"));
 
         if (!SlotData.IsEmpty())
         {
@@ -86,14 +84,7 @@ void UEquipmentComponent::OnRep_Slots()
     }
 
     PrevReplicatedSlots = ReplicatedSlots;
-
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[EquipmentRep][Client] OnRep_Slots ChangedSlotCount=%d TotalSlots=%d"),
-        ChangedSlotCount,
-        ReplicatedSlots.Num());
 }
-
-// ========== Request API ==========
 
 void UEquipmentComponent::RequestEquipFromInventory(EEquipmentSlot Slot, FGuid ItemInstanceID)
 {
@@ -140,8 +131,6 @@ void UEquipmentComponent::RequestDropEquippedItem(EEquipmentSlot Slot)
     DropEquippedItem_Internal(Slot);
 }
 
-// ========== Server RPCs ==========
-
 void UEquipmentComponent::Server_RequestEquipFromInventory_Implementation(
     EEquipmentSlot Slot, FGuid ItemInstanceID)
 {
@@ -184,8 +173,6 @@ void UEquipmentComponent::Server_RequestDropEquippedItem_Implementation(EEquipme
     DropEquippedItem_Internal(Slot);
 }
 
-// ========== Initialize ==========
-
 void UEquipmentComponent::InitializeSlots()
 {
     ReplicatedSlots.Empty();
@@ -209,8 +196,6 @@ void UEquipmentComponent::InitializeSlotMapping()
     SlotTagToCandidates.Add(FName("Eyewear"), { EEquipmentSlot::Eyewear });
     SlotTagToCandidates.Add(FName("Body"), { EEquipmentSlot::Body });
 }
-
-// ========== Internal Write API ==========
 
 bool UEquipmentComponent::EquipItem_Internal(
     EEquipmentSlot Slot, const FInventoryItemInstance& ItemInstance)
@@ -266,13 +251,7 @@ bool UEquipmentComponent::EquipFromInventory_Internal(EEquipmentSlot Slot, FGuid
     checkf(GetOwner() && GetOwner()->HasAuthority(),
         TEXT("EquipFromInventory_Internal must run on the server."));
 
-    AActor* Owner = GetOwner();
-    if (!Owner)
-    {
-        return false;
-    }
-
-    UInventoryComponent* InvComp = Owner->FindComponentByClass<UInventoryComponent>();
+    UInventoryComponent* InvComp = CachedInventoryComp.Get();
     if (!InvComp)
     {
         return false;
@@ -369,19 +348,13 @@ bool UEquipmentComponent::UnequipToInventory_Internal(EEquipmentSlot Slot)
     checkf(GetOwner() && GetOwner()->HasAuthority(),
         TEXT("UnequipToInventory_Internal must run on the server."));
 
-    AActor* Owner = GetOwner();
-    if (!Owner)
-    {
-        return false;
-    }
-
     FInventoryItemInstance EquippedItem;
     if (!GetEquippedItem(Slot, EquippedItem))
     {
         return false;
     }
 
-    UInventoryComponent* InvComp = Owner->FindComponentByClass<UInventoryComponent>();
+    UInventoryComponent* InvComp = CachedInventoryComp.Get();
     if (!InvComp)
     {
         return false;
@@ -404,19 +377,13 @@ bool UEquipmentComponent::UnequipToInventoryAt_Internal(
     checkf(GetOwner() && GetOwner()->HasAuthority(),
         TEXT("UnequipToInventoryAt_Internal must run on the server."));
 
-    AActor* Owner = GetOwner();
-    if (!Owner)
-    {
-        return false;
-    }
-
     FInventoryItemInstance EquippedItem;
     if (!GetEquippedItem(Slot, EquippedItem))
     {
         return false;
     }
 
-    UInventoryComponent* InvComp = Owner->FindComponentByClass<UInventoryComponent>();
+    UInventoryComponent* InvComp = CachedInventoryComp.Get();
     if (!InvComp)
     {
         return false;
@@ -481,8 +448,6 @@ bool UEquipmentComponent::DropEquippedItem_Internal(EEquipmentSlot Slot)
     return DroppedItem != nullptr;
 }
 
-// ========== Query API ==========
-
 bool UEquipmentComponent::GetEquippedItem(EEquipmentSlot Slot, FInventoryItemInstance& OutItem) const
 {
     const FEquipmentSlotData* SlotData = FindSlotData(Slot);
@@ -513,8 +478,6 @@ bool UEquipmentComponent::HasWeaponEquipped() const
     }
     return false;
 }
-
-// ========== Helpers ==========
 
 void UEquipmentComponent::RebuildSlotIndexMap()
 {
@@ -601,8 +564,6 @@ UAbilitySystemComponent* UEquipmentComponent::GetASC() const
     }
     return nullptr;
 }
-
-// ========== Slot Selection ==========
 
 EEquipmentSlot UEquipmentComponent::FindTargetSlot(const FName& EquipmentSlotTag) const
 {

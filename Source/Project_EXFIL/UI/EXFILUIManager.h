@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// EXFILUIManager.h — UI 소유권 루트: Viewport 직속 위젯 생성/소유, 인벤토리 토글, 입력 모드/커서 전환
 
 #pragma once
 

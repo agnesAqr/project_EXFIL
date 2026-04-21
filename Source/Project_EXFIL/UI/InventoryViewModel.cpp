@@ -17,11 +17,15 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
 	InventoryComp = InInventoryComponent;
     InInventoryComponent->EnsureReplicatedCachesReady();
 
-	// Cache the grid dimensions for the view model.
+    if (UWorld* World = InInventoryComponent->GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+        }
+    }
 	UE_MVVM_SET_PROPERTY_VALUE(GridWidth, InInventoryComponent->GridWidth);
 	UE_MVVM_SET_PROPERTY_VALUE(GridHeight, InInventoryComponent->GridHeight);
-
-    // Create one slot view model per grid cell.
     const int32 TotalSlots = GridWidth * GridHeight;
     SlotViewModels.SetNum(TotalSlots);
 
@@ -31,8 +35,6 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
         SlotVM->SetGridPosition(FIntPoint(i % GridWidth, i / GridWidth));
         SlotViewModels[i] = SlotVM;
     }
-
-    // Bind the model delegate once and mirror the initial state immediately.
     InInventoryComponent->OnInventoryUpdated.AddUObject(
         this, &UInventoryViewModel::HandleInventoryUpdated);
     RefreshAllSlots();
@@ -122,10 +124,6 @@ void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& DirtyIndices
         return;
     }
 
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryVM] HandleInventoryUpdated DirtyCount=%d"),
-        DirtyIndices.Num());
-
     if (UInventoryComponent* Inventory = InventoryComp.Get())
     {
         Inventory->EnsureReplicatedCachesReady();
@@ -142,10 +140,6 @@ void UInventoryViewModel::RefreshAllSlots()
     {
         AllIndices.Add(i);
     }
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryVM] RefreshAllSlots Total=%d"),
-        AllIndices.Num());
     RefreshDirtySlots(AllIndices);
 }
 
@@ -156,15 +150,7 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
         return;
     }
 
-    // Resolve item icons through the shared item data subsystem.
-    UItemDataSubsystem* ItemSub = nullptr;
-    if (UWorld* World = InventoryComp->GetWorld())
-    {
-        if (UGameInstance* GI = World->GetGameInstance())
-        {
-            ItemSub = GI->GetSubsystem<UItemDataSubsystem>();
-        }
-    }
+    UItemDataSubsystem* ItemSub = CachedItemSub.Get();
 
     for (int32 i : DirtyIndices)
     {
@@ -224,12 +210,6 @@ void UInventoryViewModel::RefreshDirtySlots(const TSet<int32>& DirtyIndices)
             SlotVM->SetIcon(TSoftObjectPtr<UTexture2D>());
         }
     }
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryVM] RefreshDirtySlots DirtyCount=%d"),
-        DirtyIndices.Num());
-
-    // Notify the overlay that these slots were refreshed.
     OnViewModelRefreshed.Broadcast(DirtyIndices);
 }
 

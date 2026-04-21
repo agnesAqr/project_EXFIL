@@ -9,15 +9,12 @@
 
 void UInventorySlotWidget::SetSlotViewModel(UInventorySlotViewModel* InSlotVM)
 {
-    // 기존 바인딩 해제
     if (SlotVM)
     {
         SlotVM->RemoveAllFieldValueChangedDelegates(this);
     }
 
     SlotVM = InSlotVM;
-
-    // FieldNotify 바인딩 — SlotVM 변경 시 자동 RefreshVisuals
     if (SlotVM)
     {
         auto Delegate = INotifyFieldValueChanged::FFieldValueChangedDelegate::CreateUObject(
@@ -45,7 +42,6 @@ void UInventorySlotWidget::RefreshVisuals()
 
     if (SlotBorder)
     {
-        // 기본 슬롯 배경색: 빈 슬롯 = 어두운 회색, 점유 슬롯 = 파란색
         const FLinearColor DefaultColor = bIsEmpty
             ? FLinearColor(0.1f, 0.1f, 0.1f, 0.8f)
             : FLinearColor(0.12f, 0.15f, 0.10f, 1.0f);
@@ -69,18 +65,15 @@ void UInventorySlotWidget::SetHighlight(bool bHighlighted, bool bIsValid)
     {
         if (bIsValid)
         {
-            // 배치 가능 — 초록
             SlotBorder->SetBrushColor(FLinearColor(0.0f, 0.8f, 0.0f, 0.7f));
         }
         else
         {
-            // 배치 불가 — 빨강
             SlotBorder->SetBrushColor(FLinearColor(0.8f, 0.0f, 0.0f, 0.7f));
         }
     }
     else
     {
-        // 하이라이트 해제 — RefreshVisuals로 원래 색상 복원
         RefreshVisuals();
     }
 }

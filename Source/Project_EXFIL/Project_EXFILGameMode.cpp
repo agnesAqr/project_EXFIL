@@ -4,5 +4,4 @@
 
 AProject_EXFILGameMode::AProject_EXFILGameMode()
 {
-	// stub
 }

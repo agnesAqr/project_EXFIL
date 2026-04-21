@@ -27,14 +27,11 @@
 
 AEXFILCharacter::AEXFILCharacter()
 {
-    // Replication is enabled by default on ACharacter, but keep it explicit here.
     bReplicates = true;
 
     InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
     CraftingComponent  = CreateDefaultSubobject<UCraftingComponent>(TEXT("CraftingComponent"));
     EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
-
-    // GAS: the attribute set must be created in the constructor.
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
     AbilitySystemComponent->SetIsReplicated(true);
     
@@ -51,13 +48,9 @@ UAbilitySystemComponent* AEXFILCharacter::GetAbilitySystemComponent() const
 void AEXFILCharacter::PossessedBy(AController* NewController)
 {
     Super::PossessedBy(NewController);
-
-    // Initialize server-side GAS ownership.
     if (AbilitySystemComponent)
     {
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
-
-        // Grant the fire ability on the server.
         if (GA_FireClass)
         {
             FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
@@ -69,28 +62,20 @@ void AEXFILCharacter::PossessedBy(AController* NewController)
 void AEXFILCharacter::BeginPlay()
 {
     Super::BeginPlay();
-
-    // Cache editor-authored defaults before aim mode overrides them.
     if (USpringArmComponent* SpringArm = GetCameraBoom())
     {
         DefaultArmLength = SpringArm->TargetArmLength;
         DefaultSocketOffset = SpringArm->SocketOffset;
     }
-
-    // Standalone sessions can reach BeginPlay before PossessedBy.
     if (AbilitySystemComponent && !AbilitySystemComponent->GetOwnerActor())
     {
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
-
-        // Grant the fire ability for standalone play.
         if (GA_FireClass)
         {
             FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
             AbilitySystemComponent->GiveAbility(FireSpec);
         }
     }
-
-    // Server-only starter loadout.
     if (HasAuthority())
     {
         if (InventoryComponent)
@@ -100,23 +85,16 @@ void AEXFILCharacter::BeginPlay()
             InventoryComponent->AddItemByID_Internal(FName("BodyArmor"));
             InventoryComponent->AddItemByID_Internal(FName("Painkillers"), 5);
             InventoryComponent->AddItemByID_Internal(FName("Medkit"));
-            // Push the starter loadout to the owning client immediately so the first
-            // inventory open reflects replicated data instead of waiting for another change.
             ForceNetUpdate();
         }
     }
-
-    // Client-only view model creation and UI binding.
     if (IsLocallyControlled())
     {
-        // 1. Create the inventory view model on the owning character.
         if (InventoryComponent)
         {
             InventoryViewModel = NewObject<UInventoryViewModel>(this);
             InventoryViewModel->Initialize(InventoryComponent);
         }
-
-        // 2. Let the UI manager own and bind the pawn UI.
         if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
         {
             if (UEXFILUIManager* UIManager = PC->GetUIManager())
@@ -124,13 +102,9 @@ void AEXFILCharacter::BeginPlay()
                 UIManager->BindPawnUI(InventoryViewModel, CraftingComponent, InventoryComponent);
             }
         }
-
-        // 3. Initialize the survival view model once ASC is ready.
         InitializeViewModels();
     }
 }
-
-// ========== Interaction Input ==========
 
 void AEXFILCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -176,7 +150,6 @@ void AEXFILCharacter::OnInteractPressed()
 
 AWorldItem* AEXFILCharacter::TraceForWorldItem() const
 {
-    // Return the nearest world item within interaction range.
     AWorldItem* NearestItem = nullptr;
     float NearestDist = InteractionDistance;
 
@@ -192,8 +165,6 @@ AWorldItem* AEXFILCharacter::TraceForWorldItem() const
 
     return NearestItem;
 }
-
-// ========== Pickup Server RPC ==========
 
 bool AEXFILCharacter::Server_RequestPickupItem_Validate(AWorldItem* TargetItem)
 {
@@ -211,11 +182,7 @@ void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
     {
         return;
     }
-
-    // 1. Validate the target item. Another player may have taken it already.
     if (!IsValid(TargetItem)) return;
-
-    // 2. Validate distance with a small buffer for latency compensation.
     const float Distance = FVector::Dist(GetActorLocation(), TargetItem->GetActorLocation());
     if (Distance > MaxPickupDistance)
     {
@@ -223,8 +190,6 @@ void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
             Distance, MaxPickupDistance);
         return;
     }
-
-    // 3. Try to add the item to the inventory.
     UInventoryComponent* Inventory = FindComponentByClass<UInventoryComponent>();
     if (!Inventory) return;
 
@@ -238,24 +203,16 @@ void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
             *TargetItem->GetItemDataID().ToString()));
         return;
     }
-
-    // 4. Destroy the replicated world item so every client sees it disappear.
     TargetItem->Destroy();
 }
-
-// ========== Dedicated Server: Client ASC Initialization ==========
 
 void AEXFILCharacter::OnRep_PlayerState()
 {
     Super::OnRep_PlayerState();
-
-    // Initialize ASC on the owning client.
     if (AbilitySystemComponent)
     {
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
     }
-
-    // Initialize view models on the owning client.
     if (IsLocallyControlled())
     {
         InitializeViewModels();
@@ -264,10 +221,8 @@ void AEXFILCharacter::OnRep_PlayerState()
 
 void AEXFILCharacter::InitializeViewModels()
 {
-    if (SurvivalViewModel) return; // Already initialized.
+    if (SurvivalViewModel) return;
     if (!AbilitySystemComponent) return;
-
-    // Ensure the attribute set is available before binding the view model.
     const USurvivalAttributeSet* AttrSet = AbilitySystemComponent->GetSet<USurvivalAttributeSet>();
     if (!AttrSet)
     {
@@ -277,8 +232,6 @@ void AEXFILCharacter::InitializeViewModels()
 
     SurvivalViewModel = NewObject<USurvivalViewModel>(this);
     SurvivalViewModel->InitializeWithASC(AbilitySystemComponent);
-
-    // Bind the stat widgets through the UI manager.
     if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
     {
         if (UEXFILUIManager* UIManager = PC->GetUIManager())
@@ -287,8 +240,6 @@ void AEXFILCharacter::InitializeViewModels()
         }
     }
 }
-
-// ========== Combat ==========
 
 bool AEXFILCharacter::IsInventoryUIVisible() const
 {
@@ -333,15 +284,11 @@ void AEXFILCharacter::OnAimToggled()
     if (IsInventoryUIVisible()) return;
 
     bIsAiming = !bIsAiming;
-
-    // Adjust the spring arm length and shoulder offset for aiming.
     if (USpringArmComponent* SpringArm = GetCameraBoom())
     {
         SpringArm->TargetArmLength = bIsAiming ? AimArmLength : DefaultArmLength;
         SpringArm->SocketOffset = bIsAiming ? AimSocketOffset : DefaultSocketOffset;
     }
-
-    // Adjust camera FOV for aim mode.
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
         if (APlayerCameraManager* CM = PC->PlayerCameraManager)
@@ -349,16 +296,11 @@ void AEXFILCharacter::OnAimToggled()
             CM->SetFOV(bIsAiming ? AimFOV : DefaultFOV);
         }
     }
-
-    // Aim mode snaps character yaw to the controller.
-    // Hip-fire mode restores standard orient-to-movement behavior.
     if (UCharacterMovementComponent* CMC = GetCharacterMovement())
     {
         bUseControllerRotationYaw = bIsAiming;
         CMC->bOrientRotationToMovement = !bIsAiming;
     }
-
-    // Toggle the crosshair through the UI manager.
     if (AEXFILPlayerController* AimPC = Cast<AEXFILPlayerController>(GetController()))
     {
         if (UEXFILUIManager* UIManager = AimPC->GetUIManager())
@@ -414,9 +356,6 @@ void AEXFILCharacter::Server_ConfirmHit_Implementation(
                 *SpecHandle.Data.Get(), TargetChar->GetAbilitySystemComponent());
         }
     }
-
-    // Multicast_PlayHitEffect is intentionally disabled until the effect is used again.
-    // Multicast_PlayHitEffect(HitLocation, HitNormal);
     TargetChar->Multicast_PlayHitReact();
 }
 
@@ -451,7 +390,7 @@ void AEXFILCharacter::Multicast_PlayHitReact_Implementation()
 void AEXFILCharacter::OnDeath()
 {
     if (!HasAuthority()) return;
-    if (RespawnPhase != ERespawnPhase::Alive) return; // Guard against duplicate death handling.
+    if (RespawnPhase != ERespawnPhase::Alive) return;
 
     RespawnPhase = ERespawnPhase::Dead;
     ApplyDeadState();
@@ -487,7 +426,7 @@ void AEXFILCharacter::Server_PrepareRespawn()
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::HiddenDead) return;
 
-    FVector RespawnLocation = GetActorLocation(); // Fallback to the current location.
+    FVector RespawnLocation = GetActorLocation();
     FRotator RespawnRotation = GetActorRotation();
 
     if (AGameModeBase* GM = GetWorld()->GetAuthGameMode())
@@ -681,8 +620,6 @@ void AEXFILCharacter::SnapToPendingRespawnTransform()
     }
 }
 
-// ========== Replication ==========
-
 void AEXFILCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -696,7 +633,6 @@ void AEXFILCharacter::OnRep_RespawnPhase()
     switch (RespawnPhase)
     {
     case ERespawnPhase::Dead:
-        // Apply ragdoll if a late joiner receives the dead state.
         ApplyDeadState();
         break;
 
@@ -705,13 +641,11 @@ void AEXFILCharacter::OnRep_RespawnPhase()
         break;
 
     case ERespawnPhase::Respawning:
-        // Keep respawning characters hidden for late joiners.
         ApplyRespawningState();
         SnapToPendingRespawnTransform();
         break;
 
     case ERespawnPhase::Alive:
-        // Restore the normal alive state for late joiners.
         ApplyAliveState();
         break;
     }

@@ -17,8 +17,6 @@
 void UEquipmentSlotWidget::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
-
-    // SlotLabel 자동 설정
     static const TMap<EEquipmentSlot, FText> SlotLabels =
     {
         { EEquipmentSlot::Head,    NSLOCTEXT("Equip", "Head",    "HEAD")     },
@@ -43,14 +41,10 @@ void UEquipmentSlotWidget::NativeOnInitialized()
 void UEquipmentSlotWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-
-    // ItemDataSubsystem 캐싱
     if (UGameInstance* GI = GetGameInstance())
     {
         CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
     }
-
-    // OwningPlayer → Pawn → EquipmentComponent 자동 바인딩
     APlayerController* PC = GetOwningPlayer();
     APawn* Pawn = PC ? PC->GetPawn() : nullptr;
     if (Pawn)
@@ -61,8 +55,6 @@ void UEquipmentSlotWidget::NativeConstruct()
             BoundEquipComp = EquipComp;
             EquipComp->OnItemEquipped.AddDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemEquipped);
             EquipComp->OnItemUnequipped.AddDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemUnequipped);
-
-            // 초기 상태 반영
             RefreshFromEquipmentComponent();
         }
     }
@@ -70,7 +62,6 @@ void UEquipmentSlotWidget::NativeConstruct()
 
 void UEquipmentSlotWidget::NativeDestruct()
 {
-    // 델리게이트 해제
     if (BoundEquipComp.IsValid())
     {
         BoundEquipComp->OnItemEquipped.RemoveDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemEquipped);
@@ -93,7 +84,6 @@ void UEquipmentSlotWidget::OnEquipmentItemUnequipped(EEquipmentSlot InSlot, cons
 {
     if (InSlot == SlotType)
     {
-        // 빈 슬롯으로 갱신
         FEquipmentSlotData EmptyData(SlotType);
         RefreshSlot(EmptyData);
     }
@@ -127,7 +117,6 @@ void UEquipmentSlotWidget::RefreshSlot(const FEquipmentSlotData& SlotData)
 
     if (!SlotData.IsEmpty())
     {
-        // 아이콘 텍스처 로드 및 표시
         if (Image_ItemIcon)
         {
             if (CachedItemSub)
@@ -144,7 +133,6 @@ void UEquipmentSlotWidget::RefreshSlot(const FEquipmentSlotData& SlotData)
             }
             Image_ItemIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
         }
-        // 아이템 이름 표시
         if (TextBlock_ItemName)
         {
             TextBlock_ItemName->SetText(FText::FromName(SlotData.ItemInstance.ItemDataID));
@@ -186,15 +174,12 @@ void UEquipmentSlotWidget::SetDragHighlight(bool bVisible, bool bIsValid)
     }
 }
 
-// ─── 스타일 헬퍼 ───────────────────────────────────────────────────────────────
-
 void UEquipmentSlotWidget::ApplyEmptyStyle()
 {
     if (!Border_Slot)
     {
         return;
     }
-    // Background: (0.08, 0.08, 0.08, 1.0)
     FLinearColor BgColor(0.08f, 0.08f, 0.08f, 1.0f);
     FSlateBrush Brush = Border_Slot->GetContentColorAndOpacity() == FLinearColor::White
         ? FSlateBrush()
@@ -209,7 +194,6 @@ void UEquipmentSlotWidget::ApplyEquippedStyle()
     {
         return;
     }
-    // Background: (0.05, 0.25, 0.15, 1.0)
     Border_Slot->SetBrushColor(FLinearColor(0.18f, 0.22f, 0.15f, 0.9f));
 }
 
@@ -221,22 +205,17 @@ void UEquipmentSlotWidget::ApplyDragHoverStyle(bool bIsValid)
     }
     if (bIsValid)
     {
-        // (0.08, 0.18, 0.3, 1.0)
         Border_Slot->SetBrushColor(FLinearColor(0.08f, 0.18f, 0.3f, 1.0f));
     }
     else
     {
-        // (0.25, 0.08, 0.08, 1.0)
         Border_Slot->SetBrushColor(FLinearColor(0.25f, 0.08f, 0.08f, 1.0f));
     }
 }
 
-// ─── 드래그앤드롭 ──────────────────────────────────────────────────────────────
-
 FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
                                                       const FPointerEvent& InMouseEvent)
 {
-    // 우클릭: 메뉴가 열려있으면 무조건 먼저 닫고, 아이템이 있으면 새 메뉴 열기
     if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
     {
         if (ContextMenuWidget &&
@@ -247,7 +226,6 @@ FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 
         if (!CachedSlotData.IsEmpty())
         {
-            // 지연 생성
             if (!ContextMenuWidget && ContextMenuWidgetClass)
             {
                 APlayerController* PC = GetOwningPlayer();
@@ -269,12 +247,9 @@ FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
                 ContextMenuWidget->SetMenuPosition(InMouseEvent.GetScreenSpacePosition());
             }
         }
-        // 빈 슬롯 우클릭 → 닫기만 하고 끝
 
         return FReply::Handled();
     }
-
-    // 좌클릭 → 드래그
     if (InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton) && !CachedSlotData.IsEmpty())
     {
         return FReply::Handled().DetectDrag(GetCachedWidget().ToSharedRef(), EKeys::LeftMouseButton);
@@ -317,15 +292,10 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
     {
         return false;
     }
-
-    // 장비슬롯에서 온 드래그는 여기서 처리하지 않음 (장비→장비 교환은 미지원)
     if (DragOp->bFromEquipment)
     {
         return false;
     }
-
-    // 인벤토리에서 온 드래그 → 장착 시도
-    // 1. DataTable에서 슬롯 타입 검증
     if (CachedItemSub)
     {
         const FItemData* ItemData = CachedItemSub->GetItemData(DragOp->ItemDataID);
@@ -335,13 +305,9 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
                 *DragOp->ItemDataID.ToString());
             return false;
         }
-
-        // EquipmentSlotTag → 후보 슬롯 목록으로 이 슬롯 타입 허용 여부 검사
-        // (예: "Weapon" → Weapon1, Weapon2 모두 허용)
         const FName& Tag = ItemData->EquipmentSlotTag;
         if (!Tag.IsNone())
         {
-            // 후보 슬롯 인라인 매핑 (FindTargetSlot과 동일 기준)
             TArray<EEquipmentSlot> ValidSlots;
             if      (Tag == FName("Weapon"))  ValidSlots = { EEquipmentSlot::Weapon1, EEquipmentSlot::Weapon2 };
             else if (Tag == FName("Head"))    ValidSlots = { EEquipmentSlot::Head    };
@@ -357,8 +323,6 @@ bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
             }
         }
     }
-
-    // 2. 소유 Actor의 EquipmentComponent로 복합 RPC 호출
     APlayerController* PC = GetOwningPlayer();
     APawn* Pawn = PC ? PC->GetPawn() : nullptr;
     if (!Pawn)

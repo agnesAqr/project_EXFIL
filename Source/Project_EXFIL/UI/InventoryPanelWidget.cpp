@@ -17,41 +17,11 @@
 #include "GAS/SurvivalViewModel.h"
 #include "Input/CommonUIInputTypes.h"
 #include "Components/ScrollBox.h"
-#include "Project_EXFIL.h"
-
-namespace InventoryPanelDebug
-{
-    static FString FormatDirtyIndices(const TSet<int32>& DirtyIndices)
-    {
-        TArray<int32> SortedIndices = DirtyIndices.Array();
-        SortedIndices.Sort();
-
-        TArray<FString> Parts;
-        const int32 PreviewCount = FMath::Min(SortedIndices.Num(), 16);
-        Parts.Reserve(PreviewCount + 1);
-
-        for (int32 i = 0; i < PreviewCount; ++i)
-        {
-            Parts.Add(FString::FromInt(SortedIndices[i]));
-        }
-
-        if (SortedIndices.Num() > PreviewCount)
-        {
-            Parts.Add(TEXT("..."));
-        }
-
-        return FString::Printf(TEXT("[%s]"), *FString::Join(Parts, TEXT(",")));
-    }
-}
 
 void UInventoryPanelWidget::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
-
-    // I키/ESC키 입력을 받기 위해 포커스 가능하게 설정
     SetIsFocusable(true);
-
-    // 탭 버튼 바인딩
     if (Button_InventoryTab)
     {
         Button_InventoryTab->OnClicked.AddDynamic(this, &UInventoryPanelWidget::OnInventoryTabClicked);
@@ -60,14 +30,11 @@ void UInventoryPanelWidget::NativeOnInitialized()
     {
         Button_CraftingTab->OnClicked.AddDynamic(this, &UInventoryPanelWidget::OnCraftingTabClicked);
     }
-
-    // 기본: 인벤토리 탭 활성
     UpdateTabStyles(0);
 }
 
 void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
 {
-    // 기존 델리게이트 해제
     if (ViewModel)
     {
         ViewModel->OnViewModelRefreshed.Remove(ViewModelRefreshedHandle);
@@ -86,9 +53,6 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
 
 void UInventoryPanelWidget::NotifyPanelShown()
 {
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryPanel] NotifyPanelShown ActiveTab=%d"),
-        WidgetSwitcher_Content ? WidgetSwitcher_Content->GetActiveWidgetIndex() : INDEX_NONE);
 
     if (!CraftingPanel)
     {
@@ -109,7 +73,6 @@ void UInventoryPanelWidget::NotifyPanelShown()
 
 void UInventoryPanelWidget::NotifyPanelHidden()
 {
-    UE_LOG(LogProject_EXFIL, Log, TEXT("[InventoryPanel] NotifyPanelHidden"));
 
     if (CraftingPanel)
     {
@@ -120,8 +83,6 @@ void UInventoryPanelWidget::NotifyPanelHidden()
 void UInventoryPanelWidget::NativeOnActivated()
 {
     Super::NativeOnActivated();
-
-    // 인벤토리 열 때마다 셀 크기 재계산 + 레이아웃 상태 리셋 (해상도/창 크기 변경 대응)
     bNeedsCellSquareFix = true;
     bLayoutReady = false;
     CachedCellStride = FVector2D::ZeroVector;
@@ -137,21 +98,18 @@ void UInventoryPanelWidget::NativeOnDeactivated()
 
 bool UInventoryPanelWidget::NativeOnHandleBackAction()
 {
-    // ESC는 PIE를 종료시키므로 CommonUI BackAction 비활성화
     return false;
 }
 
 FReply UInventoryPanelWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
     const FPointerEvent& InMouseEvent)
 {
-    // 패널 아무 곳이나 클릭하면 열려있는 컨텍스트 메뉴 닫기
     if (IconOverlay)
     {
         IconOverlay->CloseContextMenuIfOpen();
     }
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
-        // 빈 영역 드래그가 게임 입력으로 새지 않도록 패널이 직접 마우스를 소비한다.
         return FReply::Handled().CaptureMouse(TakeWidget());
     }
 
@@ -237,22 +195,16 @@ void UInventoryPanelWidget::BuildGrid()
             UInventorySlotViewModel* SlotVM = ViewModel->GetSlotAt(FIntPoint(X, Y));
             SlotWidget->SetParentPanel(this);
             SlotWidget->SetSlotViewModel(SlotVM);
-
-            // UniformGridPanel: Column = X, Row = Y
             UUniformGridSlot* GridSlot = GridPanel->AddChildToUniformGrid(SlotWidget, Y, X);
             GridSlot->SetHorizontalAlignment(HAlign_Fill);
             GridSlot->SetVerticalAlignment(VAlign_Fill);
             SlotWidgets.Add(SlotWidget);
         }
     }
-
-    // IconOverlay에 ParentPanel 주입 — 드롭 라우팅 및 하이라이트용
     if (IconOverlay)
     {
         IconOverlay->SetParentPanel(this);
     }
-
-    // 초기 데이터를 pending에 등록 — NativePaint에서 레이아웃 확정 후 flush
     const int32 Total = Width * Height;
     PendingDirtyIndices.Reserve(Total);
     for (int32 i = 0; i < Total; ++i)
@@ -260,10 +212,6 @@ void UInventoryPanelWidget::BuildGrid()
         PendingDirtyIndices.Add(i);
     }
     bHasPendingOverlayRefresh = true;
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryPanel] BuildGrid Grid=%dx%d InitialDirtyCount=%d"),
-        Width, Height, PendingDirtyIndices.Num());
 }
 
 bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
@@ -299,7 +247,6 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
     {
         for (int32 X = RootPos.X; X < RootPos.X + ItemSize.Width; ++X)
         {
-            // 범위 밖 좌표는 스킵 (음수이거나 그리드 초과)
             if (X < 0 || Y < 0 || X >= GridWidth || Y >= GridHeight)
             {
                 continue;
@@ -314,8 +261,6 @@ void UInventoryPanelWidget::HighlightArea(FIntPoint RootPos, FItemSize ItemSize,
     }
 }
 
-// ─── Deferred Overlay Refresh ────────────────────────────────────────────────
-
 void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyIndices)
 {
     if (DirtyIndices.Num() == 0)
@@ -326,26 +271,16 @@ void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyInd
     PendingDirtyIndices.Append(DirtyIndices);
     bHasPendingOverlayRefresh = true;
 
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryPanel] HandleViewModelRefreshed IncomingDirty=%d PendingDirty=%d Dirty=%s"),
-        DirtyIndices.Num(),
-        PendingDirtyIndices.Num(),
-        *InventoryPanelDebug::FormatDirtyIndices(PendingDirtyIndices));
-
     FlushOverlayDelta();
 }
 
 void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeometry)
 {
     if (!GridPanel || !ViewModel) return;
-
-    // layout 유효성 판정 — GridPanel의 실제 geometry가 유효한지
     const FVector2D GridSize = GridPanel->GetCachedGeometry().GetLocalSize();
     bLayoutReady = (GridSize.X > 1.f && GridSize.Y > 1.f);
 
     if (!bLayoutReady) return;
-
-    // stride 변경 감지 (창 리사이즈, 셀 정사각형 보정 후 등)
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
     const FVector2D NewStride(GridSize.X / GridW, GridSize.Y / GridH);
@@ -354,9 +289,6 @@ void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeomet
     if (bStrideChanged)
     {
         CachedCellStride = NewStride;
-        UE_LOG(LogProject_EXFIL, Log,
-            TEXT("[InventoryPanel] HandleLayoutMeasured StrideChanged NewStride=(%.2f,%.2f)"),
-            NewStride.X, NewStride.Y);
         RebuildOverlayFull();
         return;
     }
@@ -373,13 +305,7 @@ void UInventoryPanelWidget::FlushOverlayDelta()
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
 
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryPanel] FlushOverlayDelta DirtyCount=%d Dirty=%s"),
-        PendingDirtyIndices.Num(),
-        *InventoryPanelDebug::FormatDirtyIndices(PendingDirtyIndices));
-
     IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, PendingDirtyIndices);
-
 
     PendingDirtyIndices.Empty();
     bHasPendingOverlayRefresh = false;
@@ -401,10 +327,6 @@ void UInventoryPanelWidget::RebuildOverlayFull()
         AllIndices.Add(i);
     }
 
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[InventoryPanel] RebuildOverlayFull DirtyCount=%d"),
-        AllIndices.Num());
-
     IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, AllIndices);
     PendingDirtyIndices.Empty();
     bHasPendingOverlayRefresh = false;
@@ -419,9 +341,6 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
                                        OutDrawElements, LayerId, InWidgetStyle, bParentEnabled);
 
     auto* MutableThis = const_cast<UInventoryPanelWidget*>(this);
-
-    // 셀 정사각형 보정 — 레이아웃 첫 유효 시점에 1회 실행
-    // SetMinDesiredSlotHeight가 레이아웃을 무효화하므로 이번 프레임은 skip
     if (GridPanel && GridPanel->GetChildrenCount() > 0 && ViewModel)
     {
         const int32 GridWidth = FMath::Max(1, ViewModel->GetGridWidth());
@@ -435,12 +354,9 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
             MutableThis->CachedSquareCellSize = DesiredCellSize;
             MutableThis->GridPanel->SetMinDesiredSlotWidth(DesiredCellSize);
             MutableThis->GridPanel->SetMinDesiredSlotHeight(DesiredCellSize);
-            // 다음 프레임에 geometry가 확정된 후 HandleLayoutMeasured에서 처리
             return Result;
         }
     }
-
-    // geometry 확정 후 레이아웃 측정 → flush 시도
     MutableThis->HandleLayoutMeasured(AllottedGeometry);
 
     return Result;
@@ -465,8 +381,6 @@ void UInventoryPanelWidget::BindStatsToViewModel(USurvivalViewModel* InSurvivalV
     if (StatEntry_ST) StatEntry_ST->BindToViewModel(InSurvivalViewModel, FName("Stamina"));
 }
 
-// ─── 탭 전환 ──────────────────────────────────────────────────────────────────
-
 void UInventoryPanelWidget::OnInventoryTabClicked()
 {
     if (WidgetSwitcher_Content)
@@ -475,8 +389,6 @@ void UInventoryPanelWidget::OnInventoryTabClicked()
     }
     UpdateTabStyles(0);
     NotifyPanelHidden();
-
-    UE_LOG(LogProject_EXFIL, Log, TEXT("[InventoryPanel] SwitchedTo=Inventory"));
 }
 
 void UInventoryPanelWidget::OnCraftingTabClicked()
@@ -486,27 +398,17 @@ void UInventoryPanelWidget::OnCraftingTabClicked()
         WidgetSwitcher_Content->SetActiveWidgetIndex(1);
     }
     UpdateTabStyles(1);
-
-    // 크래프팅 패널 레시피 목록 갱신
     if (CraftingPanel)
     {
         CraftingPanel->NotifyPanelShown();
     }
-
-    UE_LOG(LogProject_EXFIL, Log, TEXT("[InventoryPanel] SwitchedTo=Crafting"));
 }
 
 void UInventoryPanelWidget::UpdateTabStyles(int32 ActiveIndex)
 {
-    // 활성: (1,1,1,0.8) / 비활성: (1,1,1,0.35)
-    // 버튼 스타일 변경은 WBP에서 Dynamic Material 또는 SetColorAndOpacity로 처리.
-    // C++에서는 TextBlock 색상으로 간단히 구분.
-
-    // 탭 버튼에 접근해 자식 TextBlock 색상 변경
     auto ApplyTabColor = [](UButton* Btn, FLinearColor Color)
     {
         if (!Btn) return;
-        // 버튼 첫 번째 자식 TextBlock 탐색
         if (UWidget* Child = Btn->GetChildAt(0))
         {
             if (UTextBlock* TB = Cast<UTextBlock>(Child))
@@ -522,8 +424,6 @@ void UInventoryPanelWidget::UpdateTabStyles(int32 ActiveIndex)
         ActiveIndex == 1 ? FLinearColor(1.f, 1.f, 1.f, 0.8f) : FLinearColor(1.f, 1.f, 1.f, 0.35f));
 }
 
-// ─── 드래그 자동 스크롤 ──────────────────────────────────────────────────────
-
 void UInventoryPanelWidget::UpdateDragAutoScroll(const FVector2D& ScreenSpacePosition)
 {
     if (!InventoryScrollBox) return;
@@ -531,13 +431,10 @@ void UInventoryPanelWidget::UpdateDragAutoScroll(const FVector2D& ScreenSpacePos
     const FGeometry& ScrollGeo = InventoryScrollBox->GetCachedGeometry();
     const FVector2D LocalPos = ScrollGeo.AbsoluteToLocal(ScreenSpacePosition);
     const FVector2D ScrollSize = ScrollGeo.GetLocalSize();
-
-    // 상단 가장자리
     if (LocalPos.Y < ScrollEdgeZone)
     {
         AutoScrollSpeed = -ScrollRate;
     }
-    // 하단 가장자리
     else if (LocalPos.Y > ScrollSize.Y - ScrollEdgeZone)
     {
         AutoScrollSpeed = ScrollRate;
@@ -546,14 +443,12 @@ void UInventoryPanelWidget::UpdateDragAutoScroll(const FVector2D& ScreenSpacePos
     {
         AutoScrollSpeed = 0.f;
     }
-
-    // 타이머 시작 (이미 돌고 있으면 무시)
     if (AutoScrollSpeed != 0.f && !GetWorld()->GetTimerManager().IsTimerActive(AutoScrollTimerHandle))
     {
         GetWorld()->GetTimerManager().SetTimer(
             AutoScrollTimerHandle, this,
             &UInventoryPanelWidget::TickAutoScroll,
-            0.016f, true); // ~60fps
+            0.016f, true);
     }
     else if (AutoScrollSpeed == 0.f)
     {

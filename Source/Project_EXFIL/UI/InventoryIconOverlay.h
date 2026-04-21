@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// InventoryIconOverlay.h — 인벤토리 아이콘 오버레이: 아이템 아이콘 렌더링, 드래그&드롭, 우클릭 메뉴
 
 #pragma once
 
@@ -17,51 +16,36 @@ class UUniformGridPanel;
 class UItemContextMenuWidget;
 class UInventoryDragDropOp;
 class UInventoryPanelWidget;
+class UItemDataSubsystem;
 
-/**
- * UInventoryIconOverlay — 멀티셀 아이템 아이콘 전용 오버레이 위젯
- *
- * UniformGridPanel 위에 CanvasPanel을 겹쳐 배치하여
- * 아이템 실제 크기(W×H 칸)에 맞는 아이콘 이미지를 표시한다.
- *
- * 우클릭 → 컨텍스트 메뉴 (Use / Equip / Drop)
- */
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UInventoryIconOverlay : public UUserWidget
 {
     GENERATED_BODY()
 
 public:
-    /**
-     * 변경된 슬롯(DirtyIndices)에 해당하는 루트 아이템의 아이콘만 갱신.
-     * 내부적으로 ViewModel/GridPanel/Dimensions를 캐싱하여 우클릭 HitTest에 활용.
-     * @param InViewModel   조회할 InventoryViewModel
-     * @param InGridPanel   슬롯이 배치된 UniformGridPanel
-     * @param InGridWidth   그리드 열 수
-     * @param InGridHeight  그리드 행 수
-     * @param DirtyIndices  변경된 슬롯 인덱스 (1D: Y*Width+X)
-     */
+    
     void RefreshIcons(UInventoryViewModel* InViewModel, UUniformGridPanel* InGridPanel,
                       int32 InGridWidth, int32 InGridHeight,
                       const TSet<int32>& DirtyIndices);
 
-    /** 컨텍스트 메뉴 위젯 클래스 — BP 디테일에서 할당 */
+    
     UPROPERTY(EditAnywhere, Category = "UI")
     TSubclassOf<UItemContextMenuWidget> ContextMenuWidgetClass;
 
-    /** 외부(InventoryPanelWidget 등)에서 컨텍스트 메뉴가 열려있으면 닫기 */
+    
     void CloseContextMenuIfOpen();
 
-    /** InventoryPanelWidget에서 BuildGrid 후 주입 — 드롭 라우팅에 필요 */
+    
     void SetParentPanel(UInventoryPanelWidget* InPanel);
 
-    /** Toggle the active drag item's rotation and refresh the placement preview. */
+    
     bool RotateActiveDragItem();
 
 protected:
     virtual void NativeOnInitialized() override;
 
-    /** WBP의 CanvasPanel — BindWidget으로 연결 */
+    
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UCanvasPanel> IconCanvas;
 
@@ -83,9 +67,11 @@ protected:
         UDragDropOperation* InOperation) override;
 
 private:
-    // 우클릭 HitTest용 캐시
     UPROPERTY()
     TObjectPtr<UInventoryViewModel> CachedViewModel;
+
+    UPROPERTY()
+    TWeakObjectPtr<UItemDataSubsystem> CachedItemSub;
 
     UPROPERTY()
     TWeakObjectPtr<UUniformGridPanel> CachedGridPanel;
@@ -93,30 +79,25 @@ private:
     int32 CachedGridWidth = 0;
     int32 CachedGridHeight = 0;
 
-    /** 지연 생성되는 컨텍스트 메뉴 인스턴스 */
+    
     UPROPERTY()
     TObjectPtr<UItemContextMenuWidget> ContextMenuWidget;
 
-    /** 드래그 시작 시 캐싱 — NativeOnDragDetected에서 DragOp 생성용 */
+    
     FGuid PendingDragInstanceID;
 
-    /** 클릭 지점 로컬 좌표 — DragOffset 계산용 */
+    
     FVector2D PendingDragClickLocalPos = FVector2D::ZeroVector;
 
-    /** 드롭 라우팅 및 하이라이트용 부모 패널 참조 */
+    
     UPROPERTY()
     TWeakObjectPtr<UInventoryPanelWidget> ParentPanel;
 
-    /**
-     * LocalPos(캔버스 좌표)에 해당하는 인벤토리 아이템 검색.
-     * @param OutInstanceID  찾은 아이템의 InstanceID
-     * @param OutItemDataID  찾은 아이템의 ItemDataID
-     * @return 찾으면 true
-     */
+    
     bool FindItemAtPosition(const FVector2D& LocalPos,
                             FGuid& OutInstanceID, FName& OutItemDataID) const;
 
-    /** 컨텍스트 메뉴를 지연 생성하거나 기존 것을 반환 */
+    
     UItemContextMenuWidget* GetOrCreateContextMenu();
 
     UPROPERTY()
@@ -129,16 +110,14 @@ private:
 
     void UpdateDragPreview(UInventoryDragDropOp* DragOp, const FVector2D& LocalPos);
 
-    // ========== 아이콘 위젯 캐시 (ClearChildren 제거 최적화) ==========
-
-    /** 아이템 InstanceID → 아이콘 Image 위젯 캐시 */
+    
     UPROPERTY()
     TMap<FGuid, UImage*> IconImageCache;
 
-    /** 아이템 InstanceID → 스택 카운트 TextBlock 캐시 */
+    
     UPROPERTY()
     TMap<FGuid, UTextBlock*> StackTextCache;
 
-    /** 캐시된 CellStride (geometry 변경 시 전체 재배치 판별용) */
+    
     FVector2D CachedCellStride = FVector2D::ZeroVector;
 };

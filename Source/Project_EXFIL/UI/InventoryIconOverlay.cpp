@@ -21,7 +21,11 @@
 void UInventoryIconOverlay::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
-    // The overlay must stay Visible so it can receive mouse events directly.
+
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+    }
     SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -39,7 +43,6 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
                                           int32 InGridWidth, int32 InGridHeight,
                                           const TSet<int32>& DirtyIndices)
 {
-    // Refresh caches used for hit testing and drag math.
     CachedViewModel  = InViewModel;
     CachedGridPanel  = InGridPanel;
     CachedGridWidth  = InGridWidth;
@@ -65,8 +68,6 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
     {
         return;
     }
-
-    // Rebuild every icon when the slot stride changes.
     const bool bStrideChanged = !CachedCellStride.Equals(CellStride, 0.5f);
     if (bStrideChanged)
     {
@@ -76,14 +77,7 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         StackTextCache.Empty();
     }
 
-    // Resolve cached item icons through the item data subsystem.
-    UItemDataSubsystem* ItemSub = nullptr;
-    if (UGameInstance* GI = GetGameInstance())
-    {
-        ItemSub = GI->GetSubsystem<UItemDataSubsystem>();
-    }
-
-    // Collect unique root items affected by the dirty slot set.
+    UItemDataSubsystem* ItemSub = CachedItemSub.Get();
     TSet<FGuid> DirtyRootItems;
 
     for (int32 SlotIndex : DirtyIndices)
@@ -102,14 +96,10 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         }
         else
         {
-            // Empty dirty slots are handled during the cache reconciliation pass below.
         }
     }
-
-    // Refresh each dirty root item once.
     for (const FGuid& ItemID : DirtyRootItems)
     {
-        // Resolve the root slot for the item.
         const FIntPoint RootPos = InViewModel->GetItemRootPosition(ItemID);
         if (RootPos.X < 0) continue;
 
@@ -120,8 +110,6 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
         const FVector2D IconSize(
             RootSlotVM->GetItemSizeX() * CellStride.X,
             RootSlotVM->GetItemSizeY() * CellStride.Y);
-
-        // Update the icon widget.
         const TSoftObjectPtr<UTexture2D> IconPtr = RootSlotVM->GetIcon();
         UImage** ExistingImage = IconImageCache.Find(ItemID);
 
@@ -131,7 +119,10 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
             if (IconTex)
             {
                 const bool bRotated = RootSlotVM->IsRotated();
-                const FVector2D TexSize(IconTex->GetSizeX(), IconTex->GetSizeY());
+                const FIntPoint ImportedSize = IconTex->GetImportedSize();
+                const FVector2D TexSize(
+                    ImportedSize.X > 0 ? static_cast<float>(ImportedSize.X) : static_cast<float>(IconTex->GetSizeX()),
+                    ImportedSize.Y > 0 ? static_cast<float>(ImportedSize.Y) : static_cast<float>(IconTex->GetSizeY()));
                 const float Scale = bRotated
                     ? FMath::Min(IconSize.X / TexSize.Y, IconSize.Y / TexSize.X)
                     : FMath::Min(IconSize.X / TexSize.X, IconSize.Y / TexSize.Y);
@@ -182,8 +173,6 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
             (*ExistingImage)->RemoveFromParent();
             IconImageCache.Remove(ItemID);
         }
-
-        // Update the stack count widget.
         UTextBlock** ExistingText = StackTextCache.Find(ItemID);
 
         if (RootSlotVM->GetStackCount() > 1)
@@ -226,15 +215,12 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
             StackTextCache.Remove(ItemID);
         }
     }
-
-    // Remove stale widgets that no longer map to an item in the view model.
     TArray<FGuid> StaleIDs;
     for (auto& Pair : IconImageCache)
     {
         const FIntPoint RootPos = InViewModel->GetItemRootPosition(Pair.Key);
         if (RootPos.X < 0)
         {
-            // The view model no longer knows about this item.
             StaleIDs.Add(Pair.Key);
         }
     }
@@ -258,8 +244,6 @@ void UInventoryIconOverlay::RefreshIcons(UInventoryViewModel* InViewModel,
     }
 }
 
-// ========== Context Menu ==========
-
 FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometry,
     const FPointerEvent& InMouseEvent)
 {
@@ -272,22 +256,16 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
 
     const FVector2D GridLocalPos = CachedGridPanel->GetCachedGeometry().AbsoluteToLocal(
         InMouseEvent.GetScreenSpacePosition());
-
-    // Right mouse button opens the context menu.
     if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
     {
         FGuid HitInstanceID;
         FName HitItemDataID;
         const bool bHitItem = FindItemAtPosition(GridLocalPos, HitInstanceID, HitItemDataID);
-
-        // Always close an existing menu before opening a new one.
         if (ContextMenuWidget &&
             ContextMenuWidget->GetVisibility() == ESlateVisibility::Visible)
         {
             ContextMenuWidget->CloseMenu();
         }
-
-        // Open the menu when the cursor is over an item.
         if (bHitItem)
         {
             UItemContextMenuWidget* Menu = GetOrCreateContextMenu();
@@ -297,12 +275,9 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
                 Menu->SetMenuPosition(InMouseEvent.GetScreenSpacePosition());
             }
         }
-        // Empty space only closes the menu.
 
         return FReply::Handled();
     }
-
-    // The overlay owns left-click drag detection because it intercepts hit tests.
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
         FGuid HitInstanceID;
@@ -312,7 +287,6 @@ FReply UInventoryIconOverlay::NativeOnMouseButtonDown(const FGeometry& InGeometr
         {
             PendingDragInstanceID    = HitInstanceID;
             PendingDragClickLocalPos = GridLocalPos;
-            // TakeWidget forces the underlying Slate widget to exist before drag detection.
             return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
         }
     }
@@ -328,8 +302,6 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
         UE_LOG(LogEXFIL, Error, TEXT("IconOverlay NativeOnDragDetected: PendingDragInstanceID invalid - canceling drag"));
         return;
     }
-
-    // Resolve the authoritative inventory item so drag math uses the true item size.
     APlayerController* PC = GetOwningPlayer();
     APawn* Pawn = PC ? PC->GetPawn() : nullptr;
     UInventoryComponent* InvComp = Pawn
@@ -362,8 +334,6 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
     DragOp->bIsRotated             = bInitialRotated;
     DragOp->bFromEquipment         = false;
     DragOp->Pivot                  = EDragPivot::TopLeft;
-
-    // DragOffset keeps drops aligned when dragging from any occupied cell.
     if (CachedGridPanel.IsValid() && CachedGridWidth > 0 && CachedGridHeight > 0)
     {
         const FVector2D GridLocalSize = CachedGridPanel->GetCachedGeometry().GetLocalSize();
@@ -375,15 +345,12 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
                 FMath::FloorToInt(PendingDragClickLocalPos.X / CellStride.X),
                 FMath::FloorToInt(PendingDragClickLocalPos.Y / CellStride.Y));
             FIntPoint Offset = ClickedCell - ItemInstance.RootPosition;
-            // Clamp the offset inside the current item bounds.
             const FItemSize EffSize = ItemInstance.GetEffectiveSize();
             Offset.X = FMath::Clamp(Offset.X, 0, EffSize.Width  - 1);
             Offset.Y = FMath::Clamp(Offset.Y, 0, EffSize.Height - 1);
             DragOp->DragOffset = Offset;
         }
     }
-
-    // Use highlight feedback only. No separate drag visual is spawned.
     DragOp->DefaultDragVisual = nullptr;
 
     ActiveDragOperation = DragOp;
@@ -391,16 +358,6 @@ void UInventoryIconOverlay::NativeOnDragDetected(const FGeometry& InGeometry,
     CachedPreviewRootPos = ItemInstance.RootPosition;
     bCachedPreviewCanPlace = true;
     bHasCachedPreview = false;
-
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[InventoryDrag] Begin Item=%s DataID=%s Root=(%d,%d) DragOffset=(%d,%d) Rotated=%s"),
-        *ItemInstance.InstanceID.ToString(),
-        *ItemInstance.ItemDataID.ToString(),
-        ItemInstance.RootPosition.X,
-        ItemInstance.RootPosition.Y,
-        DragOp->DragOffset.X,
-        DragOp->DragOffset.Y,
-        DragOp->bIsRotated ? TEXT("true") : TEXT("false"));
 
     OutOperation = DragOp;
     PendingDragInstanceID.Invalidate();
@@ -419,8 +376,6 @@ bool UInventoryIconOverlay::FindItemAtPosition(const FVector2D& LocalPos,
 
     const FVector2D CellStride(GridLocalSize.X / CachedGridWidth,
                                 GridLocalSize.Y / CachedGridHeight);
-
-    // Convert directly from local coordinates to a grid cell.
     const int32 Col = FMath::FloorToInt(LocalPos.X / CellStride.X);
     const int32 Row = FMath::FloorToInt(LocalPos.Y / CellStride.Y);
 
@@ -439,8 +394,6 @@ bool UInventoryIconOverlay::FindItemAtPosition(const FVector2D& LocalPos,
     OutItemDataID = SlotVM->GetItemDataID();
     return true;
 }
-
-// ========== Parent Panel Wiring ==========
 
 void UInventoryIconOverlay::SetParentPanel(UInventoryPanelWidget* InPanel)
 {
@@ -473,10 +426,6 @@ bool UInventoryIconOverlay::RotateActiveDragItem()
     return true;
 }
 
-
-// ========== Drop / Highlight ==========
-
-/** Convert local overlay coordinates into a grid cell index. */
 static FIntPoint LocalPosToGridCell(const FVector2D& LocalPos,
     const FVector2D& GridLocalSize, int32 GridW, int32 GridH)
 {
@@ -568,8 +517,6 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     const FVector2D GridLocalPos = CachedGridPanel->GetCachedGeometry().AbsoluteToLocal(
         InDragDropEvent.GetScreenSpacePosition());
     CachedDragLocalPos = GridLocalPos;
-    // Use the actual pointer location at drop time as the authoritative input.
-    // The cached drag-over preview is only for highlight feedback.
     const FIntPoint DroppedCell = LocalPosToGridCell(GridLocalPos, GridLocalSize,
         CachedGridWidth, CachedGridHeight);
     const FIntPoint NewRootPos = DroppedCell - DragOp->DragOffset;
@@ -588,14 +535,6 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
             return false;
         }
 
-        UE_LOG(LogEXFIL, Log,
-            TEXT("[InventoryDrag] UnequipDrop Item=%s Slot=%d To=(%d,%d) Rotated=%s"),
-            *DragOp->DraggedItemInstanceID.ToString(),
-            static_cast<int32>(DragOp->SourceEquipmentSlot),
-            NewRootPos.X,
-            NewRootPos.Y,
-            DragOp->bIsRotated ? TEXT("true") : TEXT("false"));
-
         EquipComp->RequestUnequipToInventoryAt(
             DragOp->SourceEquipmentSlot, NewRootPos, DragOp->bIsRotated);
         return true;
@@ -606,15 +545,6 @@ bool UInventoryIconOverlay::NativeOnDrop(const FGeometry& InGeometry,
     {
         return false;
     }
-
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[InventoryDrag] Drop Item=%s From=(%d,%d) To=(%d,%d) Rotated=%s"),
-        *DragOp->DraggedItemInstanceID.ToString(),
-        DragOp->OriginalPosition.X,
-        DragOp->OriginalPosition.Y,
-        NewRootPos.X,
-        NewRootPos.Y,
-        DragOp->bIsRotated ? TEXT("true") : TEXT("false"));
 
     return ParentPanel->ForwardMoveRequest(
         DragOp->DraggedItemInstanceID, NewRootPos, DragOp->bIsRotated);
@@ -679,7 +609,7 @@ UItemContextMenuWidget* UInventoryIconOverlay::GetOrCreateContextMenu()
         ContextMenuWidget = CreateWidget<UItemContextMenuWidget>(PC, ContextMenuWidgetClass);
         if (ContextMenuWidget)
         {
-            ContextMenuWidget->AddToViewport(100); // Keep the menu above the inventory panel.
+            ContextMenuWidget->AddToViewport(100);
             ContextMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
         }
     }

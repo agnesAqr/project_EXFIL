@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// EXFILGameMode.h — 서버 GameMode: 월드 아이템 스폰, 게임 룰 관리
 
 #pragma once
 
@@ -7,11 +6,6 @@
 #include "Project_EXFILGameMode.h"
 #include "EXFILGameMode.generated.h"
 
-/**
- * AEXFILGameMode — EXFIL 프로젝트 메인 GameMode
- *
- * 테스트용 WorldItem 스폰 (BeginPlay) — 레벨 디자인으로 교체 예정
- */
 UCLASS()
 class PROJECT_EXFIL_API AEXFILGameMode : public AProject_EXFILGameMode
 {
@@ -24,6 +18,6 @@ protected:
     virtual void BeginPlay() override;
 
 private:
-    /** 테스트용 WorldItem을 월드에 스폰 (서버 전용) */
+    
     void SpawnTestWorldItems();
 };

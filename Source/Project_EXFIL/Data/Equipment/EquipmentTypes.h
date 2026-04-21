@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// EquipmentTypes.h — 장비 시스템 공용 타입: EEquipmentSlot, FEquipmentSlotEntry
 
 #pragma once
 
@@ -8,7 +7,6 @@
 #include "Inventory/EXFILInventoryTypes.h"
 #include "EquipmentTypes.generated.h"
 
-/** 장비 슬롯 종류 */
 UENUM(BlueprintType)
 enum class EEquipmentSlot : uint8
 {
@@ -21,11 +19,6 @@ enum class EEquipmentSlot : uint8
     Weapon2  UMETA(DisplayName = "Weapon 2")
 };
 
-/**
- * FEquipmentSlotData — 장비 슬롯 상태 (TMap→TArray 변환 — 리플리케이션 지원)
- *
- * 리플리케이션 대상. ActiveGEHandle은 서버 전용(NotReplicated).
- */
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FEquipmentSlotData
 {
@@ -34,15 +27,15 @@ struct PROJECT_EXFIL_API FEquipmentSlotData
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     EEquipmentSlot SlotType = EEquipmentSlot::None;
 
-    /** 장착된 아이템의 InstanceID (Invalid = 빈 슬롯) */
+    
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     FGuid EquippedItemID;
 
-    /** 장착된 아이템 인스턴스 (EquippedItemID가 Valid일 때만 유효) */
+    
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
     FInventoryItemInstance ItemInstance;
 
-    /** 서버 전용 — GE Handle은 리플리케이션 제외 */
+    
     UPROPERTY(NotReplicated)
     FActiveGameplayEffectHandle ActiveGEHandle;
 

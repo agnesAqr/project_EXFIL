@@ -5,9 +5,6 @@
 
 void UInventorySlotViewModel::RequestDrop()
 {
-    // View가 드롭 요청 시 호출 — 부모 UInventoryViewModel을 통해 Model로 전달
-    // UInventoryPanelWidget::NativeOnDrop에서 RequestMoveItem 호출이 실제 처리
-    // 이 함수는 슬롯 자체에서 아이템을 버릴 때 사용 (향후 확장)
 }
 
 void UInventorySlotViewModel::SetEmpty(bool bNewValue)

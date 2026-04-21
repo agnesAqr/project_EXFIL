@@ -36,10 +36,6 @@ void UEXFILUIManager::Initialize(APlayerController* InPC,
 			CrosshairWidget->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
-
-	UE_LOG(LogEXFIL, Log, TEXT("UIManager initialized — InventoryPanel: %s, Crosshair: %s"),
-		InventoryPanel ? TEXT("OK") : TEXT("NULL"),
-		CrosshairWidget ? TEXT("OK") : TEXT("NULL"));
 }
 
 void UEXFILUIManager::BindPawnUI(UInventoryViewModel* InInventoryVM,
@@ -69,8 +65,6 @@ void UEXFILUIManager::BindSurvivalStats(USurvivalViewModel* InSurvivalVM)
 		InventoryPanel->BindStatsToViewModel(InSurvivalVM);
 	}
 }
-
-// ========== 인벤토리 토글 ==========
 
 void UEXFILUIManager::ToggleInventory()
 {
@@ -112,8 +106,6 @@ bool UEXFILUIManager::IsInventoryVisible() const
 	       InventoryPanel->GetVisibility() == ESlateVisibility::Visible;
 }
 
-// ========== 크로스헤어 ==========
-
 void UEXFILUIManager::SetCrosshairVisible(bool bVisible)
 {
 	bWantsCrosshairVisible = bVisible;
@@ -128,8 +120,6 @@ void UEXFILUIManager::UpdateCrosshairVisibility()
 	CrosshairWidget->SetVisibility(
 		bShouldShow ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
-
-// ========== 내부 ==========
 
 void UEXFILUIManager::SetInputModeGame()
 {

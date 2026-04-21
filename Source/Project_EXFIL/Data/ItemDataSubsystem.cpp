@@ -13,7 +13,6 @@ void UItemDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UItemDataSubsystem::LoadDataTables()
 {
-    // DT_ItemData — CSV에서 임포트한 아이템 DataTable
     ItemDataTable = LoadObject<UDataTable>(
         nullptr,
         TEXT("/Game/Data/DT_ItemData"));
@@ -26,12 +25,7 @@ void UItemDataSubsystem::LoadDataTables()
     }
     else
     {
-        UE_LOG(LogProject_EXFIL, Log,
-               TEXT("UItemDataSubsystem: DT_ItemData 로드 완료. 행 수: %d"),
-               ItemDataTable->GetRowNames().Num());
     }
-
-    // DT_CraftingRecipe — 에디터에서 직접 생성 (TArray 필드 포함으로 CSV 불가)
     CraftingRecipeTable = LoadObject<UDataTable>(
         nullptr,
         TEXT("/Game/Data/DT_CraftingRecipe"));
@@ -44,9 +38,6 @@ void UItemDataSubsystem::LoadDataTables()
     }
     else
     {
-        UE_LOG(LogProject_EXFIL, Log,
-               TEXT("UItemDataSubsystem: DT_CraftingRecipe 로드 완료. 행 수: %d"),
-               CraftingRecipeTable->GetRowNames().Num());
     }
 }
 
@@ -58,7 +49,7 @@ const FItemData* UItemDataSubsystem::GetItemData(FName ItemDataID) const
     }
 
     static const FString Context = TEXT("UItemDataSubsystem::GetItemData");
-    return ItemDataTable->FindRow<FItemData>(ItemDataID, Context, /*bWarnIfRowMissing=*/false);
+    return ItemDataTable->FindRow<FItemData>(ItemDataID, Context, false);
 }
 
 TArray<FName> UItemDataSubsystem::GetAllItemIDs() const
@@ -111,8 +102,6 @@ TArray<FName> UItemDataSubsystem::GetAllRecipeIDs() const
     }
     return CraftingRecipeTable->GetRowNames();
 }
-
-// ========== 에셋 캐시 ==========
 
 UTexture2D* UItemDataSubsystem::GetCachedTexture(const TSoftObjectPtr<UTexture2D>& SoftPtr)
 {

@@ -10,6 +10,7 @@
 
 class UAbilitySystemComponent;
 class UItemDataSubsystem;
+class UInventoryComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
     FOnEquipmentChanged,
@@ -23,8 +24,6 @@ class PROJECT_EXFIL_API UEquipmentComponent : public UActorComponent
 
 public:
     UEquipmentComponent();
-
-    // ========== Request API ==========
 
     UFUNCTION(BlueprintCallable, Category = "Equipment")
     void RequestEquipFromInventory(EEquipmentSlot Slot, FGuid ItemInstanceID);
@@ -46,8 +45,6 @@ public:
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     bool HasWeaponEquipped() const;
-
-    // ========== Server RPCs ==========
 
     EEquipmentSlot FindTargetSlot(const FName& EquipmentSlotTag) const;
 
@@ -78,8 +75,6 @@ private:
 
     UFUNCTION(Server, Reliable)
     void Server_RequestDropEquippedItem(EEquipmentSlot Slot);
-
-    // ========== Internal Write API ==========
 
     bool EquipItem_Internal(EEquipmentSlot Slot, const FInventoryItemInstance& ItemInstance);
     bool UnequipItem_Internal(EEquipmentSlot Slot);
@@ -112,4 +107,7 @@ private:
 
     UPROPERTY()
     TObjectPtr<UItemDataSubsystem> CachedItemSub;
+
+    UPROPERTY()
+    TWeakObjectPtr<UInventoryComponent> CachedInventoryComp;
 };

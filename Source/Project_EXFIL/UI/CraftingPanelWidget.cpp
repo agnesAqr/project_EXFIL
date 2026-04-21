@@ -11,36 +11,18 @@
 #include "Data/ItemDataSubsystem.h"
 #include "UI/CraftingRecipeWidget.h"
 #include "Engine/GameInstance.h"
-#include "Project_EXFIL.h"
-
-namespace CraftingPanelDebug
-{
-    static FString FormatItemIDs(const TSet<FName>& ItemIDs)
-    {
-        TArray<FName> SortedIDs = ItemIDs.Array();
-        SortedIDs.Sort(FNameLexicalLess());
-
-        TArray<FString> Parts;
-        const int32 PreviewCount = FMath::Min(SortedIDs.Num(), 16);
-        Parts.Reserve(PreviewCount + 1);
-
-        for (int32 i = 0; i < PreviewCount; ++i)
-        {
-            Parts.Add(SortedIDs[i].ToString());
-        }
-
-        if (SortedIDs.Num() > PreviewCount)
-        {
-            Parts.Add(TEXT("..."));
-        }
-
-        return FString::Printf(TEXT("[%s]"), *FString::Join(Parts, TEXT(",")));
-    }
-}
 
 void UCraftingPanelWidget::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
+
+    if (UWorld* World = GetWorld())
+    {
+        if (UGameInstance* GI = World->GetGameInstance())
+        {
+            CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
+        }
+    }
 
     if (Border_CraftProgress)
     {
@@ -95,21 +77,11 @@ void UCraftingPanelWidget::SetupCrafting(UCraftingComponent* InCraftingComp,
             InInventoryComp->OnInventoryItemCountsChanged.AddUObject(
                 this, &UCraftingPanelWidget::OnInventoryItemCountsChanged);
     }
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] SetupCrafting BoundInventory=%s BoundCrafting=%s"),
-        InInventoryComp ? TEXT("true") : TEXT("false"),
-        InCraftingComp ? TEXT("true") : TEXT("false"));
 }
 
 void UCraftingPanelWidget::NotifyPanelShown()
 {
     bPanelVisible = true;
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] NotifyPanelShown RecipesInitialized=%s PendingDirtyCount=%d"),
-        bRecipesInitialized ? TEXT("true") : TEXT("false"),
-        PendingDirtyItemIDs.Num());
 
     if (!bRecipesInitialized)
     {
@@ -125,7 +97,6 @@ void UCraftingPanelWidget::NotifyPanelShown()
 void UCraftingPanelWidget::NotifyPanelHidden()
 {
     bPanelVisible = false;
-    UE_LOG(LogProject_EXFIL, Log, TEXT("[CraftingPanel] NotifyPanelHidden"));
 }
 
 void UCraftingPanelWidget::OnInventoryItemCountsChanged(
@@ -140,19 +111,8 @@ void UCraftingPanelWidget::OnInventoryItemCountsChanged(
     {
         PendingDirtyItemIDs.Append(ChangedItemDataIDs);
         bHasPendingRecipeRefresh = true;
-
-        UE_LOG(LogProject_EXFIL, Log,
-            TEXT("[CraftingPanel] QueueItemCountChange Visible=false Incoming=%d Pending=%d IDs=%s"),
-            ChangedItemDataIDs.Num(),
-            PendingDirtyItemIDs.Num(),
-            *CraftingPanelDebug::FormatItemIDs(PendingDirtyItemIDs));
         return;
     }
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] HandleItemCountChange Visible=true Changed=%d IDs=%s"),
-        ChangedItemDataIDs.Num(),
-        *CraftingPanelDebug::FormatItemIDs(ChangedItemDataIDs));
 
     RefreshRecipesByItemChanges(ChangedItemDataIDs);
 }
@@ -164,15 +124,7 @@ void UCraftingPanelWidget::RefreshRecipeList()
         return;
     }
 
-    UItemDataSubsystem* Subsystem = nullptr;
-    if (UWorld* World = GetWorld())
-    {
-        if (UGameInstance* GI = World->GetGameInstance())
-        {
-            Subsystem = GI->GetSubsystem<UItemDataSubsystem>();
-        }
-    }
-
+    UItemDataSubsystem* Subsystem = CachedItemSub.Get();
     if (!Subsystem)
     {
         return;
@@ -200,34 +152,25 @@ void UCraftingPanelWidget::RefreshRecipeList()
         }
 
         const bool bCanCraft = Crafting ? Crafting->CanCraft(RecipeID) : false;
+        const bool bIsCrafting = Crafting ? Crafting->IsCrafting() : false;
+        const FName ActiveRecipeID =
+            bIsCrafting && Crafting ? Crafting->GetCurrentRecipeID() : NAME_None;
         RecipeWidget->SetRecipe(RecipeID, Inventory, bCanCraft);
-        RecipeWidget->SetCraftingInProgress(Crafting ? Crafting->IsCrafting() : false);
+        RecipeWidget->SetCraftingInProgress(
+            bIsCrafting, RecipeID == ActiveRecipeID);
         RecipeWidget->OnRecipeClicked.BindUObject(
             this, &UCraftingPanelWidget::OnRecipeSelected);
 
         ScrollBox_Recipes->AddChild(RecipeWidget);
         RecipeWidgetCache.Add(RecipeID, RecipeWidget);
     }
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] RefreshRecipeList InitialBuild RecipeWidgetCount=%d DependencyKeys=%d"),
-        RecipeWidgetCache.Num(),
-        IngredientToRecipeIDs.Num());
 }
 
 void UCraftingPanelWidget::BuildRecipeDependencyIndex()
 {
     IngredientToRecipeIDs.Empty();
 
-    UItemDataSubsystem* Subsystem = nullptr;
-    if (UWorld* World = GetWorld())
-    {
-        if (UGameInstance* GI = World->GetGameInstance())
-        {
-            Subsystem = GI->GetSubsystem<UItemDataSubsystem>();
-        }
-    }
-
+    UItemDataSubsystem* Subsystem = CachedItemSub.Get();
     if (!Subsystem)
     {
         return;
@@ -248,10 +191,6 @@ void UCraftingPanelWidget::BuildRecipeDependencyIndex()
     }
 
     bRecipeDependencyIndexBuilt = true;
-
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] BuildRecipeDependencyIndex IngredientKeyCount=%d"),
-        IngredientToRecipeIDs.Num());
 }
 
 void UCraftingPanelWidget::RefreshRecipesByItemChanges(
@@ -285,12 +224,9 @@ void UCraftingPanelWidget::RefreshRecipesByItemChanges(
         }
     }
 
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] RefreshRecipesByItemChanges Changed=%d AffectedRecipes=%d IDs=%s"),
-        ChangedItemDataIDs.Num(),
-        AffectedRecipeIDs.Num(),
-        *CraftingPanelDebug::FormatItemIDs(ChangedItemDataIDs));
-
+    const bool bIsCrafting = Crafting->IsCrafting();
+    const FName ActiveRecipeID =
+        bIsCrafting ? Crafting->GetCurrentRecipeID() : NAME_None;
     for (const FName& RecipeID : AffectedRecipeIDs)
     {
         UCraftingRecipeWidget* const* FoundWidget = RecipeWidgetCache.Find(RecipeID);
@@ -301,7 +237,8 @@ void UCraftingPanelWidget::RefreshRecipesByItemChanges(
 
         const bool bCanCraft = Crafting->CanCraft(RecipeID);
         (*FoundWidget)->SetRecipe(RecipeID, Inventory, bCanCraft);
-        (*FoundWidget)->SetCraftingInProgress(Crafting->IsCrafting());
+        (*FoundWidget)->SetCraftingInProgress(
+            bIsCrafting, RecipeID == ActiveRecipeID);
     }
 }
 
@@ -312,11 +249,6 @@ void UCraftingPanelWidget::FlushPendingRecipeRefresh()
         return;
     }
 
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] FlushPendingRecipeRefresh Pending=%d IDs=%s"),
-        PendingDirtyItemIDs.Num(),
-        *CraftingPanelDebug::FormatItemIDs(PendingDirtyItemIDs));
-
     RefreshRecipesByItemChanges(PendingDirtyItemIDs);
     PendingDirtyItemIDs.Reset();
     bHasPendingRecipeRefresh = false;
@@ -324,10 +256,10 @@ void UCraftingPanelWidget::FlushPendingRecipeRefresh()
 
 void UCraftingPanelWidget::OnCraftingStateChanged(bool bIsCrafting, float RemainingTime)
 {
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingPanel] OnCraftingStateChanged bIsCrafting=%s Remaining=%.2f"),
-        bIsCrafting ? TEXT("true") : TEXT("false"),
-        RemainingTime);
+    const FName ActiveRecipeID =
+        bIsCrafting && CraftingComp.IsValid()
+            ? CraftingComp->GetCurrentRecipeID()
+            : NAME_None;
 
     if (bIsCrafting)
     {
@@ -371,7 +303,8 @@ void UCraftingPanelWidget::OnCraftingStateChanged(bool bIsCrafting, float Remain
     {
         if (Pair.Value)
         {
-            Pair.Value->SetCraftingInProgress(bIsCrafting);
+            Pair.Value->SetCraftingInProgress(
+                bIsCrafting, Pair.Key == ActiveRecipeID);
         }
     }
 }

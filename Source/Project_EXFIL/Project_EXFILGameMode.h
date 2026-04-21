@@ -6,9 +6,6 @@
 #include "GameFramework/GameModeBase.h"
 #include "Project_EXFILGameMode.generated.h"
 
-/**
- *  Simple GameMode for a third person game
- */
 UCLASS(abstract)
 class AProject_EXFILGameMode : public AGameModeBase
 {
@@ -16,6 +13,6 @@ class AProject_EXFILGameMode : public AGameModeBase
 
 public:
 	
-	/** Constructor */
+	
 	AProject_EXFILGameMode();
 };

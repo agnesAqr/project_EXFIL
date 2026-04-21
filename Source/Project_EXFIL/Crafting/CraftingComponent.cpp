@@ -35,8 +35,6 @@ void UCraftingComponent::BeginPlay()
     }
 }
 
-// ========== Replication ==========
-
 void UCraftingComponent::GetLifetimeReplicatedProps(
     TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -48,10 +46,6 @@ void UCraftingComponent::GetLifetimeReplicatedProps(
 
 void UCraftingComponent::OnRep_CraftingState()
 {
-    UE_LOG(LogProject_EXFIL, Log,
-        TEXT("[CraftingRep][Client] OnRep_CraftingState bIsCrafting=%s RecipeID=%s"),
-        bIsCrafting ? TEXT("true") : TEXT("false"),
-        *CurrentRecipeID.ToString());
 
     if (bIsCrafting)
     {
@@ -65,8 +59,6 @@ void UCraftingComponent::OnRep_CraftingState()
         OnCraftingStateChanged.Broadcast(false, 0.f);
     }
 }
-
-// ========== Request API ==========
 
 void UCraftingComponent::RequestStartCraft(FName RecipeID)
 {
@@ -99,8 +91,6 @@ void UCraftingComponent::RequestCancelCraft()
     CancelCraft_Internal();
 }
 
-// ========== Server RPCs ==========
-
 void UCraftingComponent::Server_RequestStartCraft_Implementation(FName RecipeID)
 {
     if (RecipeID.IsNone())
@@ -124,8 +114,6 @@ void UCraftingComponent::Client_NotifyCraftStartFailed_Implementation(FName Reci
 {
     OnCraftStartFailed.Broadcast(RecipeID);
 }
-
-// ========== Query API ==========
 
 bool UCraftingComponent::CanCraft(FName RecipeID) const
 {
@@ -168,8 +156,6 @@ TArray<FName> UCraftingComponent::GetAvailableRecipes() const
 
     return Sub->GetAllRecipeIDs();
 }
-
-// ========== Internal Write API ==========
 
 bool UCraftingComponent::StartCraft_Internal(FName RecipeID)
 {
@@ -222,9 +208,6 @@ bool UCraftingComponent::StartCraft_Internal(FName RecipeID)
         &UCraftingComponent::OnCraftTimerComplete,
         Recipe->CraftDuration,
         false);
-
-    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' started (%.1fs)"),
-        *RecipeID.ToString(), Recipe->CraftDuration);
     return true;
 }
 
@@ -252,9 +235,6 @@ void UCraftingComponent::CancelCraft_Internal()
     bIsCrafting = false;
     const FName CancelledRecipe = CurrentRecipeID;
     CurrentRecipeID = NAME_None;
-
-    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' canceled"),
-        *CancelledRecipe.ToString());
 }
 
 void UCraftingComponent::NotifyCraftStartFailed(FName RecipeID)
@@ -274,8 +254,6 @@ void UCraftingComponent::NotifyCraftStartFailed(FName RecipeID)
 
     Client_NotifyCraftStartFailed(RecipeID);
 }
-
-// ========== Server-only Completion ==========
 
 void UCraftingComponent::OnCraftTimerComplete()
 {
@@ -325,9 +303,6 @@ void UCraftingComponent::OnCraftTimerComplete()
     ConsumedIngredients.Empty();
 
     OnCraftingCompleted.Broadcast(CompletedRecipe);
-
-    UE_LOG(LogProject_EXFIL, Log, TEXT("CraftingComponent: '%s' completed"),
-        *CompletedRecipe.ToString());
 }
 
 UInventoryComponent* UCraftingComponent::GetInventoryComp() const

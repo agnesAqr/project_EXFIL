@@ -59,8 +59,6 @@ void UGA_Fire::ActivateAbility(
         EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
-
-    // 인벤토리 UI가 열려있으면 발사 안 함
     AEXFILCharacter* OwnerChar = Cast<AEXFILCharacter>(AvatarActor);
     if (OwnerChar && OwnerChar->IsInventoryUIVisible())
     {
@@ -82,10 +80,8 @@ void UGA_Fire::ActivateAbility(
     const bool bHit = AvatarActor->GetWorld()->LineTraceSingleByChannel(
         HitResult, TraceStart, TraceEnd, ECC_Pawn, Params);
 
-
     if (bHit && HitResult.GetActor())
     {
-        // LocalPredicted: 서버+클라이언트 양쪽 실행 → IsLocallyControlled에서만 RPC 호출하여 중복 방지
         if (OwnerChar && OwnerChar->IsLocallyControlled())
         {
             OwnerChar->Server_ConfirmHit(

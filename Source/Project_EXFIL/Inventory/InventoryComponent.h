@@ -1,6 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// InventoryComponent.h - grid-based inventory state, item mutations,
-// bitmap placement helpers, and owner-only FastArray replication.
 
 #pragma once
 
@@ -57,17 +55,18 @@ public:
 	UInventoryComponent();
 
 #pragma region Config
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridWidth = 10;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	int32 GridHeight = 12;
 
-	/** Forward offset used when dropping an item into the world. */
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropForwardOffset = 100.f;
 
-	/** Upward offset used when dropping an item into the world. */
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
 	float DropUpwardOffset = 50.f;
 #pragma endregion
@@ -104,11 +103,7 @@ public:
 
 	bool DropItem_Internal(FGuid ItemInstanceID);
 
-	/**
-	 * Decrement a single stack by one.
-	 * Automatically removes the item when the stack reaches zero.
-	 * Returns the remaining stack count, or zero when removed.
-	 */
+	
 	int32 DecrementStack_Internal(const FGuid& InstanceID);
 #pragma endregion
 
@@ -116,7 +111,7 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool CanPlaceItemAt(FIntPoint Position, FItemSize Size) const;
 
-	/** Rebuild client-side lookup caches from already replicated items when UI binds late. */
+	
 	void EnsureReplicatedCachesReady();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
@@ -230,8 +225,6 @@ private:
 #pragma region Cache / Lookup Data
 	UPROPERTY()
 	TObjectPtr<class UItemDataSubsystem> CachedItemSub;
-
-	// Derived runtime caches rebuilt from InventoryList.Items.
 	TArray<FInventorySlot> GridSlots;
 	TMap<FName, int32> ItemCountCache;
 	TMap<FGuid, int32> ItemIndexMap;

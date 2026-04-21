@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// EXFILItemTypes.h — DataTable 행 구조체: FItemData, FCraftingRecipe, EItemType, EItemRarity
 
 #pragma once
 
@@ -9,10 +8,6 @@
 #include "Inventory/EXFILInventoryTypes.h"
 
 #include "EXFILItemTypes.generated.h"
-
-// ─────────────────────────────────────────────
-// EItemType — 아이템 분류
-// ─────────────────────────────────────────────
 UENUM(BlueprintType)
 enum class EItemType : uint8
 {
@@ -23,10 +18,6 @@ enum class EItemType : uint8
     Ammo        UMETA(DisplayName = "Ammo"),
     Quest       UMETA(DisplayName = "Quest")
 };
-
-// ─────────────────────────────────────────────
-// FItemData : FTableRowBase — 아이템 정적 정의
-// ─────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FItemData : public FTableRowBase
 {
@@ -53,36 +44,32 @@ struct PROJECT_EXFIL_API FItemData : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|Stack")
     int32 MaxStackCount = 1;
 
-    /** 아이콘 텍스처 — Soft Reference로 필요할 때만 로드 */
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|UI")
     TSoftObjectPtr<UTexture2D> Icon;
 
-    /** 소비 시 적용할 GE 클래스 */
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|GAS")
     TSoftClassPtr<UGameplayEffect> ConsumableEffect;
 
-    /** 장착 시 적용할 GE 클래스 */
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|GAS")
     TSoftClassPtr<UGameplayEffect> EquipmentEffect;
 
-    /** 장비 슬롯 태그 — Equipment일 때만 유효 */
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|Equipment")
     FName EquipmentSlotTag;
 
-    /** 월드 드롭 시 표시할 스태틱 메시 — nullptr이면 기본 큐브 폴백 */
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "World")
     TObjectPtr<UStaticMesh> WorldMesh = nullptr;
 
-    /** FItemSize 변환 헬퍼 */
+    
     FItemSize GetItemSize() const
     {
         return FItemSize(SizeWidth, SizeHeight);
     }
 };
-
-// ─────────────────────────────────────────────
-// FCraftingIngredient — 레시피 재료 1종
-// ─────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FCraftingIngredient
 {
@@ -94,10 +81,6 @@ struct PROJECT_EXFIL_API FCraftingIngredient
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
     int32 RequiredCount = 1;
 };
-
-// ─────────────────────────────────────────────
-// FCraftingRecipe : FTableRowBase — 크래프팅 레시피
-// ─────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FCraftingRecipe : public FTableRowBase
 {
@@ -106,7 +89,7 @@ struct PROJECT_EXFIL_API FCraftingRecipe : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crafting")
     FText RecipeName;
 
-    /** TArray는 CSV 임포트 불가 — 에디터에서 직접 입력 */
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crafting")
     TArray<FCraftingIngredient> Ingredients;
 
@@ -119,7 +102,7 @@ struct PROJECT_EXFIL_API FCraftingRecipe : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crafting")
     float CraftDuration = 3.0f;
 
-    /** 빈 Name = 맨손 제작 가능 */
+    
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crafting")
     FName RequiredStation;
 };

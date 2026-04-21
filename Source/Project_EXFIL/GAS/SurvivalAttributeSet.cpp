@@ -8,7 +8,6 @@
 
 USurvivalAttributeSet::USurvivalAttributeSet()
 {
-    // 초기값 설정 — UPROPERTY 기본값 사용 (에디터에서 조절 가능)
     InitHealth(InitialHealth);
     InitMaxHealth(InitialMaxHealth);
     InitHunger(InitialHunger);
@@ -37,8 +36,6 @@ void USurvivalAttributeSet::GetLifetimeReplicatedProps(
 void USurvivalAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
 {
     Super::PreAttributeChange(Attribute, NewValue);
-
-    // CurrentValue 클램핑 — BaseValue는 PostGameplayEffectExecute에서 처리
     if (Attribute == GetHealthAttribute())
     {
         NewValue = FMath::Clamp(NewValue, 0.f, GetMaxHealth());
@@ -87,8 +84,6 @@ void USurvivalAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCa
         SetStamina(FMath::Clamp(GetStamina(), 0.f, GetMaxStamina()));
     }
 }
-
-// ─── OnRep 함수 ───────────────────────────────────────────────────────────────
 
 void USurvivalAttributeSet::OnRep_Health(const FGameplayAttributeData& OldHealth)
 {

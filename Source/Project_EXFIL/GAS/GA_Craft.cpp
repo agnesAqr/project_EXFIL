@@ -60,8 +60,6 @@ void UGA_Craft::EndAbility(const FGameplayAbilitySpecHandle Handle,
 
 void UGA_Craft::OnCraftingCompleted(FName CompletedRecipeID)
 {
-    UE_LOG(LogProject_EXFIL, Log, TEXT("GA_Craft: '%s' completed -> EndAbility"),
-        *CompletedRecipeID.ToString());
 
     const FGameplayAbilityActorInfo* ActorInfo = GetCurrentActorInfo();
     EndAbility(GetCurrentAbilitySpecHandle(), ActorInfo,

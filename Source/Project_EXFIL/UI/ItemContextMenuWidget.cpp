@@ -27,8 +27,6 @@ void UItemContextMenuWidget::ShowForInventoryItem(FGuid InItemInstanceID, FName 
     bIsEquippedItem = false;
     CachedItemInstanceID = InItemInstanceID;
     CachedItemDataID = InItemDataID;
-
-    // 아이템 타입에 따라 버튼 가시성 결정
     const FItemData* Data = nullptr;
     if (UGameInstance* GI = GetGameInstance())
     {
@@ -44,7 +42,7 @@ void UItemContextMenuWidget::ShowForInventoryItem(FGuid InItemInstanceID, FName 
     if (Button_Use)     Button_Use->SetVisibility(bIsConsumable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     if (Button_Equip)   Button_Equip->SetVisibility(bIsEquipable  ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     if (Button_Unequip) Button_Unequip->SetVisibility(ESlateVisibility::Collapsed);
-    if (Button_Drop)    Button_Drop->SetVisibility(ESlateVisibility::Visible); // 항상 표시
+    if (Button_Drop)    Button_Drop->SetVisibility(ESlateVisibility::Visible);
 
     SetVisibility(ESlateVisibility::Visible);
 }
@@ -74,7 +72,6 @@ void UItemContextMenuWidget::OnUseClicked()
 
 void UItemContextMenuWidget::OnEquipClicked()
 {
-    // 슬롯 결정은 서버의 FindTargetSlot이 전담 → 클라이언트는 None 전달
     if (UEquipmentComponent* Equip = GetEquipmentComponent())
     {
         Equip->RequestEquipFromInventory(EEquipmentSlot::None, CachedItemInstanceID);
@@ -121,16 +118,11 @@ void UItemContextMenuWidget::CloseMenu()
 
 void UItemContextMenuWidget::SetMenuPosition(const FVector2D& ScreenPosition)
 {
-    // AddToViewport() 후 슬롯은 UGameViewportSubsystem이 관리 (UCanvasPanelSlot 아님)
     UGameViewportSubsystem* ViewportSub = UGameViewportSubsystem::Get(GetWorld());
     if (!ViewportSub) return;
 
     APlayerController* PC = GetOwningPlayer();
     if (!PC) return;
-
-    // GetScreenSpacePosition()은 OS 창 전체 기준 Slate 절대 좌표
-    // → PIE에서 에디터 툴바 높이만큼 Y 오프셋 발생
-    // GetMousePosition()은 뷰포트 기준 물리 픽셀 → DPI Scale 나누면 정확한 Slate 단위
     float MouseX = 0.f, MouseY = 0.f;
     PC->GetMousePosition(MouseX, MouseY);
 

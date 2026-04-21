@@ -1,5 +1,4 @@
 // Copyright Project EXFIL. All Rights Reserved.
-// EXFILInventoryTypes.h — 인벤토리 공용 구조체: FItemSize, FInventorySlot, FInventoryItemInstance
 
 #pragma once
 
@@ -7,9 +6,6 @@
 #include "Net/Serialization/FastArraySerializer.h"
 #include "EXFILInventoryTypes.generated.h"
 
-/**
- * FItemSize — 아이템이 그리드에서 차지하는 크기 (Width × Height)
- */
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FItemSize
 {
@@ -25,7 +21,7 @@ struct PROJECT_EXFIL_API FItemSize
 	FItemSize(int32 InWidth, int32 InHeight)
 		: Width(InWidth), Height(InHeight) {}
 
-	/** 회전 시 Width/Height 스왑된 사이즈 반환 */
+	
 	FItemSize GetRotated() const { return FItemSize(Height, Width); }
 	bool IsSquare() const { return Width == Height; }
 
@@ -35,43 +31,40 @@ struct PROJECT_EXFIL_API FItemSize
 	}
 };
 
-/**
- * FInventoryItemInstance — 인벤토리에 존재하는 아이템 런타임 인스턴스
- */
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FInventoryItemInstance : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
-	/** 고유 인스턴스 ID (같은 종류 아이템도 각각 다른 ID) */
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	FGuid InstanceID;
 
-	/** 아이템 정의 ID (DataTable RowName으로 연결) */
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FName ItemDataID;
 
-	/** 그리드 내 루트 위치 (좌상단 기준) */
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	FIntPoint RootPosition = FIntPoint::ZeroValue;
 
-	/** 그리드 점유 크기 */
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FItemSize ItemSize;
 
-	/** 회전 기능 제거 후 호환성 유지용 플래그 */
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	bool bIsRotated = false;
 
-	/** 스택 수량 */
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 StackCount = 1;
 
-	/** 최대 스택 수량 (DataTable에서 로드) */
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int32 MaxStackCount = 1;
 
-	/** 현재 적용 중인 크기 */
+	
 	FItemSize GetEffectiveSize() const
 	{
 		return (bIsRotated && !ItemSize.IsSquare()) ? ItemSize.GetRotated() : ItemSize;
@@ -85,19 +78,16 @@ struct PROJECT_EXFIL_API FInventoryItemInstance : public FFastArraySerializerIte
 	}
 };
 
-/**
- * FInventorySlot — 그리드의 개별 셀
- */
 USTRUCT(BlueprintType)
 struct PROJECT_EXFIL_API FInventorySlot
 {
 	GENERATED_BODY()
 
-	/** 이 슬롯을 점유한 아이템의 InstanceID (Invalid = 빈 슬롯) */
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	FGuid OccupyingItemID;
 
-	/** 이 슬롯이 아이템의 루트(좌상단) 위치인지 */
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	bool bIsRootSlot = false;
 
