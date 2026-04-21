@@ -9,7 +9,6 @@ public class Project_EXFIL : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
 		PublicDependencyModuleNames.AddRange(new string[] {
-			// Day 1
 			"Core",
 			"CoreUObject",
 			"Engine",
@@ -18,7 +17,6 @@ public class Project_EXFIL : ModuleRules
 			"AIModule",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
-			// Day 2
 			"UMG",
 			"SlateCore",
 			"Slate",
@@ -26,10 +24,8 @@ public class Project_EXFIL : ModuleRules
 			"CommonInput",
 			"ModelViewViewModel",
 			"GameplayTags",
-			// Day 4
 			"GameplayAbilities",
 			"GameplayTasks",
-			// Replication
 			"NetCore"
 		});
 
@@ -43,13 +39,5 @@ public class Project_EXFIL : ModuleRules
 			"Project_EXFIL/UI",
 			"Project_EXFIL/GAS",
 		});
-
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
 	}
 }

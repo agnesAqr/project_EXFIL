@@ -108,7 +108,7 @@
     <!-- MID: Server RPC 목록                          -->
     <!-- label y=298, table y=308                     -->
     <!-- ============================================ -->
-    <text x="15" y="304" fill="#8b949e" font-size="9" letter-spacing="2">SERVER RPC — 14개 (Implementation 내부 sanity check, 11개 표시 + 사망 흐름 3개 생략)</text>
+    <text x="15" y="304" fill="#8b949e" font-size="9" letter-spacing="2">SERVER RPC — 12개 (전부 _Implementation sanity check + early return)</text>
 
     <!-- 테이블 헤더 -->
     <rect x="15" y="314" width="950" height="22" rx="3" fill="#161b22" stroke="#30363d"/>
@@ -199,7 +199,7 @@
     <rect x="15" y="566" width="950" height="30" rx="4" fill="#161b22" stroke="#3fb95044"/>
     <text x="27" y="586" fill="#3fb950" font-size="9" font-weight="600">1차 — Implementation 내부 sanity check</text>
     <text x="320" y="586" fill="#8b949e" font-size="9">null 파라미터, 유효하지 않은 요청 → early return</text>
-    <text x="730" y="586" fill="#3fb950" font-size="9">14개 RPC 전수 적용</text>
+    <text x="730" y="586" fill="#3fb950" font-size="9">12개 RPC 전수 적용</text>
 
     <rect x="15" y="604" width="950" height="30" rx="4" fill="#161b22" stroke="#d2992244"/>
     <text x="27" y="624" fill="#d29922" font-size="9" font-weight="600">2차 — 서버 라인 트레이스 재검증</text>
@@ -232,7 +232,7 @@
     <rect x="740" y="701" width="10" height="10" rx="2" fill="#f8514933" stroke="#f8514966"/>
     <text x="756" y="711" fill="#8b949e" font-size="9">Unreliable (이펙트)</text>
 
-    <text x="890" y="711" fill="#8b949e" font-size="9">RPC 14개</text>
+    <text x="890" y="711" fill="#8b949e" font-size="9">RPC 12개</text>
 
   </svg>
 </div>

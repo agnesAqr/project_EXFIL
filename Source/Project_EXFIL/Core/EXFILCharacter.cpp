@@ -166,11 +166,6 @@ AWorldItem* AEXFILCharacter::TraceForWorldItem() const
     return NearestItem;
 }
 
-bool AEXFILCharacter::Server_RequestPickupItem_Validate(AWorldItem* TargetItem)
-{
-    return TargetItem != nullptr;
-}
-
 void AEXFILCharacter::Server_RequestPickupItem_Implementation(AWorldItem* TargetItem)
 {
     ExecutePickup(TargetItem);
@@ -308,12 +303,6 @@ void AEXFILCharacter::OnAimToggled()
             UIManager->SetCrosshairVisible(bIsAiming);
         }
     }
-}
-
-bool AEXFILCharacter::Server_ConfirmHit_Validate(
-    AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal)
-{
-    return HitActor != nullptr;
 }
 
 void AEXFILCharacter::Server_ConfirmHit_Implementation(

@@ -49,7 +49,7 @@ public:
 	bool IsInventoryUIVisible() const;
 
 	
-	UFUNCTION(Server, Reliable, WithValidation)
+	UFUNCTION(Server, Reliable)
 	void Server_ConfirmHit(AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
 
 	
@@ -190,7 +190,7 @@ protected:
 
 	
 	AWorldItem* TraceForWorldItem() const;
-	UFUNCTION(Server, Reliable, WithValidation)
+	UFUNCTION(Server, Reliable)
 	void Server_RequestPickupItem(AWorldItem* TargetItem);
 
 	void ExecutePickup(AWorldItem* TargetItem);
