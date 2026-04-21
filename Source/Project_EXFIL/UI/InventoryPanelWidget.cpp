@@ -380,24 +380,6 @@ void UInventoryPanelWidget::FlushOverlayDelta()
 
     IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, PendingDirtyIndices);
 
-/*
-    {
-        // 전체 슬롯 갱신 (stride 변경 → 모든 아이콘 좌표 재계산)
-        TSet<int32> AllIndices;
-        const int32 Total = GridW * GridH;
-        AllIndices.Reserve(Total);
-        for (int32 i = 0; i < Total; ++i)
-        {
-            AllIndices.Add(i);
-        }
-        IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, AllIndices);
-    }
-    else
-    {
-        // dirty 슬롯만 갱신
-        IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, PendingDirtyIndices);
-    }
-*/
 
     PendingDirtyIndices.Empty();
     bHasPendingOverlayRefresh = false;

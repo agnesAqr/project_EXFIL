@@ -174,10 +174,7 @@ protected:
 
 	void OnAimToggled();
 
-	/** 인벤토리 토글 InputAction */
-	UPROPERTY(EditAnywhere, Category = "Input")
-	TObjectPtr<UInputAction> IA_ToggleInventory;
-
+	/** 인벤토리 토글 처리 */
 	void OnToggleInventory();
 
 	// === Interaction ===

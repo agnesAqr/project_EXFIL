@@ -274,7 +274,8 @@ void FInventoryFastArray::PostReplicatedChange(
 			OwnerComponent->ItemIndexMap.FindOrAdd(Item.InstanceID) = ChangedIndex;
 		}
 
-		if (!OwnerComponent->DoesGridMatchItemFootprint(Item))
+		const bool bFootprintChanged = !OwnerComponent->DoesGridMatchItemFootprint(Item);
+		if (bFootprintChanged)
 		{
 			OwnerComponent->ApplyItemMovedByScan_Local(Item, PendingDirtyIndices);
 		}
@@ -282,14 +283,14 @@ void FInventoryFastArray::PostReplicatedChange(
 		{
 			OwnerComponent->CollectFootprintIndices(
 				Item.RootPosition, Item.GetEffectiveSize(), PendingDirtyIndices);
-		}
 
-		const int32 OldCount = OwnerComponent->GetItemCountByID_Cached(Item.ItemDataID);
-		OwnerComponent->RecalculateItemCountForID(Item.ItemDataID);
-		const int32 NewCount = OwnerComponent->GetItemCountByID_Cached(Item.ItemDataID);
-		if (OldCount != NewCount)
-		{
-			PendingChangedItemDataIDs.Add(Item.ItemDataID);
+			const int32 OldCount = OwnerComponent->GetItemCountByID_Cached(Item.ItemDataID);
+			OwnerComponent->RecalculateItemCountForID(Item.ItemDataID);
+			const int32 NewCount = OwnerComponent->GetItemCountByID_Cached(Item.ItemDataID);
+			if (OldCount != NewCount)
+			{
+				PendingChangedItemDataIDs.Add(Item.ItemDataID);
+			}
 		}
 	}
 }
