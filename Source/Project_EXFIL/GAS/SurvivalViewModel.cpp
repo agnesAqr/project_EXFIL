@@ -13,13 +13,6 @@ void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
         return;
     }
 
-    const USurvivalAttributeSet* AttrSet = ASC->GetSet<USurvivalAttributeSet>();
-    if (!AttrSet)
-    {
-        UE_LOG(LogEXFIL, Warning, TEXT("SurvivalViewModel::InitializeWithASC — AttributeSet NULL"));
-        return;
-    }
-
     CachedASC = ASC;
 
     BoundDelegates.Add(
@@ -42,38 +35,57 @@ void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
             USurvivalAttributeSet::GetStaminaAttribute())
         .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
 
+    BoundDelegates.Add(
+        ASC->GetGameplayAttributeValueChangeDelegate(
+            USurvivalAttributeSet::GetMaxHealthAttribute())
+        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+
+    BoundDelegates.Add(
+        ASC->GetGameplayAttributeValueChangeDelegate(
+            USurvivalAttributeSet::GetMaxHungerAttribute())
+        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+
+    BoundDelegates.Add(
+        ASC->GetGameplayAttributeValueChangeDelegate(
+            USurvivalAttributeSet::GetMaxThirstAttribute())
+        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+
+    BoundDelegates.Add(
+        ASC->GetGameplayAttributeValueChangeDelegate(
+            USurvivalAttributeSet::GetMaxStaminaAttribute())
+        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
 }
 
 void USurvivalViewModel::OnAttributeChanged(const FOnAttributeChangeData& Data)
 {
-    const FName StatName = FName(*Data.Attribute.GetName());
-    const float NewValue = Data.NewValue;
-
-    OnStatChanged.Broadcast(StatName, NewValue);
+    if (const FProperty* Prop = Data.Attribute.GetUProperty())
+    {
+        OnStatChanged.Broadcast(Prop->GetFName(), Data.NewValue);
+    }
 }
 
 float USurvivalViewModel::GetStatValue(FName StatName) const
 {
     if (!CachedASC.IsValid()) return 0.f;
-    const USurvivalAttributeSet* AttrSet = CachedASC->GetSet<USurvivalAttributeSet>();
-    if (!AttrSet) return 0.f;
+    const USurvivalAttributeSet* AS = CachedASC->GetSet<USurvivalAttributeSet>();
+    if (!AS) return 0.f;
 
-    if (StatName == FName("Health"))  return AttrSet->GetHealth();
-    if (StatName == FName("Hunger"))  return AttrSet->GetHunger();
-    if (StatName == FName("Thirst"))  return AttrSet->GetThirst();
-    if (StatName == FName("Stamina")) return AttrSet->GetStamina();
+    if (StatName == FName("Health"))  return AS->GetHealth();
+    if (StatName == FName("Hunger"))  return AS->GetHunger();
+    if (StatName == FName("Thirst"))  return AS->GetThirst();
+    if (StatName == FName("Stamina")) return AS->GetStamina();
     return 0.f;
 }
 
 float USurvivalViewModel::GetMaxStatValue(FName StatName) const
 {
     if (!CachedASC.IsValid()) return 100.f;
-    const USurvivalAttributeSet* AttrSet = CachedASC->GetSet<USurvivalAttributeSet>();
-    if (!AttrSet) return 100.f;
+    const USurvivalAttributeSet* AS = CachedASC->GetSet<USurvivalAttributeSet>();
+    if (!AS) return 100.f;
 
-    if (StatName == FName("Health"))  return AttrSet->GetMaxHealth();
-    if (StatName == FName("Hunger"))  return AttrSet->GetMaxHunger();
-    if (StatName == FName("Thirst"))  return AttrSet->GetMaxThirst();
-    if (StatName == FName("Stamina")) return AttrSet->GetMaxStamina();
+    if (StatName == FName("Health"))  return AS->GetMaxHealth();
+    if (StatName == FName("Hunger"))  return AS->GetMaxHunger();
+    if (StatName == FName("Thirst"))  return AS->GetMaxThirst();
+    if (StatName == FName("Stamina")) return AS->GetMaxStamina();
     return 100.f;
 }

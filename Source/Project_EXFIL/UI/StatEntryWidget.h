@@ -4,12 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "GAS/SurvivalViewModel.h"
 #include "StatEntryWidget.generated.h"
 
 class UImage;
 class UTextBlock;
 class UTexture2D;
-class USurvivalViewModel;
 
 UENUM(BlueprintType)
 enum class EExfilStatType : uint8
@@ -63,20 +63,18 @@ private:
     float CachedCurrent = 100.f;
     float CachedMaximum = 100.f;
 
-    
     int32 CachedRoundedCurrent = 100;
     int32 CachedRoundedMax = 100;
 
-    
     FName TrackedStatName;
+    FName TrackedMaxName;
 
-    
+    TWeakObjectPtr<USurvivalViewModel> BoundViewModel;
+
     UFUNCTION()
-    void OnStatUpdated(FName StatName, float NewValue);
+    void OnStatUpdated(FName ChangedFieldName, float NewValue);
 
-    
     FLinearColor GetNormalFillColor() const;
 
-    
     static constexpr float LowWarningThreshold = 0.20f;
 };

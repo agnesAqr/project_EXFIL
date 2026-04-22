@@ -11,7 +11,9 @@
 class USurvivalAttributeSet;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
-    FOnStatChanged, FName, StatName, float, NewValue);
+    FOnStatChanged,
+    FName, ChangedFieldName,
+    float, NewValue);
 
 UCLASS()
 class PROJECT_EXFIL_API USurvivalViewModel : public UObject
@@ -19,26 +21,19 @@ class PROJECT_EXFIL_API USurvivalViewModel : public UObject
     GENERATED_BODY()
 
 public:
-    
     void InitializeWithASC(UAbilitySystemComponent* ASC);
 
-    
     UPROPERTY(BlueprintAssignable)
     FOnStatChanged OnStatChanged;
 
-    
     float GetStatValue(FName StatName) const;
-
-    
     float GetMaxStatValue(FName StatName) const;
 
 private:
     UPROPERTY()
     TWeakObjectPtr<UAbilitySystemComponent> CachedASC;
 
-    
     void OnAttributeChanged(const FOnAttributeChangeData& Data);
 
-    
     TArray<FDelegateHandle> BoundDelegates;
 };

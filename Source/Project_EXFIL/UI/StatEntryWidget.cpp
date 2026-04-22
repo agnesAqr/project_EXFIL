@@ -102,20 +102,41 @@ void UStatEntryWidget::UpdateStat(float Current, float Maximum)
 void UStatEntryWidget::BindToViewModel(USurvivalViewModel* ViewModel, FName InStatName)
 {
     TrackedStatName = InStatName;
+    TrackedMaxName = FName(*FString::Printf(TEXT("Max%s"), *InStatName.ToString()));
+
+    if (BoundViewModel.IsValid())
+    {
+        BoundViewModel->OnStatChanged.RemoveDynamic(this, &UStatEntryWidget::OnStatUpdated);
+    }
+
+    BoundViewModel = ViewModel;
     if (!ViewModel)
     {
         return;
     }
-    UpdateStat(ViewModel->GetStatValue(InStatName), ViewModel->GetMaxStatValue(InStatName));
+
+    UpdateStat(
+        ViewModel->GetStatValue(InStatName),
+        ViewModel->GetMaxStatValue(InStatName));
     ViewModel->OnStatChanged.AddDynamic(this, &UStatEntryWidget::OnStatUpdated);
 }
 
-void UStatEntryWidget::OnStatUpdated(FName StatName, float NewValue)
+void UStatEntryWidget::OnStatUpdated(FName ChangedFieldName, float NewValue)
 {
-    if (StatName == TrackedStatName)
+    if (ChangedFieldName == TrackedStatName)
     {
-        UpdateStat(NewValue, CachedMaximum);
+        CachedCurrent = NewValue;
     }
+    else if (ChangedFieldName == TrackedMaxName)
+    {
+        CachedMaximum = NewValue;
+    }
+    else
+    {
+        return;
+    }
+
+    UpdateStat(CachedCurrent, CachedMaximum);
 }
 
 FLinearColor UStatEntryWidget::GetNormalFillColor() const
