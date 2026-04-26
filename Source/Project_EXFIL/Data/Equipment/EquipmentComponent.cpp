@@ -404,10 +404,6 @@ bool UEquipmentComponent::DropEquippedItem_Internal(EEquipmentSlot Slot)
 
     const FName DropItemDataID = SlotData->ItemInstance.ItemDataID;
 
-    RemoveEquipmentEffect(*SlotData);
-    SlotData->EquippedItemID.Invalidate();
-    SlotData->ItemInstance = FInventoryItemInstance();
-
     AActor* Owner = GetOwner();
     if (!Owner)
     {
@@ -430,6 +426,9 @@ bool UEquipmentComponent::DropEquippedItem_Internal(EEquipmentSlot Slot)
     if (DroppedItem)
     {
         DroppedItem->InitializeItem(DropItemDataID, 1);
+        RemoveEquipmentEffect(*SlotData);
+        SlotData->EquippedItemID.Invalidate();
+        SlotData->ItemInstance = FInventoryItemInstance();
     }
 
     return DroppedItem != nullptr;

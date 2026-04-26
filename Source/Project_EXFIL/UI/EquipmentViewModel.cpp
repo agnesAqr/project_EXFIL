@@ -122,8 +122,8 @@ bool UEquipmentViewModel::TryGetContextMenuViewDataForSlot(
     }
 
     OutViewData = FItemContextMenuViewData();
-    OutViewData.bCanUnequip = true;
-    OutViewData.bCanDrop = true;
+    OutViewData.bShowUnequip = true;
+    OutViewData.bShowDrop = true;
     OutViewData.TargetItemInstanceID = Item.InstanceID;
     OutViewData.TargetEquipmentSlot = Slot;
     return true;

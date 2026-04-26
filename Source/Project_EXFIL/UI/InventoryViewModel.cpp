@@ -154,7 +154,7 @@ bool UInventoryViewModel::TryGetItemContextMenuViewDataAtCell(
     OutViewData = FItemContextMenuViewData();
     OutViewData.TargetItemInstanceID = Item.InstanceID;
     OutViewData.TargetEquipmentSlot = EEquipmentSlot::None;
-    OutViewData.bCanDrop = true;
+    OutViewData.bShowDrop = true;
 
     const UItemDataSubsystem* ItemSub = CachedItemSub.Get();
     const FItemData* ItemData = ItemSub ? ItemSub->GetItemData(Item.ItemDataID) : nullptr;
@@ -163,8 +163,8 @@ bool UInventoryViewModel::TryGetItemContextMenuViewDataAtCell(
         return true;
     }
 
-    OutViewData.bCanUse = ItemData->ItemType == EItemType::Consumable;
-    OutViewData.bCanEquip = ItemData->ItemType == EItemType::Equipment;
+    OutViewData.bShowUse = ItemData->ItemType == EItemType::Consumable;
+    OutViewData.bShowEquip = ItemData->ItemType == EItemType::Equipment;
     return true;
 }
 

@@ -26,10 +26,10 @@ void UItemContextMenuWidget::Show(
     InventoryViewModel = InInventoryViewModel;
     EquipmentViewModel = InEquipmentViewModel;
 
-    if (Button_Use)     Button_Use->SetVisibility(InViewData.bCanUse ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    if (Button_Equip)   Button_Equip->SetVisibility(InViewData.bCanEquip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    if (Button_Unequip) Button_Unequip->SetVisibility(InViewData.bCanUnequip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    if (Button_Drop)    Button_Drop->SetVisibility(InViewData.bCanDrop ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Button_Use)     Button_Use->SetVisibility(InViewData.bShowUse ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Button_Equip)   Button_Equip->SetVisibility(InViewData.bShowEquip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Button_Unequip) Button_Unequip->SetVisibility(InViewData.bShowUnequip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Button_Drop)    Button_Drop->SetVisibility(InViewData.bShowDrop ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
     SetVisibility(ESlateVisibility::Visible);
 }

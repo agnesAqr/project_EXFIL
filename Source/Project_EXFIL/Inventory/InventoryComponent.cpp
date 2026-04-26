@@ -568,15 +568,6 @@ bool UInventoryComponent::DropItem_Internal(FGuid ItemInstanceID)
 	const FName DropItemDataID = Item->ItemDataID;
 	const int32 CurrentStack = Item->StackCount;
 
-	if (CurrentStack > 1)
-	{
-		DecrementStack_Internal(ItemInstanceID);
-	}
-	else
-	{
-		RemoveItem_Internal(ItemInstanceID);
-	}
-
 	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
@@ -599,6 +590,14 @@ bool UInventoryComponent::DropItem_Internal(FGuid ItemInstanceID)
 	if (DroppedItem)
 	{
 		DroppedItem->InitializeItem(DropItemDataID, 1);
+		if (CurrentStack > 1)
+		{
+			DecrementStack_Internal(ItemInstanceID);
+		}
+		else
+		{
+			RemoveItem_Internal(ItemInstanceID);
+		}
 	}
 
 	return DroppedItem != nullptr;
@@ -836,6 +835,20 @@ void UInventoryComponent::Server_RequestDropItem_Implementation(FGuid ItemInstan
 void UInventoryComponent::HandleConsumeRequest_Internal(FName ItemDataID, int32 Count)
 {
 	if (ItemDataID.IsNone() || Count <= 0)
+	{
+		return;
+	}
+
+	const FItemData* ItemData = CachedItemSub ? CachedItemSub->GetItemData(ItemDataID) : nullptr;
+	if (!ItemData || ItemData->ItemType != EItemType::Consumable)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+			TEXT("HandleConsumeRequest_Internal: '%s' is not consumable"),
+			*ItemDataID.ToString());
+		return;
+	}
+
+	if (GetItemCountByID_Cached(ItemDataID) < Count)
 	{
 		return;
 	}

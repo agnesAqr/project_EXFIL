@@ -21,16 +21,16 @@ struct PROJECT_EXFIL_API FItemContextMenuViewData
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadOnly)
-    bool bCanUse = false;
+    bool bShowUse = false;
 
     UPROPERTY(BlueprintReadOnly)
-    bool bCanEquip = false;
+    bool bShowEquip = false;
 
     UPROPERTY(BlueprintReadOnly)
-    bool bCanUnequip = false;
+    bool bShowUnequip = false;
 
     UPROPERTY(BlueprintReadOnly)
-    bool bCanDrop = false;
+    bool bShowDrop = false;
 
     UPROPERTY(BlueprintReadOnly)
     FGuid TargetItemInstanceID;
