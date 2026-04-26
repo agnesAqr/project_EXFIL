@@ -4,16 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/CraftingViewModel.h"
 #include "CraftingPanelWidget.generated.h"
 
-class UCraftingComponent;
-class UInventoryComponent;
 class UCraftingRecipeWidget;
 class UScrollBox;
 class UBorder;
 class UTextBlock;
 class UImage;
-class UItemDataSubsystem;
 
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UCraftingPanelWidget : public UUserWidget
@@ -23,7 +21,7 @@ class PROJECT_EXFIL_API UCraftingPanelWidget : public UUserWidget
 public:
     
     UFUNCTION(BlueprintCallable, Category = "Crafting|UI")
-    void SetupCrafting(UCraftingComponent* InCraftingComp, UInventoryComponent* InInventoryComp);
+    void SetViewModel(UCraftingViewModel* InViewModel);
 
     
     UFUNCTION(BlueprintCallable, Category = "Crafting|UI")
@@ -56,11 +54,8 @@ protected:
     TSubclassOf<UCraftingRecipeWidget> RecipeWidgetClass;
 
 private:
-    TWeakObjectPtr<UCraftingComponent> CraftingComp;
-    TWeakObjectPtr<UInventoryComponent> InventoryComp;
-
     UPROPERTY()
-    TWeakObjectPtr<UItemDataSubsystem> CachedItemSub;
+    TWeakObjectPtr<UCraftingViewModel> ViewModel;
 
     
     UPROPERTY()
@@ -68,27 +63,24 @@ private:
 
     
     bool bRecipesInitialized = false;
-    bool bRecipeDependencyIndexBuilt = false;
     bool bPanelVisible = false;
-    bool bHasPendingRecipeRefresh = false;
+    bool bHasPendingRecipeDelta = false;
 
-    TMap<FName, TSet<FName>> IngredientToRecipeIDs;
-    TSet<FName> PendingDirtyItemIDs;
-    FDelegateHandle InventoryItemCountsChangedHandle;
+    FCraftingRecipeListDeltaViewData PendingRecipeDelta;
+    FDelegateHandle RecipeListDeltaHandle;
+    FDelegateHandle ProgressStartedHandle;
+    FDelegateHandle ProgressStoppedHandle;
+    FDelegateHandle CraftStartFailedHandle;
 
-    
-    UFUNCTION()
-    void OnCraftingStateChanged(bool bIsCrafting, float RemainingTime);
-
-    
-    void OnInventoryItemCountsChanged(const TSet<FName>& ChangedItemDataIDs);
-
-    void BuildRecipeDependencyIndex();
-    void RefreshRecipesByItemChanges(const TSet<FName>& ChangedItemDataIDs);
-    void FlushPendingRecipeRefresh();
+    void HandleRecipeListDeltaChanged(const FCraftingRecipeListDeltaViewData& Delta);
+    void ApplyRecipeListDelta(const FCraftingRecipeListDeltaViewData& Delta);
+    void FlushPendingRecipeDelta();
+    void HandleCraftingProgressStarted(float Duration);
+    void HandleCraftingProgressStopped();
+    void HandleCraftStartFailed(FName RecipeID);
 
     
-    void OnRecipeSelected(FName ClickedRecipeID);
+    void OnRecipeActionRequested(FName RecipeID, bool bIsCurrentRecipe);
     FTimerHandle ProgressTimerHandle;
     float CraftStartTime = 0.f;
     float CraftTotalDuration = 0.f;

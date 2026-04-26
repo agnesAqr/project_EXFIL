@@ -8,8 +8,8 @@
 
 class UInventoryPanelWidget;
 class UInventoryViewModel;
-class UCraftingComponent;
-class UInventoryComponent;
+class UEquipmentViewModel;
+class UCraftingViewModel;
 class USurvivalViewModel;
 class UUserWidget;
 
@@ -24,8 +24,8 @@ public:
 	                TSubclassOf<UUserWidget> InCrosshairClass);
 
 	void BindPawnUI(UInventoryViewModel* InInventoryVM,
-	                UCraftingComponent* InCraftingComp,
-	                UInventoryComponent* InInventoryComp);
+	                UEquipmentViewModel* InEquipmentVM,
+	                UCraftingViewModel* InCraftingVM);
 
 	void BindSurvivalStats(USurvivalViewModel* InSurvivalVM);
 

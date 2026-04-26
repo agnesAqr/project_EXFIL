@@ -10,12 +10,14 @@ class AWorldItem;
 class UAbilitySystemComponent;
 class UCraftingComponent;
 class UEquipmentComponent;
+class UEquipmentViewModel;
 class UEXFILUIManager;
 class UGameplayAbility;
 class UGameplayEffect;
 class UInputAction;
 class UInventoryComponent;
 class UInventoryViewModel;
+class UCraftingViewModel;
 class UMaterialInterface;
 class USpringArmComponent;
 class USurvivalAttributeSet;
@@ -91,6 +93,12 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UInventoryViewModel> InventoryViewModel;
+
+	UPROPERTY()
+	TObjectPtr<UEquipmentViewModel> EquipmentViewModel;
+
+	UPROPERTY()
+	TObjectPtr<UCraftingViewModel> CraftingViewModel;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
 	TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 

@@ -9,6 +9,8 @@
 #include "Crafting/CraftingComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
 #include "UI/InventoryViewModel.h"
+#include "UI/EquipmentViewModel.h"
+#include "UI/CraftingViewModel.h"
 #include "UI/EXFILUIManager.h"
 #include "GAS/SurvivalViewModel.h"
 #include "Core/EXFILPlayerController.h"
@@ -95,11 +97,22 @@ void AEXFILCharacter::BeginPlay()
             InventoryViewModel = NewObject<UInventoryViewModel>(this);
             InventoryViewModel->Initialize(InventoryComponent);
         }
+        if (EquipmentComponent)
+        {
+            EquipmentViewModel = NewObject<UEquipmentViewModel>(this);
+            EquipmentViewModel->Initialize(EquipmentComponent);
+        }
+        if (CraftingComponent && InventoryComponent)
+        {
+            CraftingViewModel = NewObject<UCraftingViewModel>(this);
+            CraftingViewModel->Initialize(CraftingComponent, InventoryComponent);
+        }
         if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
         {
             if (UEXFILUIManager* UIManager = PC->GetUIManager())
             {
-                UIManager->BindPawnUI(InventoryViewModel, CraftingComponent, InventoryComponent);
+                UIManager->BindPawnUI(
+                    InventoryViewModel, EquipmentViewModel, CraftingViewModel);
             }
         }
         InitializeViewModels();

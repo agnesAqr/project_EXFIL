@@ -4,10 +4,10 @@
 #include "CoreMinimal.h"
 #include "UI/InventoryPanelWidget.h"
 #include "UI/InventoryViewModel.h"
+#include "UI/EquipmentViewModel.h"
+#include "UI/CraftingViewModel.h"
 #include "UI/CraftingPanelWidget.h"
 #include "GAS/SurvivalViewModel.h"
-#include "Crafting/CraftingComponent.h"
-#include "Inventory/InventoryComponent.h"
 #include "Core/EXFILLog.h"
 
 void UEXFILUIManager::Initialize(APlayerController* InPC,
@@ -39,8 +39,8 @@ void UEXFILUIManager::Initialize(APlayerController* InPC,
 }
 
 void UEXFILUIManager::BindPawnUI(UInventoryViewModel* InInventoryVM,
-                                  UCraftingComponent* InCraftingComp,
-                                  UInventoryComponent* InInventoryComp)
+                                  UEquipmentViewModel* InEquipmentVM,
+                                  UCraftingViewModel* InCraftingVM)
 {
 	if (!InventoryPanel) return;
 
@@ -49,12 +49,14 @@ void UEXFILUIManager::BindPawnUI(UInventoryViewModel* InInventoryVM,
 		InventoryPanel->SetViewModel(InInventoryVM);
 	}
 
-	if (UCraftingPanelWidget* CraftingPanel = InventoryPanel->GetCraftingPanel())
+	if (InEquipmentVM)
 	{
-		if (InCraftingComp && InInventoryComp)
-		{
-			CraftingPanel->SetupCrafting(InCraftingComp, InInventoryComp);
-		}
+		InventoryPanel->SetEquipmentViewModel(InEquipmentVM);
+	}
+
+	if (InCraftingVM)
+	{
+		InventoryPanel->SetCraftingViewModel(InCraftingVM);
 	}
 }
 

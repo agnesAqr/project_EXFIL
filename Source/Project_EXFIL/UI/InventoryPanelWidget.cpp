@@ -10,12 +10,16 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "UI/InventoryViewModel.h"
+#include "UI/EquipmentViewModel.h"
+#include "UI/CraftingViewModel.h"
 #include "UI/InventorySlotWidget.h"
 #include "UI/InventoryIconOverlay.h"
+#include "UI/EquipmentSlotWidget.h"
 #include "UI/CraftingPanelWidget.h"
 #include "UI/StatEntryWidget.h"
 #include "GAS/SurvivalViewModel.h"
 #include "Input/CommonUIInputTypes.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/ScrollBox.h"
 
 void UInventoryPanelWidget::NativeOnInitialized()
@@ -48,6 +52,38 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
         ViewModelRefreshedHandle = ViewModel->OnViewModelRefreshed.AddUObject(
             this, &UInventoryPanelWidget::HandleViewModelRefreshed);
         BuildGrid();
+    }
+}
+
+void UInventoryPanelWidget::SetEquipmentViewModel(UEquipmentViewModel* InViewModel)
+{
+    EquipmentViewModel = InViewModel;
+
+    if (IconOverlay)
+    {
+        IconOverlay->SetEquipmentViewModel(InViewModel);
+    }
+
+    if (!WidgetTree)
+    {
+        return;
+    }
+
+    WidgetTree->ForEachWidget([InViewModel](UWidget* Widget)
+    {
+        if (UEquipmentSlotWidget* EquipmentSlot = Cast<UEquipmentSlotWidget>(Widget))
+        {
+            EquipmentSlot->SetViewModel(InViewModel);
+        }
+    });
+}
+
+void UInventoryPanelWidget::SetCraftingViewModel(UCraftingViewModel* InViewModel)
+{
+    CraftingViewModel = InViewModel;
+    if (CraftingPanel)
+    {
+        CraftingPanel->SetViewModel(InViewModel);
     }
 }
 
@@ -204,12 +240,7 @@ void UInventoryPanelWidget::BuildGrid()
     if (IconOverlay)
     {
         IconOverlay->SetParentPanel(this);
-    }
-    const int32 Total = Width * Height;
-    PendingDirtyIndices.Reserve(Total);
-    for (int32 i = 0; i < Total; ++i)
-    {
-        PendingDirtyIndices.Add(i);
+        IconOverlay->SetEquipmentViewModel(EquipmentViewModel);
     }
     bHasPendingOverlayRefresh = true;
 }
@@ -268,7 +299,6 @@ void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyInd
         return;
     }
 
-    PendingDirtyIndices.Append(DirtyIndices);
     bHasPendingOverlayRefresh = true;
 
     FlushOverlayDelta();
@@ -299,15 +329,21 @@ void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeomet
 void UInventoryPanelWidget::FlushOverlayDelta()
 {
     if (!bLayoutReady) return;
-    if (!bHasPendingOverlayRefresh || PendingDirtyIndices.Num() == 0) return;
+    if (!bHasPendingOverlayRefresh) return;
     if (!IconOverlay || !ViewModel || !GridPanel) return;
 
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
 
-    IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, PendingDirtyIndices);
+    FInventoryOverlayDeltaViewData Delta;
+    if (!ViewModel->ConsumePendingOverlayDelta(Delta))
+    {
+        bHasPendingOverlayRefresh = false;
+        return;
+    }
 
-    PendingDirtyIndices.Empty();
+    IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, Delta);
+
     bHasPendingOverlayRefresh = false;
 }
 
@@ -318,17 +354,12 @@ void UInventoryPanelWidget::RebuildOverlayFull()
 
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
-    const int32 Total = GridW * GridH;
-
-    TSet<int32> AllIndices;
-    AllIndices.Reserve(Total);
-    for (int32 i = 0; i < Total; ++i)
+    FInventoryOverlayDeltaViewData Delta;
+    if (ViewModel->BuildFullOverlayDelta(Delta))
     {
-        AllIndices.Add(i);
+        IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, Delta);
     }
 
-    IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, AllIndices);
-    PendingDirtyIndices.Empty();
     bHasPendingOverlayRefresh = false;
 }
 

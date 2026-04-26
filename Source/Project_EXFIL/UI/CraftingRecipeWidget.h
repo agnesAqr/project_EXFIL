@@ -4,14 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/CraftingViewModel.h"
 #include "CraftingRecipeWidget.generated.h"
 
 class UBorder;
 class UButton;
 class UImage;
 class UTextBlock;
-class UInventoryComponent;
-class UItemDataSubsystem;
 
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UCraftingRecipeWidget : public UUserWidget
@@ -21,15 +20,11 @@ class PROJECT_EXFIL_API UCraftingRecipeWidget : public UUserWidget
 public:
     
     UFUNCTION(BlueprintCallable, Category = "Crafting|UI")
-    void SetRecipe(FName InRecipeID, UInventoryComponent* InInventory, bool bCanCraft);
+    void SetRecipe(const FCraftingRecipeViewData& InRecipeViewData);
 
     
-    UFUNCTION(BlueprintCallable, Category = "Crafting|UI")
-    void SetCraftingInProgress(bool bInProgress, bool bIsCurrentRecipe);
-
-    
-    DECLARE_DELEGATE_OneParam(FOnRecipeClicked, FName);
-    FOnRecipeClicked OnRecipeClicked;
+    DECLARE_DELEGATE_TwoParams(FOnRecipeActionRequested, FName, bool);
+    FOnRecipeActionRequested OnRecipeActionRequested;
 
 protected:
     virtual void NativeOnInitialized() override;
@@ -54,12 +49,7 @@ protected:
 
 private:
     FName RecipeID;
-    bool bCanCraftCached = false;
-    bool bIsCraftingCached = false;
     bool bIsCurrentCraftRecipe = false;
-
-    UPROPERTY()
-    TWeakObjectPtr<UItemDataSubsystem> CachedItemSub;
 
     UFUNCTION()
     void OnButtonClicked();

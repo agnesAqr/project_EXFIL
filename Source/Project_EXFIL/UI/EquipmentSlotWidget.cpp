@@ -2,17 +2,12 @@
 
 #include "UI/EquipmentSlotWidget.h"
 #include "CoreMinimal.h"
+#include "Blueprint/DragDropOperation.h"
 #include "Components/Border.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
-#include "Blueprint/DragDropOperation.h"
 #include "UI/InventoryDragDropOp.h"
 #include "UI/ItemContextMenuWidget.h"
-#include "Data/Equipment/EquipmentComponent.h"
-#include "Data/EXFILItemTypes.h"
-#include "Data/ItemDataSubsystem.h"
-#include "Engine/GameInstance.h"
-#include "Core/EXFILLog.h"
 
 void UEquipmentSlotWidget::NativeOnInitialized()
 {
@@ -41,101 +36,71 @@ void UEquipmentSlotWidget::NativeOnInitialized()
 void UEquipmentSlotWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    if (UGameInstance* GI = GetGameInstance())
-    {
-        CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
-    }
-    APlayerController* PC = GetOwningPlayer();
-    APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-    if (Pawn)
-    {
-        UEquipmentComponent* EquipComp = Pawn->FindComponentByClass<UEquipmentComponent>();
-        if (EquipComp && !BoundEquipComp.IsValid())
-        {
-            BoundEquipComp = EquipComp;
-            EquipComp->OnItemEquipped.AddDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemEquipped);
-            EquipComp->OnItemUnequipped.AddDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemUnequipped);
-            RefreshFromEquipmentComponent();
-        }
-    }
 }
 
 void UEquipmentSlotWidget::NativeDestruct()
 {
-    if (BoundEquipComp.IsValid())
+    if (BoundViewModel.IsValid() && EquipmentSlotChangedHandle.IsValid())
     {
-        BoundEquipComp->OnItemEquipped.RemoveDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemEquipped);
-        BoundEquipComp->OnItemUnequipped.RemoveDynamic(this, &UEquipmentSlotWidget::OnEquipmentItemUnequipped);
-        BoundEquipComp.Reset();
+        BoundViewModel->OnEquipmentSlotChanged.Remove(EquipmentSlotChangedHandle);
+        EquipmentSlotChangedHandle.Reset();
     }
 
     Super::NativeDestruct();
 }
 
-void UEquipmentSlotWidget::OnEquipmentItemEquipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item)
+void UEquipmentSlotWidget::SetViewModel(UEquipmentViewModel* InViewModel)
 {
-    if (InSlot == SlotType)
+    if (BoundViewModel.IsValid() && EquipmentSlotChangedHandle.IsValid())
     {
-        RefreshFromEquipmentComponent();
+        BoundViewModel->OnEquipmentSlotChanged.Remove(EquipmentSlotChangedHandle);
+        EquipmentSlotChangedHandle.Reset();
     }
-}
 
-void UEquipmentSlotWidget::OnEquipmentItemUnequipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item)
-{
-    if (InSlot == SlotType)
-    {
-        FEquipmentSlotData EmptyData(SlotType);
-        RefreshSlot(EmptyData);
-    }
-}
+    BoundViewModel = InViewModel;
 
-void UEquipmentSlotWidget::RefreshFromEquipmentComponent()
-{
-    if (!BoundEquipComp.IsValid())
+    if (!InViewModel)
     {
+        RefreshSlot(FEquipmentSlotViewData());
         return;
     }
 
-    FInventoryItemInstance EquippedItem;
-    if (BoundEquipComp->GetEquippedItem(SlotType, EquippedItem))
+    EquipmentSlotChangedHandle = InViewModel->OnEquipmentSlotChanged.AddUObject(
+        this, &UEquipmentSlotWidget::HandleEquipmentSlotChanged);
+
+    FEquipmentSlotViewData SlotViewData;
+    if (InViewModel->GetSlotViewData(SlotType, SlotViewData))
     {
-        FEquipmentSlotData Data(SlotType);
-        Data.EquippedItemID = EquippedItem.InstanceID;
-        Data.ItemInstance = EquippedItem;
-        RefreshSlot(Data);
-    }
-    else
-    {
-        FEquipmentSlotData EmptyData(SlotType);
-        RefreshSlot(EmptyData);
+        RefreshSlot(SlotViewData);
     }
 }
 
-void UEquipmentSlotWidget::RefreshSlot(const FEquipmentSlotData& SlotData)
+void UEquipmentSlotWidget::HandleEquipmentSlotChanged(
+    EEquipmentSlot InSlot, const FEquipmentSlotViewData& InViewData)
+{
+    if (InSlot == SlotType)
+    {
+        RefreshSlot(InViewData);
+    }
+}
+
+void UEquipmentSlotWidget::RefreshSlot(const FEquipmentSlotViewData& SlotData)
 {
     CachedSlotData = SlotData;
+    CachedSlotData.SlotType = SlotType;
 
-    if (!SlotData.IsEmpty())
+    if (SlotData.bEquipped)
     {
         if (Image_ItemIcon)
         {
-            if (CachedItemSub)
-            {
-                const FItemData* ItemData = CachedItemSub->GetItemData(SlotData.ItemInstance.ItemDataID);
-                if (ItemData && !ItemData->Icon.IsNull())
-                {
-                    UTexture2D* IconTexture = CachedItemSub->GetCachedTexture(ItemData->Icon);
-                    if (IconTexture)
-                    {
-                        Image_ItemIcon->SetBrushFromTexture(IconTexture, true);
-                    }
-                }
-            }
-            Image_ItemIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
+            Image_ItemIcon->SetBrushFromTexture(SlotData.Icon.Get(), true);
+            Image_ItemIcon->SetVisibility(SlotData.Icon
+                ? ESlateVisibility::HitTestInvisible
+                : ESlateVisibility::Collapsed);
         }
         if (TextBlock_ItemName)
         {
-            TextBlock_ItemName->SetText(FText::FromName(SlotData.ItemInstance.ItemDataID));
+            TextBlock_ItemName->SetText(SlotData.DisplayName);
             TextBlock_ItemName->SetVisibility(ESlateVisibility::HitTestInvisible);
         }
         ApplyEquippedStyle();
@@ -163,7 +128,7 @@ void UEquipmentSlotWidget::SetDragHighlight(bool bVisible, bool bIsValid)
     }
     else
     {
-        if (!CachedSlotData.IsEmpty())
+        if (CachedSlotData.bEquipped)
         {
             ApplyEquippedStyle();
         }
@@ -180,12 +145,7 @@ void UEquipmentSlotWidget::ApplyEmptyStyle()
     {
         return;
     }
-    FLinearColor BgColor(0.08f, 0.08f, 0.08f, 1.0f);
-    FSlateBrush Brush = Border_Slot->GetContentColorAndOpacity() == FLinearColor::White
-        ? FSlateBrush()
-        : FSlateBrush();
-    Brush.TintColor = FSlateColor(BgColor);
-    Border_Slot->SetBrushColor(BgColor);
+    Border_Slot->SetBrushColor(FLinearColor(0.08f, 0.08f, 0.08f, 1.0f));
 }
 
 void UEquipmentSlotWidget::ApplyEquippedStyle()
@@ -203,18 +163,13 @@ void UEquipmentSlotWidget::ApplyDragHoverStyle(bool bIsValid)
     {
         return;
     }
-    if (bIsValid)
-    {
-        Border_Slot->SetBrushColor(FLinearColor(0.08f, 0.18f, 0.3f, 1.0f));
-    }
-    else
-    {
-        Border_Slot->SetBrushColor(FLinearColor(0.25f, 0.08f, 0.08f, 1.0f));
-    }
+    Border_Slot->SetBrushColor(bIsValid
+        ? FLinearColor(0.08f, 0.18f, 0.3f, 1.0f)
+        : FLinearColor(0.25f, 0.08f, 0.08f, 1.0f));
 }
 
-FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
-                                                      const FPointerEvent& InMouseEvent)
+FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(
+    const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
     if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
     {
@@ -224,14 +179,15 @@ FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
             ContextMenuWidget->CloseMenu();
         }
 
-        if (!CachedSlotData.IsEmpty())
+        if (CachedSlotData.bEquipped && BoundViewModel.IsValid())
         {
             if (!ContextMenuWidget && ContextMenuWidgetClass)
             {
                 APlayerController* PC = GetOwningPlayer();
                 if (PC)
                 {
-                    ContextMenuWidget = CreateWidget<UItemContextMenuWidget>(PC, ContextMenuWidgetClass);
+                    ContextMenuWidget = CreateWidget<UItemContextMenuWidget>(
+                        PC, ContextMenuWidgetClass);
                     if (ContextMenuWidget)
                     {
                         ContextMenuWidget->AddToViewport(100);
@@ -240,102 +196,65 @@ FReply UEquipmentSlotWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
                 }
             }
 
-            if (ContextMenuWidget)
+            FItemContextMenuViewData MenuViewData;
+            if (ContextMenuWidget &&
+                BoundViewModel->TryGetContextMenuViewDataForSlot(SlotType, MenuViewData))
             {
-                ContextMenuWidget->ShowForEquippedItem(
-                    SlotType, CachedSlotData.ItemInstance.ItemDataID);
+                ContextMenuWidget->Show(MenuViewData, nullptr, BoundViewModel.Get());
                 ContextMenuWidget->SetMenuPosition(InMouseEvent.GetScreenSpacePosition());
             }
         }
 
         return FReply::Handled();
     }
-    if (InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton) && !CachedSlotData.IsEmpty())
+
+    if (InMouseEvent.IsMouseButtonDown(EKeys::LeftMouseButton) &&
+        CachedSlotData.bEquipped)
     {
-        return FReply::Handled().DetectDrag(GetCachedWidget().ToSharedRef(), EKeys::LeftMouseButton);
+        return FReply::Handled().DetectDrag(
+            GetCachedWidget().ToSharedRef(), EKeys::LeftMouseButton);
     }
     return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
-void UEquipmentSlotWidget::NativeOnDragDetected(const FGeometry& InGeometry,
-                                                 const FPointerEvent& InMouseEvent,
-                                                 UDragDropOperation*& OutOperation)
+void UEquipmentSlotWidget::NativeOnDragDetected(
+    const FGeometry& InGeometry,
+    const FPointerEvent& InMouseEvent,
+    UDragDropOperation*& OutOperation)
 {
-    if (CachedSlotData.IsEmpty())
+    if (!BoundViewModel.IsValid())
+    {
+        return;
+    }
+
+    FEquipmentDragSourceViewData DragSource;
+    if (!BoundViewModel->TryBuildDragSourceForSlot(SlotType, DragSource))
     {
         return;
     }
 
     UInventoryDragDropOp* DragOp = NewObject<UInventoryDragDropOp>(this);
-    const bool bInitialRotated =
-        CachedSlotData.ItemInstance.bIsRotated &&
-        !CachedSlotData.ItemInstance.ItemSize.IsSquare();
-    DragOp->DraggedItemInstanceID = CachedSlotData.ItemInstance.InstanceID;
-    DragOp->ItemDataID             = CachedSlotData.ItemInstance.ItemDataID;
-    DragOp->ItemSize               = CachedSlotData.ItemInstance.ItemSize;
-    DragOp->DragItemSize           = bInitialRotated
-        ? CachedSlotData.ItemInstance.ItemSize.GetRotated()
-        : CachedSlotData.ItemInstance.ItemSize;
-    DragOp->bOriginalRotated       = bInitialRotated;
-    DragOp->bIsRotated             = bInitialRotated;
-    DragOp->bFromEquipment         = true;
-    DragOp->SourceEquipmentSlot    = SlotType;
+    DragOp->DraggedItemInstanceID = DragSource.ItemInstanceID;
+    DragOp->ItemSize = DragSource.BaseItemSize;
+    DragOp->DragItemSize = DragSource.InitialDragItemSize;
+    DragOp->bOriginalRotated = DragSource.bOriginalRotated;
+    DragOp->bIsRotated = DragSource.bOriginalRotated;
+    DragOp->bFromEquipment = true;
+    DragOp->SourceEquipmentSlot = DragSource.SourceSlot;
     OutOperation = DragOp;
 }
 
-bool UEquipmentSlotWidget::NativeOnDrop(const FGeometry& InGeometry,
-                                         const FDragDropEvent& InDragDropEvent,
-                                         UDragDropOperation* InOperation)
+bool UEquipmentSlotWidget::NativeOnDrop(
+    const FGeometry& InGeometry,
+    const FDragDropEvent& InDragDropEvent,
+    UDragDropOperation* InOperation)
 {
     UInventoryDragDropOp* DragOp = Cast<UInventoryDragDropOp>(InOperation);
-    if (!DragOp)
-    {
-        return false;
-    }
-    if (DragOp->bFromEquipment)
-    {
-        return false;
-    }
-    if (CachedItemSub)
-    {
-        const FItemData* ItemData = CachedItemSub->GetItemData(DragOp->ItemDataID);
-        if (!ItemData || ItemData->ItemType != EItemType::Equipment)
-        {
-            UE_LOG(LogEXFIL, Warning, TEXT("EquipmentSlotWidget: Item '%s' is not equipment"),
-                *DragOp->ItemDataID.ToString());
-            return false;
-        }
-        const FName& Tag = ItemData->EquipmentSlotTag;
-        if (!Tag.IsNone())
-        {
-            TArray<EEquipmentSlot> ValidSlots;
-            if      (Tag == FName("Weapon"))  ValidSlots = { EEquipmentSlot::Weapon1, EEquipmentSlot::Weapon2 };
-            else if (Tag == FName("Head"))    ValidSlots = { EEquipmentSlot::Head    };
-            else if (Tag == FName("Face"))    ValidSlots = { EEquipmentSlot::Face    };
-            else if (Tag == FName("Eyewear")) ValidSlots = { EEquipmentSlot::Eyewear };
-            else if (Tag == FName("Body"))    ValidSlots = { EEquipmentSlot::Body    };
-
-            if (ValidSlots.Num() > 0 && !ValidSlots.Contains(SlotType))
-            {
-                UE_LOG(LogEXFIL, Warning, TEXT("EquipmentSlotWidget: '%s'(Tag=%s)는 이 슬롯[%d]에 장착 불가"),
-                    *DragOp->ItemDataID.ToString(), *Tag.ToString(), static_cast<int32>(SlotType));
-                return false;
-            }
-        }
-    }
-    APlayerController* PC = GetOwningPlayer();
-    APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-    if (!Pawn)
+    if (!DragOp || DragOp->bFromEquipment || !BoundViewModel.IsValid())
     {
         return false;
     }
 
-    UEquipmentComponent* EquipComp = Pawn->FindComponentByClass<UEquipmentComponent>();
-    if (!EquipComp)
-    {
-        return false;
-    }
-
-    EquipComp->RequestEquipFromInventory(SlotType, DragOp->DraggedItemInstanceID);
+    BoundViewModel->RequestEquip(SlotType, DragOp->DraggedItemInstanceID);
     return true;
 }

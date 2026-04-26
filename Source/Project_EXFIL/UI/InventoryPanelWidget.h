@@ -8,6 +8,8 @@
 #include "InventoryPanelWidget.generated.h"
 
 class UInventoryViewModel;
+class UEquipmentViewModel;
+class UCraftingViewModel;
 class UInventorySlotWidget;
 class UInventoryIconOverlay;
 class UCraftingPanelWidget;
@@ -27,6 +29,12 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "Inventory|UI")
     void SetViewModel(UInventoryViewModel* InViewModel);
+
+    UFUNCTION(BlueprintCallable, Category = "Inventory|UI")
+    void SetEquipmentViewModel(UEquipmentViewModel* InViewModel);
+
+    UFUNCTION(BlueprintCallable, Category = "Inventory|UI")
+    void SetCraftingViewModel(UCraftingViewModel* InViewModel);
 
     
     bool ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated = false);
@@ -119,6 +127,12 @@ private:
     TObjectPtr<UInventoryViewModel> ViewModel;
 
     UPROPERTY()
+    TObjectPtr<UEquipmentViewModel> EquipmentViewModel;
+
+    UPROPERTY()
+    TObjectPtr<UCraftingViewModel> CraftingViewModel;
+
+    UPROPERTY()
     TArray<TObjectPtr<UInventorySlotWidget>> SlotWidgets;
 
     
@@ -136,9 +150,6 @@ private:
     
     void FlushOverlayDelta();
     void RebuildOverlayFull();
-
-    
-    TSet<int32> PendingDirtyIndices;
 
     
     bool bHasPendingOverlayRefresh = false;

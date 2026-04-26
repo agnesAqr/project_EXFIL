@@ -4,12 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
-#include "Data/Equipment/EquipmentTypes.h"
+#include "UI/InventoryViewModel.h"
 #include "ItemContextMenuWidget.generated.h"
 
 class UButton;
-class UInventoryComponent;
-class UEquipmentComponent;
+class UEquipmentViewModel;
 
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UItemContextMenuWidget : public UCommonActivatableWidget
@@ -17,11 +16,9 @@ class PROJECT_EXFIL_API UItemContextMenuWidget : public UCommonActivatableWidget
     GENERATED_BODY()
 
 public:
-    
-    void ShowForInventoryItem(FGuid InItemInstanceID, FName InItemDataID);
-
-    
-    void ShowForEquippedItem(EEquipmentSlot InSlot, FName InItemDataID);
+    void Show(const FItemContextMenuViewData& InViewData,
+              UInventoryViewModel* InInventoryViewModel,
+              UEquipmentViewModel* InEquipmentViewModel);
 
     
     void CloseMenu();
@@ -44,10 +41,14 @@ protected:
     TObjectPtr<UButton> Button_Drop;
 
 private:
-    FGuid CachedItemInstanceID;
-    FName CachedItemDataID;
-    EEquipmentSlot CachedEquipmentSlot = EEquipmentSlot::None;
-    bool bIsEquippedItem = false;
+    FItemContextMenuViewData CachedViewData;
+
+    UPROPERTY()
+    TWeakObjectPtr<UInventoryViewModel> InventoryViewModel;
+
+    UPROPERTY()
+    TWeakObjectPtr<UEquipmentViewModel> EquipmentViewModel;
+
     UFUNCTION()
     void OnUseClicked();
 
@@ -59,10 +60,4 @@ private:
 
     UFUNCTION()
     void OnDropClicked();
-
-    
-    UInventoryComponent* GetInventoryComponent() const;
-
-    
-    UEquipmentComponent* GetEquipmentComponent() const;
 };

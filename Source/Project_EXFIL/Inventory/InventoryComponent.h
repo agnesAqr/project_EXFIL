@@ -111,6 +111,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool CanPlaceItemAt(FIntPoint Position, FItemSize Size) const;
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	bool CanPlaceItemAtIgnoringInstance(FIntPoint Position, FItemSize Size,
+		FGuid IgnoreInstanceID) const;
+
 	
 	void EnsureReplicatedCachesReady();
 

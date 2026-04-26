@@ -5,12 +5,7 @@
 #include "Components/Button.h"
 #include "Blueprint/GameViewportSubsystem.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
-#include "Engine/GameInstance.h"
-#include "Data/EXFILItemTypes.h"
-#include "Data/ItemDataSubsystem.h"
-#include "Inventory/InventoryComponent.h"
-#include "Data/Equipment/EquipmentComponent.h"
-#include "Core/EXFILLog.h"
+#include "UI/EquipmentViewModel.h"
 
 void UItemContextMenuWidget::NativeConstruct()
 {
@@ -22,90 +17,65 @@ void UItemContextMenuWidget::NativeConstruct()
     if (Button_Drop)   Button_Drop->OnClicked.AddDynamic(this, &UItemContextMenuWidget::OnDropClicked);
 }
 
-void UItemContextMenuWidget::ShowForInventoryItem(FGuid InItemInstanceID, FName InItemDataID)
+void UItemContextMenuWidget::Show(
+    const FItemContextMenuViewData& InViewData,
+    UInventoryViewModel* InInventoryViewModel,
+    UEquipmentViewModel* InEquipmentViewModel)
 {
-    bIsEquippedItem = false;
-    CachedItemInstanceID = InItemInstanceID;
-    CachedItemDataID = InItemDataID;
-    const FItemData* Data = nullptr;
-    if (UGameInstance* GI = GetGameInstance())
-    {
-        if (UItemDataSubsystem* Sub = GI->GetSubsystem<UItemDataSubsystem>())
-        {
-            Data = Sub->GetItemData(InItemDataID);
-        }
-    }
+    CachedViewData = InViewData;
+    InventoryViewModel = InInventoryViewModel;
+    EquipmentViewModel = InEquipmentViewModel;
 
-    const bool bIsConsumable = Data && Data->ItemType == EItemType::Consumable;
-    const bool bIsEquipable  = Data && Data->ItemType == EItemType::Equipment;
-
-    if (Button_Use)     Button_Use->SetVisibility(bIsConsumable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    if (Button_Equip)   Button_Equip->SetVisibility(bIsEquipable  ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    if (Button_Unequip) Button_Unequip->SetVisibility(ESlateVisibility::Collapsed);
-    if (Button_Drop)    Button_Drop->SetVisibility(ESlateVisibility::Visible);
-
-    SetVisibility(ESlateVisibility::Visible);
-}
-
-void UItemContextMenuWidget::ShowForEquippedItem(EEquipmentSlot InSlot, FName InItemDataID)
-{
-    bIsEquippedItem = true;
-    CachedEquipmentSlot = InSlot;
-    CachedItemDataID = InItemDataID;
-
-    if (Button_Use)     Button_Use->SetVisibility(ESlateVisibility::Collapsed);
-    if (Button_Equip)   Button_Equip->SetVisibility(ESlateVisibility::Collapsed);
-    if (Button_Unequip) Button_Unequip->SetVisibility(ESlateVisibility::Visible);
-    if (Button_Drop)    Button_Drop->SetVisibility(ESlateVisibility::Visible);
+    if (Button_Use)     Button_Use->SetVisibility(InViewData.bCanUse ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Button_Equip)   Button_Equip->SetVisibility(InViewData.bCanEquip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Button_Unequip) Button_Unequip->SetVisibility(InViewData.bCanUnequip ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (Button_Drop)    Button_Drop->SetVisibility(InViewData.bCanDrop ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
     SetVisibility(ESlateVisibility::Visible);
 }
 
 void UItemContextMenuWidget::OnUseClicked()
 {
-    if (UInventoryComponent* Inv = GetInventoryComponent())
+    if (InventoryViewModel.IsValid())
     {
-        Inv->RequestConsumeItemByID(CachedItemDataID, 1);
+        InventoryViewModel->RequestConsumeItem(CachedViewData.TargetItemInstanceID);
     }
     CloseMenu();
 }
 
 void UItemContextMenuWidget::OnEquipClicked()
 {
-    if (UEquipmentComponent* Equip = GetEquipmentComponent())
+    if (EquipmentViewModel.IsValid())
     {
-        Equip->RequestEquipFromInventory(EEquipmentSlot::None, CachedItemInstanceID);
-    }
-    else
-    {
-        UE_LOG(LogEXFIL, Error, TEXT("OnEquipClicked: EquipmentComponent NULL"));
+        EquipmentViewModel->RequestEquip(
+            EEquipmentSlot::None, CachedViewData.TargetItemInstanceID);
     }
     CloseMenu();
 }
 
 void UItemContextMenuWidget::OnUnequipClicked()
 {
-    if (UEquipmentComponent* Equip = GetEquipmentComponent())
+    if (EquipmentViewModel.IsValid())
     {
-        Equip->RequestUnequipToInventory(CachedEquipmentSlot);
+        EquipmentViewModel->RequestUnequip(CachedViewData.TargetEquipmentSlot);
     }
     CloseMenu();
 }
 
 void UItemContextMenuWidget::OnDropClicked()
 {
-    if (bIsEquippedItem)
+    if (CachedViewData.TargetEquipmentSlot != EEquipmentSlot::None)
     {
-        if (UEquipmentComponent* Equip = GetEquipmentComponent())
+        if (EquipmentViewModel.IsValid())
         {
-            Equip->RequestDropEquippedItem(CachedEquipmentSlot);
+            EquipmentViewModel->RequestDropEquipped(CachedViewData.TargetEquipmentSlot);
         }
     }
     else
     {
-        if (UInventoryComponent* Inv = GetInventoryComponent())
+        if (InventoryViewModel.IsValid())
         {
-            Inv->RequestDropItem(CachedItemInstanceID);
+            InventoryViewModel->RequestDropItem(CachedViewData.TargetItemInstanceID);
         }
     }
     CloseMenu();
@@ -134,18 +104,4 @@ void UItemContextMenuWidget::SetMenuPosition(const FVector2D& ScreenPosition)
     SlotSettings.Offsets   = FMargin(MouseX * InvScale, MouseY * InvScale, 0.f, 0.f);
     SlotSettings.Alignment = FVector2D(0.f, 0.f);
     ViewportSub->SetWidgetSlot(this, SlotSettings);
-}
-
-UInventoryComponent* UItemContextMenuWidget::GetInventoryComponent() const
-{
-    APlayerController* PC = GetOwningPlayer();
-    APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-    return Pawn ? Pawn->FindComponentByClass<UInventoryComponent>() : nullptr;
-}
-
-UEquipmentComponent* UItemContextMenuWidget::GetEquipmentComponent() const
-{
-    APlayerController* PC = GetOwningPlayer();
-    APawn* Pawn = PC ? PC->GetPawn() : nullptr;
-    return Pawn ? Pawn->FindComponentByClass<UEquipmentComponent>() : nullptr;
 }

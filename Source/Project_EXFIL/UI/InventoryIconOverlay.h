@@ -5,18 +5,17 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Blueprint/DragDropOperation.h"
+#include "UI/InventoryViewModel.h"
 #include "InventoryIconOverlay.generated.h"
 
 class UCanvasPanel;
 class UImage;
 class UTextBlock;
-class UInventoryViewModel;
-class UInventorySlotViewModel;
 class UUniformGridPanel;
 class UItemContextMenuWidget;
 class UInventoryDragDropOp;
 class UInventoryPanelWidget;
-class UItemDataSubsystem;
+class UEquipmentViewModel;
 
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UInventoryIconOverlay : public UUserWidget
@@ -25,9 +24,11 @@ class PROJECT_EXFIL_API UInventoryIconOverlay : public UUserWidget
 
 public:
     
-    void RefreshIcons(UInventoryViewModel* InViewModel, UUniformGridPanel* InGridPanel,
-                      int32 InGridWidth, int32 InGridHeight,
-                      const TSet<int32>& DirtyIndices);
+    void RefreshIcons(UInventoryViewModel* InViewModel,
+                      UUniformGridPanel* InGridPanel,
+                      int32 InGridWidth,
+                      int32 InGridHeight,
+                      const FInventoryOverlayDeltaViewData& Delta);
 
     
     UPROPERTY(EditAnywhere, Category = "UI")
@@ -38,6 +39,9 @@ public:
 
     
     void SetParentPanel(UInventoryPanelWidget* InPanel);
+
+    
+    void SetEquipmentViewModel(UEquipmentViewModel* InViewModel);
 
     
     bool RotateActiveDragItem();
@@ -71,7 +75,7 @@ private:
     TObjectPtr<UInventoryViewModel> CachedViewModel;
 
     UPROPERTY()
-    TWeakObjectPtr<UItemDataSubsystem> CachedItemSub;
+    TObjectPtr<UEquipmentViewModel> CachedEquipmentViewModel;
 
     UPROPERTY()
     TWeakObjectPtr<UUniformGridPanel> CachedGridPanel;
@@ -86,16 +90,14 @@ private:
     
     FGuid PendingDragInstanceID;
 
+    FInventoryDragSourceViewData PendingDragSource;
+
     
     FVector2D PendingDragClickLocalPos = FVector2D::ZeroVector;
 
     
     UPROPERTY()
     TWeakObjectPtr<UInventoryPanelWidget> ParentPanel;
-
-    
-    bool FindItemAtPosition(const FVector2D& LocalPos,
-                            FGuid& OutInstanceID, FName& OutItemDataID) const;
 
     
     UItemContextMenuWidget* GetOrCreateContextMenu();

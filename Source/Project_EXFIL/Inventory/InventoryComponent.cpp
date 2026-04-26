@@ -637,6 +637,12 @@ bool UInventoryComponent::CanPlaceItemAt(FIntPoint Position, FItemSize Size) con
 	return AreSlotsFree(Position, Size);
 }
 
+bool UInventoryComponent::CanPlaceItemAtIgnoringInstance(
+	FIntPoint Position, FItemSize Size, FGuid IgnoreInstanceID) const
+{
+	return AreSlotsFreeForItem(Position, Size, IgnoreInstanceID);
+}
+
 void UInventoryComponent::EnsureReplicatedCachesReady()
 {
 	if (GetOwner() && GetOwner()->HasAuthority())

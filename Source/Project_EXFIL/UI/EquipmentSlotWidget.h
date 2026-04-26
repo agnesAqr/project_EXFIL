@@ -4,14 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
-#include "Data/Equipment/EquipmentTypes.h"
+#include "UI/EquipmentViewModel.h"
 #include "EquipmentSlotWidget.generated.h"
 
 class UBorder;
 class UImage;
 class UTextBlock;
 class UInventoryDragDropOp;
-class UEquipmentComponent;
 class UItemContextMenuWidget;
 
 UCLASS(Abstract)
@@ -26,7 +25,11 @@ public:
 
     
     UFUNCTION(BlueprintCallable, Category = "Equipment|UI")
-    void RefreshSlot(const FEquipmentSlotData& SlotData);
+    void SetViewModel(UEquipmentViewModel* InViewModel);
+
+    
+    UFUNCTION(BlueprintCallable, Category = "Equipment|UI")
+    void RefreshSlot(const FEquipmentSlotViewData& SlotData);
 
     
     UFUNCTION(BlueprintCallable, Category = "Equipment|UI")
@@ -64,11 +67,7 @@ protected:
 
 private:
     
-    FEquipmentSlotData CachedSlotData;
-
-    
-    UPROPERTY()
-    TObjectPtr<class UItemDataSubsystem> CachedItemSub;
+    FEquipmentSlotViewData CachedSlotData;
 
     
     UPROPERTY()
@@ -76,17 +75,12 @@ private:
 
     
     UPROPERTY()
-    TWeakObjectPtr<UEquipmentComponent> BoundEquipComp;
+    TWeakObjectPtr<UEquipmentViewModel> BoundViewModel;
 
-    
-    UFUNCTION()
-    void OnEquipmentItemEquipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item);
+    FDelegateHandle EquipmentSlotChangedHandle;
 
-    UFUNCTION()
-    void OnEquipmentItemUnequipped(EEquipmentSlot InSlot, const FInventoryItemInstance& Item);
-
-    
-    void RefreshFromEquipmentComponent();
+    void HandleEquipmentSlotChanged(
+        EEquipmentSlot InSlot, const FEquipmentSlotViewData& InViewData);
 
     
     void ApplyEmptyStyle();
