@@ -272,7 +272,7 @@ void UCraftingPanelWidget::StartProgressTimer(float Duration)
         ProgressTimerHandle,
         this,
         &UCraftingPanelWidget::UpdateProgressBar,
-        0.05f,
+        ProgressUpdateInterval,
         true);
 }
 
@@ -312,8 +312,8 @@ void UCraftingPanelWidget::UpdateProgressBar()
 
     if (TextBlock_CraftingTime)
     {
-        const int32 ElapsedTenths = FMath::RoundToInt(Elapsed * 10.f);
-        const int32 DurationTenths = FMath::RoundToInt(CraftTotalDuration * 10.f);
+        const int32 ElapsedTenths = FMath::RoundToInt(Elapsed * TimeDisplayPrecisionMultiplier);
+        const int32 DurationTenths = FMath::RoundToInt(CraftTotalDuration * TimeDisplayPrecisionMultiplier);
         if (ElapsedTenths != CachedElapsedTenths || DurationTenths != CachedDurationTenths)
         {
             CachedElapsedTenths = ElapsedTenths;

@@ -72,6 +72,9 @@ private:
     FDelegateHandle ProgressStoppedHandle;
     FDelegateHandle CraftStartFailedHandle;
 
+    static constexpr float ProgressUpdateInterval = 0.05f;
+    static constexpr float TimeDisplayPrecisionMultiplier = 10.f;
+
     void HandleRecipeListDeltaChanged(const FCraftingRecipeListDeltaViewData& Delta);
     void ApplyRecipeListDelta(const FCraftingRecipeListDeltaViewData& Delta);
     void FlushPendingRecipeDelta();

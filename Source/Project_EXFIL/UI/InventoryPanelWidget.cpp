@@ -406,10 +406,10 @@ void UInventoryPanelWidget::ClearAreaHighlights()
 
 void UInventoryPanelWidget::BindStatsToViewModel(USurvivalViewModel* InSurvivalViewModel)
 {
-    if (StatEntry_HP) StatEntry_HP->BindToViewModel(InSurvivalViewModel, FName("Health"));
-    if (StatEntry_HU) StatEntry_HU->BindToViewModel(InSurvivalViewModel, FName("Hunger"));
-    if (StatEntry_TH) StatEntry_TH->BindToViewModel(InSurvivalViewModel, FName("Thirst"));
-    if (StatEntry_ST) StatEntry_ST->BindToViewModel(InSurvivalViewModel, FName("Stamina"));
+    if (StatEntry_HP) StatEntry_HP->BindToViewModel(InSurvivalViewModel, EExfilStatType::Health);
+    if (StatEntry_HU) StatEntry_HU->BindToViewModel(InSurvivalViewModel, EExfilStatType::Hunger);
+    if (StatEntry_TH) StatEntry_TH->BindToViewModel(InSurvivalViewModel, EExfilStatType::Thirst);
+    if (StatEntry_ST) StatEntry_ST->BindToViewModel(InSurvivalViewModel, EExfilStatType::Stamina);
 }
 
 void UInventoryPanelWidget::OnInventoryTabClicked()
@@ -479,7 +479,7 @@ void UInventoryPanelWidget::UpdateDragAutoScroll(const FVector2D& ScreenSpacePos
         GetWorld()->GetTimerManager().SetTimer(
             AutoScrollTimerHandle, this,
             &UInventoryPanelWidget::TickAutoScroll,
-            0.016f, true);
+            AutoScrollUpdateInterval, true);
     }
     else if (AutoScrollSpeed == 0.f)
     {

@@ -10,10 +10,20 @@
 
 class USurvivalAttributeSet;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+UENUM(BlueprintType)
+enum class EExfilStatType : uint8
+{
+    Health   UMETA(DisplayName = "Health"),
+    Hunger   UMETA(DisplayName = "Hunger"),
+    Thirst   UMETA(DisplayName = "Thirst"),
+    Stamina  UMETA(DisplayName = "Stamina")
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(
     FOnStatChanged,
-    FName, ChangedFieldName,
-    float, NewValue);
+    EExfilStatType, StatType,
+    float, CurrentValue,
+    float, MaxValue);
 
 UCLASS()
 class PROJECT_EXFIL_API USurvivalViewModel : public UObject
@@ -26,14 +36,15 @@ public:
     UPROPERTY(BlueprintAssignable)
     FOnStatChanged OnStatChanged;
 
-    float GetStatValue(FName StatName) const;
-    float GetMaxStatValue(FName StatName) const;
+    float GetStatValue(EExfilStatType StatType) const;
+    float GetMaxStatValue(EExfilStatType StatType) const;
 
 private:
     UPROPERTY()
     TWeakObjectPtr<UAbilitySystemComponent> CachedASC;
 
     void OnAttributeChanged(const FOnAttributeChangeData& Data);
+    bool TryGetStatTypeFromAttribute(const FGameplayAttribute& Attribute, EExfilStatType& OutStatType) const;
 
     TArray<FDelegateHandle> BoundDelegates;
 };

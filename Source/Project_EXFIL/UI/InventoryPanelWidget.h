@@ -188,6 +188,7 @@ private:
     
     static constexpr float ScrollRate = 15.f;
 
-    
+    static constexpr float AutoScrollUpdateInterval = 0.016f;
+
     void TickAutoScroll();
 };

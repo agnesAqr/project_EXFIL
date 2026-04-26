@@ -11,15 +11,6 @@ class UImage;
 class UTextBlock;
 class UTexture2D;
 
-UENUM(BlueprintType)
-enum class EExfilStatType : uint8
-{
-    Health   UMETA(DisplayName = "Health"),
-    Hunger   UMETA(DisplayName = "Hunger"),
-    Thirst   UMETA(DisplayName = "Thirst"),
-    Stamina  UMETA(DisplayName = "Stamina")
-};
-
 UCLASS(Abstract)
 class PROJECT_EXFIL_API UStatEntryWidget : public UUserWidget
 {
@@ -39,7 +30,7 @@ public:
     void UpdateStat(float Current, float Maximum);
 
     
-    void BindToViewModel(USurvivalViewModel* ViewModel, FName InStatName);
+    void BindToViewModel(USurvivalViewModel* ViewModel, EExfilStatType InStatType);
 
 protected:
     virtual void NativeOnInitialized() override;
@@ -60,21 +51,20 @@ protected:
     TObjectPtr<UTextBlock> TextBlock_StatLabel;
 
 private:
-    float CachedCurrent = 100.f;
-    float CachedMaximum = 100.f;
+    static constexpr float InitialStatValue = 0.f;
+    static constexpr float LowWarningThreshold = 0.20f;
 
-    int32 CachedRoundedCurrent = 100;
-    int32 CachedRoundedMax = 100;
+    float CachedCurrent = InitialStatValue;
+    float CachedMaximum = InitialStatValue;
 
-    FName TrackedStatName;
-    FName TrackedMaxName;
+    int32 CachedRoundedCurrent = 0;
+    int32 CachedRoundedMax = 0;
 
     TWeakObjectPtr<USurvivalViewModel> BoundViewModel;
 
     UFUNCTION()
-    void OnStatUpdated(FName ChangedFieldName, float NewValue);
+    void OnStatUpdated(EExfilStatType ChangedStatType, float CurrentValue, float MaxValue);
 
+    FLinearColor GetFillColor(bool bIsLow) const;
     FLinearColor GetNormalFillColor() const;
-
-    static constexpr float LowWarningThreshold = 0.20f;
 };
