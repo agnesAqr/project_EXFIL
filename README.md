@@ -19,7 +19,7 @@
 | **엔진** | Unreal Engine 5.6 |
 | **언어** | C++ (100%, 블루프린트 미사용) |
 | **아키텍처** | Dedicated Server / Server Authority |
-| **개발 기간** | 2026.03.18 - 2026.03.29 (8일 스프린트) + 후속 리팩토링 |
+| **개발 기간** | 2026.03.18 - 2026.04.22 (실개발 17일 / 집중 개발 8일 + 후속 리팩토링) |
 | **작업 인원** | 1명 |
 | **주요 모듈** | GameplayAbilities · ModelViewViewModel · CommonUI · NetCore |
 
@@ -28,16 +28,19 @@
 ## 📁 프로젝트 구조
 
 ```
-Source/Project_EXFIL/
-├── Core/              캐릭터·게임모드·플레이어컨트롤러·로깅 (4클래스)
-├── Inventory/         FastArray 기반 그리드 인벤토리 + 데이터 구조체 (1클래스)
-├── GAS/               AttributeSet · GA_Fire · GA_Craft · SurvivalViewModel (4클래스)
-├── Crafting/          타이머 기반 크래프팅 컴포넌트 (1클래스)
-├── Data/              ItemDataSubsystem + FItemData / FCraftingRecipe
-│   └── Equipment/     EquipmentComponent + 장비 슬롯 enum/struct (2클래스)
-├── UI/                MVVM 위젯 + 드래그드롭 + UIManager (13클래스)
-├── World/             WorldItem 픽업/드롭 액터 (1클래스)
-└── Project_EXFILCharacter/GameMode/PlayerController  (Epic 템플릿 베이스)
+  Source/Project_EXFIL/
+  ├── Core/              EXFILCharacter · EXFILGameMode · EXFILPlayerController + EXFILLog
+  ├── Inventory/         InventoryComponent + FastArray/슬롯/아이템 구조체
+  ├── GAS/               SurvivalAttributeSet · GA_Fire · GA_Craft · SurvivalViewModel
+  ├── Crafting/          CraftingComponent
+  ├── Data/              ItemDataSubsystem + Item/Crafting 데이터 타입
+  │   └── Equipment/     EquipmentComponent + Equipment 슬롯 타입
+  ├── UI/                MVVM/View / 드래그드롭 / UIManager
+  ├── World/             WorldItem
+  ├── Project_EXFILCharacter.h
+  ├── Project_EXFILGameMode.h
+  ├── Project_EXFILPlayerController.h
+  └── Project_EXFIL.h
 ```
 
 > Core 클래스(`AEXFILCharacter` 등)는 Epic 템플릿 베이스(`AProject_EXFILCharacter` 등)를 상속해 EXFIL 도메인 로직을 확장합니다.
@@ -329,9 +332,9 @@ git clone https://github.com/agnesAqr/project_EXFIL.git
 
 인터랙티브 HTML 다이어그램:
 
-- [슈팅 네트워크 흐름](docs/Portfolio/ShootingNetworkFlow.html)
+- [Shooting 네트워크 흐름](docs/Portfolio/ShootingNetworkFlow.html)
 - [GAS 통합 파이프라인](docs/Portfolio/GASPipeline.html)
-- [리플리케이션 아키텍처](docs/Portfolio/ReplicationArch.html)
+- [Replication 아키텍처](docs/Portfolio/ReplicationArch.html)
 - [그리드 + Bitmap 시각화](docs/Portfolio/GridBitmapVisualization.html)
 - [캐시 분리 아키텍처 (FastArray + 로컬 캐시)](docs/Portfolio/CacheSeparationArch.html)
 - [ASC 초기화 타이밍](docs/Portfolio/ASCTimingDiagram.html)
