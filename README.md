@@ -176,7 +176,6 @@ classDiagram
     class UEquipmentComponent {
         +TArray~FEquipmentSlotData~ ReplicatedSlots «ReplicatedUsing=OnRep_Slots»
         -TMap~EEquipmentSlot,int32~ SlotIndexMap «Local»
-        -TMap~FName,TArray~ SlotTagToCandidates «Local»
         +Server_RequestEquipFromInventory() «Server, Reliable»
         +Server_RequestUnequipToInventory() «Server, Reliable»
         +Server_RequestUnequipToInventoryAt() «Server, Reliable»

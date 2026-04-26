@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "GameplayEffect.h"
+#include "Data/Equipment/EquipmentTypes.h"
 #include "Inventory/EXFILInventoryTypes.h"
 
 #include "EXFILItemTypes.generated.h"
@@ -58,7 +59,7 @@ struct PROJECT_EXFIL_API FItemData : public FTableRowBase
 
     
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item|Equipment")
-    FName EquipmentSlotTag;
+    TArray<EEquipmentSlot> ValidEquipmentSlots;
 
     
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "World")

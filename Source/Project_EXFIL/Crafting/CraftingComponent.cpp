@@ -281,7 +281,8 @@ void UCraftingComponent::OnCraftTimerComplete()
             if (World && Owner)
             {
                 const FVector SpawnLoc =
-                    Owner->GetActorLocation() + Owner->GetActorForwardVector() * 80.f;
+                    Owner->GetActorLocation()
+                    + Owner->GetActorForwardVector() * ResultDropForwardOffset;
                 FActorSpawnParameters SpawnParams;
                 SpawnParams.Owner = Owner;
                 SpawnParams.SpawnCollisionHandlingOverride =

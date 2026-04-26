@@ -46,11 +46,6 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     bool HasWeaponEquipped() const;
 
-    EEquipmentSlot FindTargetSlot(const FName& EquipmentSlotTag) const;
-
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
-    static EEquipmentSlot SlotTagToEnum(FName SlotTag);
-
     UPROPERTY(BlueprintAssignable, Category = "Equipment|Events")
     FOnEquipmentChanged OnItemEquipped;
 
@@ -86,13 +81,17 @@ private:
     UPROPERTY(ReplicatedUsing = OnRep_Slots)
     TArray<FEquipmentSlotData> ReplicatedSlots;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Equipment|Drop", meta = (AllowPrivateAccess = "true"))
+    float DroppedEquipmentForwardOffset = 100.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Equipment|Drop", meta = (AllowPrivateAccess = "true"))
+    float DroppedEquipmentUpwardOffset = 50.f;
+
     UFUNCTION()
     void OnRep_Slots();
 
     void InitializeSlots();
-    void InitializeSlotMapping();
-
-    TMap<FName, TArray<EEquipmentSlot>> SlotTagToCandidates;
+    EEquipmentSlot FindTargetSlot(const TArray<EEquipmentSlot>& ValidSlots) const;
 
     FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType);
     const FEquipmentSlotData* FindSlotData(EEquipmentSlot SlotType) const;

@@ -83,6 +83,9 @@ private:
 
     FTimerHandle CraftTimerHandle;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crafting|Drop", meta = (AllowPrivateAccess = "true"))
+    float ResultDropForwardOffset = 80.f;
+
     struct FConsumedIngredient
     {
         FName ItemDataID;

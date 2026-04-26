@@ -183,18 +183,7 @@ void UEquipmentComponent::InitializeSlots()
     ReplicatedSlots.Add(FEquipmentSlotData(EEquipmentSlot::Weapon1));
     ReplicatedSlots.Add(FEquipmentSlotData(EEquipmentSlot::Weapon2));
 
-    InitializeSlotMapping();
     RebuildSlotIndexMap();
-}
-
-void UEquipmentComponent::InitializeSlotMapping()
-{
-    SlotTagToCandidates.Empty();
-    SlotTagToCandidates.Add(FName("Weapon"), { EEquipmentSlot::Weapon1, EEquipmentSlot::Weapon2 });
-    SlotTagToCandidates.Add(FName("Head"), { EEquipmentSlot::Head });
-    SlotTagToCandidates.Add(FName("Face"), { EEquipmentSlot::Face });
-    SlotTagToCandidates.Add(FName("Eyewear"), { EEquipmentSlot::Eyewear });
-    SlotTagToCandidates.Add(FName("Body"), { EEquipmentSlot::Body });
 }
 
 bool UEquipmentComponent::EquipItem_Internal(
@@ -279,28 +268,26 @@ bool UEquipmentComponent::EquipFromInventory_Internal(EEquipmentSlot Slot, FGuid
         return false;
     }
 
-    const TArray<EEquipmentSlot>* ValidSlots =
-        SlotTagToCandidates.Find(ItemData->EquipmentSlotTag);
-    if (!ValidSlots || ValidSlots->IsEmpty())
+    const TArray<EEquipmentSlot>& ValidSlots = ItemData->ValidEquipmentSlots;
+    if (ValidSlots.IsEmpty())
     {
         UE_LOG(LogEXFIL, Warning,
-            TEXT("EquipFromInventory_Internal: Unknown EquipmentSlotTag '%s'"),
-            *ItemData->EquipmentSlotTag.ToString());
+            TEXT("EquipFromInventory_Internal: '%s' has no valid equipment slots"),
+            *ItemInstance.ItemDataID.ToString());
         return false;
     }
 
     EEquipmentSlot TargetSlot = Slot;
     if (TargetSlot == EEquipmentSlot::None)
     {
-        TargetSlot = FindTargetSlot(ItemData->EquipmentSlotTag);
+        TargetSlot = FindTargetSlot(ValidSlots);
     }
-    else if (!ValidSlots->Contains(TargetSlot))
+    else if (!ValidSlots.Contains(TargetSlot))
     {
         UE_LOG(LogEXFIL, Warning,
-            TEXT("EquipFromInventory_Internal: Invalid slot %d for '%s' (tag '%s')"),
+            TEXT("EquipFromInventory_Internal: Invalid slot %d for '%s'"),
             static_cast<int32>(TargetSlot),
-            *ItemInstance.ItemDataID.ToString(),
-            *ItemData->EquipmentSlotTag.ToString());
+            *ItemInstance.ItemDataID.ToString());
         return false;
     }
 
@@ -429,8 +416,8 @@ bool UEquipmentComponent::DropEquippedItem_Internal(EEquipmentSlot Slot)
 
     const FVector SpawnLocation =
         Owner->GetActorLocation()
-        + Owner->GetActorForwardVector() * 100.f
-        + FVector(0.f, 0.f, 50.f);
+        + Owner->GetActorForwardVector() * DroppedEquipmentForwardOffset
+        + FVector::UpVector * DroppedEquipmentUpwardOffset;
 
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = Owner;
@@ -565,17 +552,15 @@ UAbilitySystemComponent* UEquipmentComponent::GetASC() const
     return nullptr;
 }
 
-EEquipmentSlot UEquipmentComponent::FindTargetSlot(const FName& EquipmentSlotTag) const
+EEquipmentSlot UEquipmentComponent::FindTargetSlot(
+    const TArray<EEquipmentSlot>& ValidSlots) const
 {
-    const TArray<EEquipmentSlot>* Candidates = SlotTagToCandidates.Find(EquipmentSlotTag);
-    if (!Candidates || Candidates->IsEmpty())
+    if (ValidSlots.IsEmpty())
     {
-        UE_LOG(LogEXFIL, Warning, TEXT("FindTargetSlot: Unknown tag '%s'"),
-            *EquipmentSlotTag.ToString());
         return EEquipmentSlot::None;
     }
 
-    for (EEquipmentSlot CandidateSlot : *Candidates)
+    for (EEquipmentSlot CandidateSlot : ValidSlots)
     {
         const FEquipmentSlotData* SlotData = FindSlotData(CandidateSlot);
         if (SlotData && SlotData->IsEmpty())
@@ -584,26 +569,5 @@ EEquipmentSlot UEquipmentComponent::FindTargetSlot(const FName& EquipmentSlotTag
         }
     }
 
-    return (*Candidates)[0];
-}
-
-EEquipmentSlot UEquipmentComponent::SlotTagToEnum(FName SlotTag)
-{
-    if (SlotTag.IsNone())
-    {
-        return EEquipmentSlot::None;
-    }
-
-    static const TMap<FName, EEquipmentSlot> TagMap =
-    {
-        { FName("Head"), EEquipmentSlot::Head },
-        { FName("Face"), EEquipmentSlot::Face },
-        { FName("Eyewear"), EEquipmentSlot::Eyewear },
-        { FName("Body"), EEquipmentSlot::Body },
-        { FName("Weapon1"), EEquipmentSlot::Weapon1 },
-        { FName("Weapon2"), EEquipmentSlot::Weapon2 },
-    };
-
-    const EEquipmentSlot* Found = TagMap.Find(SlotTag);
-    return Found ? *Found : EEquipmentSlot::None;
+    return ValidSlots[0];
 }
