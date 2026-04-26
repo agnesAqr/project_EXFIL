@@ -33,6 +33,8 @@ class PROJECT_EXFIL_API USurvivalViewModel : public UObject
 public:
     void InitializeWithASC(UAbilitySystemComponent* ASC);
 
+    virtual void BeginDestroy() override;
+
     UPROPERTY(BlueprintAssignable)
     FOnStatChanged OnStatChanged;
 
@@ -45,6 +47,9 @@ private:
 
     void OnAttributeChanged(const FOnAttributeChangeData& Data);
     bool TryGetStatTypeFromAttribute(const FGameplayAttribute& Attribute, EExfilStatType& OutStatType) const;
+    void BindAttributeChange(UAbilitySystemComponent* ASC, FGameplayAttribute Attribute);
+    void UnbindASC();
 
+    TArray<FGameplayAttribute> BoundAttributes;
     TArray<FDelegateHandle> BoundDelegates;
 };

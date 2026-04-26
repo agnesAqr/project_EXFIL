@@ -37,6 +37,19 @@ void UInventoryPanelWidget::NativeOnInitialized()
     UpdateTabStyles(0);
 }
 
+void UInventoryPanelWidget::NativeDestruct()
+{
+    StopDragAutoScroll();
+
+    if (ViewModel && ViewModelRefreshedHandle.IsValid())
+    {
+        ViewModel->OnViewModelRefreshed.Remove(ViewModelRefreshedHandle);
+        ViewModelRefreshedHandle.Reset();
+    }
+
+    Super::NativeDestruct();
+}
+
 void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
 {
     if (ViewModel)

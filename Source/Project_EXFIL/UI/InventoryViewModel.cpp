@@ -10,6 +10,8 @@
 
 void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
 {
+    UnbindInventoryComponent();
+
     if (!InInventoryComponent)
     {
         return;
@@ -36,9 +38,15 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
         SlotVM->SetGridPosition(FIntPoint(i % GridWidth, i / GridWidth));
         SlotViewModels[i] = SlotVM;
     }
-    InInventoryComponent->OnInventoryUpdated.AddUObject(
+    InventoryUpdatedHandle = InInventoryComponent->OnInventoryUpdated.AddUObject(
         this, &UInventoryViewModel::HandleInventoryUpdated);
     RefreshAllSlots();
+}
+
+void UInventoryViewModel::BeginDestroy()
+{
+    UnbindInventoryComponent();
+    Super::BeginDestroy();
 }
 
 UInventorySlotViewModel* UInventoryViewModel::GetSlotAt(FIntPoint Position) const
@@ -262,6 +270,18 @@ void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& DirtyIndices
 
     BuildPendingOverlayDelta(DirtyIndices);
     OnViewModelRefreshed.Broadcast(DirtyIndices);
+}
+
+void UInventoryViewModel::UnbindInventoryComponent()
+{
+    if (InventoryComp.IsValid() && InventoryUpdatedHandle.IsValid())
+    {
+        InventoryComp->OnInventoryUpdated.Remove(InventoryUpdatedHandle);
+    }
+
+    InventoryUpdatedHandle.Reset();
+    InventoryComp.Reset();
+    CachedItemSub.Reset();
 }
 
 void UInventoryViewModel::RefreshAllSlots()

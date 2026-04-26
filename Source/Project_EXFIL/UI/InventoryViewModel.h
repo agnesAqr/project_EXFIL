@@ -130,6 +130,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
     void Initialize(UInventoryComponent* InInventoryComponent);
 
+    virtual void BeginDestroy() override;
+
     
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
     UInventorySlotViewModel* GetSlotAt(FIntPoint Position) const;
@@ -207,8 +209,10 @@ private:
 
     FInventoryOverlayDeltaViewData PendingOverlayDelta;
     bool bHasPendingOverlayDelta = false;
+    FDelegateHandle InventoryUpdatedHandle;
 
     void HandleInventoryUpdated(const TSet<int32>& DirtyIndices);
+    void UnbindInventoryComponent();
 
     
     void RefreshAllSlots();

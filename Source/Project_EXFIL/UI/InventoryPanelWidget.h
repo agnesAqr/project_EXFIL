@@ -64,6 +64,7 @@ public:
 
 protected:
     virtual void NativeOnInitialized() override;
+    virtual void NativeDestruct() override;
     virtual void NativeOnActivated() override;
     virtual void NativeOnDeactivated() override;
     virtual bool NativeOnHandleBackAction() override;

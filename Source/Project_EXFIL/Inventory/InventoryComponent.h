@@ -56,10 +56,12 @@ public:
 
 #pragma region Config
 	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config",
+		meta = (ClampMin = "1", ClampMax = "16", UIMin = "1", UIMax = "16"))
 	int32 GridWidth = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config",
+		meta = (ClampMin = "1", UIMin = "1"))
 	int32 GridHeight = 12;
 
 	
@@ -235,6 +237,7 @@ private:
 
 	void RebuildItemIndexMap();
 
+	static constexpr int32 MaxGridBitmapWidth = 16;
 	TArray<uint16> RowBitmap;
 	void RebuildItemCountCache();
 	void SetBit(int32 Col, int32 Row, bool bOccupied);

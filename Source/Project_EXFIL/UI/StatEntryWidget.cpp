@@ -42,6 +42,17 @@ void UStatEntryWidget::NativeOnInitialized()
     }
 }
 
+void UStatEntryWidget::NativeDestruct()
+{
+    if (BoundViewModel.IsValid())
+    {
+        BoundViewModel->OnStatChanged.RemoveDynamic(this, &UStatEntryWidget::OnStatUpdated);
+        BoundViewModel.Reset();
+    }
+
+    Super::NativeDestruct();
+}
+
 void UStatEntryWidget::UpdateStat(float Current, float Maximum)
 {
     if (Maximum <= 0.f)

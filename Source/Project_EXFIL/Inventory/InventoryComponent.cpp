@@ -677,7 +677,12 @@ bool UInventoryComponent::FindFirstAvailableSlot(FItemSize Size, FIntPoint& OutP
 {
 	const int32 W = Size.Width;
 	const int32 H = Size.Height;
-	const uint16 BaseMask = static_cast<uint16>((1 << W) - 1);
+	if (W <= 0 || H <= 0 || W > GridWidth || H > GridHeight)
+	{
+		return false;
+	}
+
+	const uint16 BaseMask = static_cast<uint16>((static_cast<uint32>(1) << W) - 1U);
 
 	for (int32 Y = 0; Y <= GridHeight - H; ++Y)
 	{
@@ -979,14 +984,14 @@ void UInventoryComponent::BroadcastFullInventoryRefresh()
 
 void UInventoryComponent::InitializeGridStorage()
 {
-	const int32 SafeGridWidth = FMath::Max(1, GridWidth);
-	const int32 SafeGridHeight = FMath::Max(1, GridHeight);
+	GridWidth = FMath::Clamp(GridWidth, 1, MaxGridBitmapWidth);
+	GridHeight = FMath::Max(1, GridHeight);
 
-	GridSlots.SetNum(SafeGridWidth * SafeGridHeight);
+	GridSlots.SetNum(GridWidth * GridHeight);
 	for (FInventorySlot& Slot : GridSlots)
 		Slot.Clear();
 
-	RowBitmap.Init(0, SafeGridHeight);
+	RowBitmap.Init(0, GridHeight);
 }
 
 void UInventoryComponent::ApplyItemAdded_Local(const FInventoryItemInstance& Item, int32 ItemIndex,
@@ -1225,7 +1230,8 @@ bool UInventoryComponent::AreSlotsFree(FIntPoint Position, FItemSize Size) const
 		return false;
 	}
 
-	const uint16 Mask = static_cast<uint16>(((1 << Size.Width) - 1) << Position.X);
+	const uint16 Mask = static_cast<uint16>(
+		((static_cast<uint32>(1) << Size.Width) - 1U) << Position.X);
 	for (int32 Y = Position.Y; Y < Position.Y + Size.Height; ++Y)
 	{
 		if ((RowBitmap[Y] & Mask) != 0)
@@ -1309,18 +1315,18 @@ void UInventoryComponent::FreeSlotsAt(FIntPoint Position, FItemSize EffectiveSiz
 
 void UInventoryComponent::SetBit(int32 Col, int32 Row, bool bOccupied)
 {
-	if (!RowBitmap.IsValidIndex(Row))
+	if (!RowBitmap.IsValidIndex(Row) || Col < 0 || Col >= GridWidth)
 	{
 		return;
 	}
 
 	if (bOccupied)
 	{
-		RowBitmap[Row] |= (1 << Col);
+		RowBitmap[Row] |= static_cast<uint16>(1U << Col);
 	}
 	else
 	{
-		RowBitmap[Row] &= ~(1 << Col);
+		RowBitmap[Row] &= static_cast<uint16>(~(1U << Col));
 	}
 }
 #pragma endregion

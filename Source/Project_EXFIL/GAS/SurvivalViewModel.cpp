@@ -7,6 +7,8 @@
 
 void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
 {
+    UnbindASC();
+
     if (!ASC)
     {
         UE_LOG(LogEXFIL, Warning, TEXT("SurvivalViewModel::InitializeWithASC — ASC NULL"));
@@ -15,45 +17,54 @@ void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
 
     CachedASC = ASC;
 
-    BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetHealthAttribute())
-        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetHealthAttribute());
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetHungerAttribute());
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetThirstAttribute());
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetStaminaAttribute());
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetMaxHealthAttribute());
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetMaxHungerAttribute());
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetMaxThirstAttribute());
+    BindAttributeChange(ASC, USurvivalAttributeSet::GetMaxStaminaAttribute());
+}
 
-    BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetHungerAttribute())
-        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+void USurvivalViewModel::BeginDestroy()
+{
+    UnbindASC();
+    Super::BeginDestroy();
+}
 
-    BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetThirstAttribute())
-        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+void USurvivalViewModel::BindAttributeChange(
+    UAbilitySystemComponent* ASC, FGameplayAttribute Attribute)
+{
+    if (!ASC)
+    {
+        return;
+    }
 
+    BoundAttributes.Add(Attribute);
     BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetStaminaAttribute())
+        ASC->GetGameplayAttributeValueChangeDelegate(Attribute)
         .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+}
 
-    BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetMaxHealthAttribute())
-        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+void USurvivalViewModel::UnbindASC()
+{
+    if (UAbilitySystemComponent* ASC = CachedASC.Get())
+    {
+        const int32 BindingCount = FMath::Min(BoundAttributes.Num(), BoundDelegates.Num());
+        for (int32 Index = 0; Index < BindingCount; ++Index)
+        {
+            if (BoundDelegates[Index].IsValid())
+            {
+                ASC->GetGameplayAttributeValueChangeDelegate(BoundAttributes[Index])
+                    .Remove(BoundDelegates[Index]);
+            }
+        }
+    }
 
-    BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetMaxHungerAttribute())
-        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
-
-    BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetMaxThirstAttribute())
-        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
-
-    BoundDelegates.Add(
-        ASC->GetGameplayAttributeValueChangeDelegate(
-            USurvivalAttributeSet::GetMaxStaminaAttribute())
-        .AddUObject(this, &USurvivalViewModel::OnAttributeChanged));
+    BoundAttributes.Reset();
+    BoundDelegates.Reset();
+    CachedASC.Reset();
 }
 
 void USurvivalViewModel::OnAttributeChanged(const FOnAttributeChangeData& Data)
