@@ -19,7 +19,7 @@
 | **엔진** | Unreal Engine 5.6 |
 | **언어** | C++ (100%, 블루프린트 미사용) |
 | **아키텍처** | Dedicated Server / Server Authority |
-| **개발 기간** | 2026.03.18 - 2026.04.22 (실개발 17일 / 집중 개발 8일 + 후속 리팩토링) |
+| **개발 기간** | 2026.03.18 - 2026.04.27 |
 | **작업 인원** | 1명 |
 | **주요 모듈** | GameplayAbilities · ModelViewViewModel · CommonUI · NetCore |
 
@@ -35,7 +35,7 @@
   ├── Crafting/          CraftingComponent
   ├── Data/              ItemDataSubsystem + Item/Crafting 데이터 타입
   │   └── Equipment/     EquipmentComponent + Equipment 슬롯 타입
-  ├── UI/                MVVM/View / 드래그드롭 / UIManager
+  ├── UI/                MVVM ViewModel/View / 드래그드롭 / UIManager
   ├── World/             WorldItem
   ├── Project_EXFILCharacter.h
   ├── Project_EXFILGameMode.h
@@ -79,7 +79,7 @@
 ```
 View Layer (CommonUI Widgets + Drag/Drop Overlay)
     │  Delegate / FieldNotify
-ViewModel Layer (InventoryViewModel · SurvivalViewModel)
+ViewModel Layer (InventoryViewModel · EquipmentViewModel · CraftingViewModel · SurvivalViewModel)
     │  Delegate
 Model Layer (UInventoryComponent · UCraftingComponent · UEquipmentComponent)
     │
@@ -92,9 +92,9 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 
 ### 설계 원칙
 
-- **MVVM 단방향:** View → ViewModel → Model 방향으로만 참조. 게임플레이 상태 동기화는 Delegate / OnRep / FieldNotify (Tick 미사용)
+- **MVVM 단방향:** View → ViewModel → Model 방향으로만 참조. 게임플레이 상태 동기화는 Delegate / OnRep / FieldNotify 기반이며 Tick/Timer 기반 Model polling은 금지
 - **Server Authority:** 모든 게임 로직은 서버에서만 실행. 클라이언트는 Request → Server RPC → `_Internal` 3계층으로 요청만 전달
-- **Data-Driven:** 아이템 / 레시피 / 장비 스펙 전부 DataTable CSV. 텍스처·GE 클래스는 TSoftObjectPtr / TSoftClassPtr로 지연 로드 후 Subsystem 캐시
+- **Data-Driven:** 아이템 / 레시피 / 장비 스펙은 DataTable CSV. 텍스처·GE 클래스는 TSoftObjectPtr / TSoftClassPtr로 지연 로드 후 Subsystem 캐시
 - **Incremental Cache Patch:** FastArray의 변경 인덱스만 받아 캐시(`ItemIndexMap`, `ItemCountCache`, `RowBitmap`, `GridSlots`)를 부분 갱신
 
 ---
@@ -103,7 +103,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 
 ### FEATURE 01 — 그리드 인벤토리 + 비트맵 검색 + FastArray 델타 동기화
 - 1D `TArray`로 2D 그리드를 표현하는 타르코프 스타일 인벤토리 — 멀티셀 아이템 배치, 회전, 스택 병합
-- `RowBitmap (TArray<uint16>)` 기반 빈 영역 검증: **O(H)** (행당 비트 AND 1회)
+- `RowBitmap (TArray<uint16>)` 기반 빈 영역 검증: **O(H)** (행당 비트 AND 1회, 현재 `GridWidth <= 16`으로 제한)
 - `ItemIndexMap (TMap<FGuid, int32>)`로 인스턴스 탐색: **O(1)**
 - `ItemCountCache (TMap<FName, int32>)`로 ID별 수량 합계: **O(1)**
 - Replicated 데이터(`FInventoryFastArray InventoryList`) + 로컬 전용 캐시(GridSlots / TMap / Bitmap) 분리
@@ -125,16 +125,26 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - **Server RPC 12개**(Inventory 4 · Equipment 4 · Crafting 2 · Character 2)
   - 모든 Server RPC는 `_Implementation` 내부 sanity-check + early return
   - Character RPC(`Server_ConfirmHit`, `Server_RequestPickupItem`)도 동일 정책으로 정리
+  - `_Validate` 실패는 클라이언트 disconnect 성격이므로, 정상 플레이에서도 발생 가능한 요청 실패는 `_Implementation`에서 서버 상태 기준으로 거부 처리
 - 리플리케이션 조건 전략 분리:
-  - `COND_OwnerOnly` (FastArray) — Inventory
-  - `ReplicatedUsing` 본인 데이터 — Equipment(`ReplicatedSlots`), Crafting(`bIsCrafting`)
+  - `COND_OwnerOnly` — Inventory(`InventoryList`), Equipment(`ReplicatedSlots`), Crafting(`bIsCrafting`, `CurrentRecipeID`)
   - `COND_None` — WorldItem, AttributeSet, ERespawnPhase (전체 가시성 필요)
 - 치트 방어 3계층: 파라미터 sanity check → 서버 라인 트레이스 재검증 → `HasAuthority` 가드
 
 ### FEATURE 05 — Deferred UI Refresh + Drag & Drop
-- ViewModel 갱신과 Slate 레이아웃 측정의 순서가 보장되지 않는 문제를, `bLayoutReady` + `bHasPendingOverlayRefresh` 2조건이 모두 충족된 시점에서 한 번만 flush 하는 패턴으로 해결 (타이머 미사용, NativePaint 트리거)
-- `InventoryIconOverlay`는 `UniformGridPanel` 위에 겹친 `CanvasPanel`로 멀티셀 아이콘을 정확한 픽셀 위치에 렌더링 (CellStride × RootGridPos)
-- 드래그 시 회전(R 키) + 자동 스크롤 + 빈 영역 하이라이트(초록/빨강) 지원
+- ViewModel 갱신과 Slate 레이아웃 측정의 순서가 보장되지 않는 문제를, `bLayoutReady` + `bHasPendingOverlayRefresh` 2조건이 모두 충족된 시점에서 한 번만 flush 하는 패턴으로 해결 (데이터 동기화 polling 없음, NativePaint 트리거)
+- `InventoryIconOverlay`는 `UInventoryViewModel`이 만든 overlay delta(Upsert/Remove)를 소비하고, `UniformGridPanel` 위 `CanvasPanel`에 멀티셀 아이콘을 정확한 픽셀 위치로 배치
+- 드래그 시 회전(R 키) + 자동 스크롤 + 빈 영역 하이라이트(초록/빨강) 지원. 배치 가능 표시는 `bPredictedPlaceable` 기반 UX hint이며 최종 성공 여부는 서버가 재검증
+
+---
+
+## ⚠️ 현재 한계
+
+- `AEXFILCharacter::BeginPlay()`의 시작 로드아웃(Bandage/Pistol/BodyArmor/Painkillers/Medkit)과 `AEXFILGameMode::SpawnTestWorldItems()`의 테스트 월드 스폰은 아직 DataTable/DataAsset로 분리되지 않은 데모용 seed 코드입니다.
+- `UItemDataSubsystem`의 `LoadSynchronous()` 기반 최초 로드는 현재 데이터 규모에서는 단순성을 우선한 선택입니다. 아이템/아이콘/GE 수가 늘거나 첫 상호작용 hitch가 프로파일링에서 확인되면, 핵심 에셋은 GameInstance 초기화 단계에서 warm-up하고 나머지는 `StreamableManager` 기반 async load + 캐시 완료 콜백 구조로 전환할 예정입니다.
+- `TraceForWorldItem()`의 `TActorIterator` 기반 근접 검색은 테스트 월드의 소수 아이템 기준 구현입니다. 월드 아이템 수가 증가하거나 상호작용 탐색 비용이 프레임에 영향을 주는 시점에는 overlap candidate cache 또는 `OverlapMultiByObjectType`/spatial query 기반 탐색으로 교체할 예정입니다.
+- GameplayEffect는 DataTable에서 SoftClassPtr로 참조하지만, 실제 modifier 수치는 GE 에셋 내부에 분산되어 있습니다. 현재 규모에서는 빠른 제작과 GAS 파이프라인 검증을 우선한 선택이며, 아이템/장비/효과 수가 늘어나면 modifier magnitude를 DataTable/DataAsset 또는 SetByCaller 기반으로 분리해 밸런스 값을 한 곳에서 관리할 예정입니다.
+- `GA_Fire`는 `LocalPredicted` 정책을 사용하지만 진짜 GAS Prediction Key 발급/롤백은 구현하지 않았습니다 — 클라 즉시 활성화 + 서버 ConfirmHit 재검증 조합입니다.
 
 ---
 
@@ -144,82 +154,106 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 classDiagram
     direction TB
 
-    class AEXFILCharacter {
-        +UAbilitySystemComponent* ASC «Mixed Mode»
-        +UInventoryComponent* InventoryComp
-        +UEquipmentComponent* EquipmentComp
-        +UCraftingComponent* CraftingComp
-        +ERespawnPhase RespawnPhase «ReplicatedUsing»
-        +PossessedBy()
-        +OnRep_PlayerState()
-        +Server_ConfirmHit() «Server, Reliable»
-        +Server_RequestPickupItem() «Server, Reliable»
-        +Multicast_PlayHitReact() «Unreliable»
-        +Multicast_PlayHitEffect() «Unreliable»
-        +Client_ShowNotification() «Client, Reliable»
+    namespace Character_Actor_Layer {
+        class AEXFILCharacter {
+            +UAbilitySystemComponent* ASC «Mixed Mode»
+            +UInventoryComponent* InventoryComp
+            +UEquipmentComponent* EquipmentComp
+            +UCraftingComponent* CraftingComp
+            +ERespawnPhase RespawnPhase «ReplicatedUsing»
+            +PossessedBy()
+            +OnRep_PlayerState()
+            +Server_ConfirmHit() «Server, Reliable»
+            +Server_RequestPickupItem() «Server, Reliable»
+            +Multicast_PlayHitReact() «Unreliable»
+            +Multicast_PlayHitEffect() «Unreliable»
+            +Client_ShowNotification() «Client, Reliable»
+        }
     }
 
-    class UInventoryComponent {
-        +FInventoryFastArray InventoryList «Replicated, NetDeltaSerialize»
-        -TArray~FInventorySlot~ GridSlots «Local»
-        -TMap~FGuid,int32~ ItemIndexMap «Local»
-        -TMap~FName,int32~ ItemCountCache «Local»
-        -TArray~uint16~ RowBitmap «Local»
-        +Server_RequestRemoveItem() «Server, Reliable»
-        +Server_RequestMoveItem() «Server, Reliable»
-        +Server_RequestConsumeItemByID() «Server, Reliable»
-        +Server_RequestDropItem() «Server, Reliable»
-        +AddItemByID_Internal()  «Authority»
-        +AreSlotsFree() O(H) bitmap
+    namespace Model_Component_Layer {
+        class UInventoryComponent {
+            +FInventoryFastArray InventoryList «Replicated, NetDeltaSerialize»
+            -TArray~FInventorySlot~ GridSlots «Local»
+            -TMap~FGuid,int32~ ItemIndexMap «Local»
+            -TMap~FName,int32~ ItemCountCache «Local»
+            -TArray~uint16~ RowBitmap «Local, GridWidth<=16»
+            +Server_RequestRemoveItem() «Server, Reliable»
+            +Server_RequestMoveItem() «Server, Reliable»
+            +Server_RequestConsumeItemByID() «Server, Reliable»
+            +Server_RequestDropItem() «Server, Reliable»
+            +AddItemByID_Internal()  «Authority»
+            +AreSlotsFree() O(H) bitmap
+        }
+
+        class UEquipmentComponent {
+            +TArray~FEquipmentSlotData~ ReplicatedSlots «ReplicatedUsing=OnRep_Slots»
+            -TMap~EEquipmentSlot,int32~ SlotIndexMap «Local»
+            +Server_RequestEquipFromInventory() «Server, Reliable»
+            +Server_RequestUnequipToInventory() «Server, Reliable»
+            +Server_RequestUnequipToInventoryAt() «Server, Reliable»
+            +Server_RequestDropEquippedItem() «Server, Reliable»
+            +ApplyEquipmentEffect() / RemoveEquipmentEffect()
+        }
+
+        class UCraftingComponent {
+            +bool bIsCrafting «ReplicatedUsing=OnRep_CraftingState»
+            +FName CurrentRecipeID «Replicated»
+            -TArray~FConsumedIngredient~ ConsumedIngredients
+            +Server_RequestStartCraft() «Server, Reliable»
+            +Server_RequestCancelCraft() «Server, Reliable»
+            +Client_NotifyCraftStartFailed() «Client, Reliable»
+        }
     }
 
-    class UEquipmentComponent {
-        +TArray~FEquipmentSlotData~ ReplicatedSlots «ReplicatedUsing=OnRep_Slots»
-        -TMap~EEquipmentSlot,int32~ SlotIndexMap «Local»
-        +Server_RequestEquipFromInventory() «Server, Reliable»
-        +Server_RequestUnequipToInventory() «Server, Reliable»
-        +Server_RequestUnequipToInventoryAt() «Server, Reliable»
-        +Server_RequestDropEquippedItem() «Server, Reliable»
-        +ApplyEquipmentEffect() / RemoveEquipmentEffect()
+    namespace ViewModel_Layer {
+        class UInventoryViewModel {
+            +TArray~UInventorySlotViewModel~ SlotViewModels
+            +HandleInventoryUpdated(TSet~int32~)
+            +OnViewModelRefreshed «Native Multicast Delegate»
+        }
+
+        class UInventorySlotViewModel {
+            +GridPosition / ItemDataID / StackCount «FieldNotify»
+            +ItemInstanceID / Icon / Size / Rotated «FieldNotify»
+        }
+
+        class UEquipmentViewModel {
+            +GetSlotViewData()
+            +OnEquipmentSlotChanged «Native Multicast Delegate»
+        }
+
+        class UCraftingViewModel {
+            +BuildInitialRecipeListDelta()
+            +OnRecipeListDeltaChanged «Native Multicast Delegate»
+            +OnCraftingProgressStarted «Native Multicast Delegate»
+        }
+
+        class USurvivalViewModel {
+            +OnStatChanged(EExfilStatType, Current, Max) «Dynamic Multicast Delegate»
+            +InitializeWithASC()
+        }
     }
 
-    class UCraftingComponent {
-        +bool bIsCrafting «ReplicatedUsing=OnRep_CraftingState»
-        +FName CurrentRecipeID «Replicated»
-        -TArray~FConsumedIngredient~ ConsumedIngredients
-        +Server_RequestStartCraft() «Server, Reliable»
-        +Server_RequestCancelCraft() «Server, Reliable»
-        +Client_NotifyCraftStartFailed() «Client, Reliable»
-    }
+    namespace Data_GAS_Layer {
+        class USurvivalAttributeSet {
+            +Health / MaxHealth «ReplicatedUsing»
+            +Hunger / MaxHunger «ReplicatedUsing»
+            +Thirst / MaxThirst «ReplicatedUsing»
+            +Stamina / MaxStamina «ReplicatedUsing»
+            +PreAttributeChange()
+            +PostGameplayEffectExecute()
+        }
 
-    class USurvivalAttributeSet {
-        +Health / MaxHealth «ReplicatedUsing»
-        +Hunger / MaxHunger «ReplicatedUsing»
-        +Thirst / MaxThirst «ReplicatedUsing»
-        +Stamina / MaxStamina «ReplicatedUsing»
-        +PreAttributeChange()
-        +PostGameplayEffectExecute()
-    }
-
-    class UItemDataSubsystem {
-        +UDataTable* ItemDataTable
-        +UDataTable* CraftingRecipeTable
-        -TMap TextureCache
-        -TMap EffectClassCache
-        +GetItemData(FName) FItemData*
-        +GetCachedTexture() UTexture2D*
-        +GetCachedEffect() UClass*
-    }
-
-    class UInventoryViewModel {
-        +TArray~UInventorySlotViewModel~ SlotViewModels
-        +HandleInventoryUpdated(TSet~int32~)
-        +OnViewModelRefreshed «Multicast Delegate»
-    }
-
-    class USurvivalViewModel {
-        +OnStatChanged «Delegate»
-        +InitializeWithASC()
+        class UItemDataSubsystem {
+            +UDataTable* ItemDataTable
+            +UDataTable* CraftingRecipeTable
+            -TMap TextureCache
+            -TMap EffectClassCache
+            +GetItemData(FName) FItemData*
+            +GetCachedTexture() UTexture2D*
+            +GetCachedEffect() UClass*
+        }
     }
 
     AEXFILCharacter *-- UInventoryComponent
@@ -232,8 +266,11 @@ classDiagram
     UCraftingComponent ..> UInventoryComponent : consumes / adds items
     UCraftingComponent ..> UItemDataSubsystem : queries
 
-    UInventoryComponent ..> UInventoryViewModel : Delegate
-    USurvivalAttributeSet ..> USurvivalViewModel : OnAttributeChanged
+    UInventoryComponent ..> UInventoryViewModel : OnInventoryUpdated
+    UEquipmentComponent ..> UEquipmentViewModel : OnItemEquipped/Unequipped
+    UCraftingComponent ..> UCraftingViewModel : OnCraftingStateChanged
+    USurvivalAttributeSet ..> USurvivalViewModel : ASC AttributeChanged
+    UInventoryViewModel *-- UInventorySlotViewModel : owns slot VMs
 ```
 
 ```mermaid
@@ -327,7 +364,7 @@ git clone https://github.com/agnesAqr/project_EXFIL.git
 
 ---
 
-## 📄 다이어그램 (GitHub Pages)
+## 📄 관련 시각 자료 (`docs/Portfolio/`)
 
 인터랙티브 HTML 다이어그램:
 
