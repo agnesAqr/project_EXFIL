@@ -62,9 +62,9 @@
     <!-- FastArray callbacks box -->
     <rect x="345" y="305" width="200" height="80" rx="6" fill="#161b22" stroke="#d2992244"/>
     <text x="357" y="325" fill="#d29922" font-size="9" font-weight="600">FastArray PostReplicated*</text>
-    <text x="357" y="345" fill="#e6edf3" font-size="9">ApplyItem*_Local (steady)</text>
-    <text x="357" y="360" fill="#e6edf3" font-size="9">  Added/Removed/Moved/Stack</text>
-    <text x="357" y="375" fill="#e6edf3" font-size="9">→ 초기 sync는 RebuildAll</text>
+    <text x="357" y="345" fill="#e6edf3" font-size="9">Add/Change → ApplyItem*_Local</text>
+    <text x="357" y="360" fill="#e6edf3" font-size="9">Remove/InitSync → RebuildAll</text>
+    <text x="357" y="375" fill="#8b949e" font-size="8">PostReplicatedReceive 1회 flush</text>
     
     <!-- Cache rebuild arrows (marker 기반) -->
     <line x1="545" y1="325" x2="588" y2="325" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ag)"/>

@@ -111,6 +111,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - `ItemCountCache (TMap<FName, int32>)`로 ID별 수량 합계: **O(1)**
 - Replicated 데이터(`FInventoryFastArray InventoryList`) + 로컬 전용 캐시(GridSlots / TMap / Bitmap) 분리
 - FastArray 콜백(`PreReplicatedRemove` / `PostReplicatedAdd` / `PostReplicatedChange` / `PostReplicatedReceive`)에서 변경분만 캐시에 패치 후 ViewModel → IconOverlay까지 dirty 인덱스 전파
+- **Remove 경로는 풀 리빌드로 전환:** 서버 `RemoveItem_Internal` / `ConsumeItemByID_Internal`(full-stack)은 호출 직후 `RebuildAllCachesFromItems()`. 클라이언트는 `PreReplicatedRemove`에서 `bPendingFullCacheRebuild` 플래그만 세우고, 실제 재빌드는 `PostReplicatedReceive`에서 1회 실행. Add/Change는 부분 패치 유지 — `RemoveAt`로 인한 후행 인덱스 시프트가 `ItemIndexMap` stale 캐시를 만들던 문제를 정리
 
 ### FEATURE 02 — 서버 히트 재검증 슈팅
 - `GA_Fire` (LocalPredicted, InstancedPerActor) → 클라이언트가 카메라 기준 라인 트레이스 (5000cm, ECC_Pawn)
@@ -120,6 +121,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 
 ### FEATURE 03 — GAS 통합 파이프라인
 - `USurvivalAttributeSet` 8속성 (Health/MaxHealth, Hunger/MaxHunger, Thirst/MaxThirst, Stamina/MaxStamina) — 각각 `ReplicatedUsing = OnRep_*`
+- 복제 조건은 가시성 기준으로 분리: **Health/MaxHealth = `COND_None`** (다른 플레이어 HP 표시 필요), **Hunger/Thirst/Stamina (+Max) = `COND_OwnerOnly`** (개인 생존 스탯이라 본인 HUD에만 노출)
 - 클램핑 2단계: `PreAttributeChange` (CurrentValue 클램프) + `PostGameplayEffectExecute` (BaseValue 클램프 + Health ≤ 0 시 `OnDeath()`)
 - ASC Mixed Replication: GE는 Owner Client에만, GameplayCue / Tag는 전체 전파
 
@@ -164,8 +166,8 @@ classDiagram
             +UEquipmentComponent* EquipmentComp
             +UCraftingComponent* CraftingComp
             +ERespawnPhase RespawnPhase «ReplicatedUsing»
-            +PossessedBy()
-            +OnRep_PlayerState()
+            +PossessedBy() — server-side ASC init + GA_Fire grant
+            +InitAbilityActorInfoForClient() — called by PC.AcknowledgePossession
             +Server_ConfirmHit() «Server, Reliable»
             +Server_RequestPickupItem() «Server, Reliable»
             +Multicast_PlayHitReact() «Unreliable»
@@ -240,10 +242,10 @@ classDiagram
 
     namespace Data_GAS_Layer {
         class USurvivalAttributeSet {
-            +Health / MaxHealth «ReplicatedUsing»
-            +Hunger / MaxHunger «ReplicatedUsing»
-            +Thirst / MaxThirst «ReplicatedUsing»
-            +Stamina / MaxStamina «ReplicatedUsing»
+            +Health / MaxHealth «ReplicatedUsing, COND_None»
+            +Hunger / MaxHunger «ReplicatedUsing, COND_OwnerOnly»
+            +Thirst / MaxThirst «ReplicatedUsing, COND_OwnerOnly»
+            +Stamina / MaxStamina «ReplicatedUsing, COND_OwnerOnly»
             +PreAttributeChange()
             +PostGameplayEffectExecute()
         }
@@ -335,11 +337,11 @@ sequenceDiagram
     S->>S: Sanity check + 게임 로직 실행 (Authority)
 
     S-->>C: NetDeltaSerialize / OnRep (COND_OwnerOnly)
-    Note over C: Inventory(FastArray) / Equipment / Crafting
+    Note over C: Inventory(FastArray) / Equipment / Crafting<br/>Hunger·Thirst·Stamina (+Max)
 
     S-->>C: OnRep (COND_None)
     S-->>T: OnRep (COND_None)
-    Note over C,T: WorldItem / AttributeSet / ERespawnPhase
+    Note over C,T: WorldItem / Health·MaxHealth / ERespawnPhase
 
     S->>C: Multicast (Unreliable)
     S->>T: Multicast (Unreliable)

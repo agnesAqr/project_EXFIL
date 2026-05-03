@@ -78,8 +78,8 @@
     <text x="322" y="184" fill="#58a6ff" font-size="9" font-weight="600">Crafting</text>
     <text x="322" y="198" fill="#8b949e" font-size="8">bIsCrafting + RecipeID</text>
 
-    <text x="27" y="226" fill="#8b949e" font-size="9">근거: 인벤토리/장비/크래프팅은 본인만 조회. 전파 불필요.</text>
-    <text x="27" y="240" fill="#8b949e" font-size="9">거래 필요 시 별도 Server RPC로 요청하는 구조가 효율적.</text>
+    <text x="27" y="226" fill="#8b949e" font-size="9">근거: 인벤토리/장비/크래프팅 + Hunger/Thirst/Stamina(+Max) 모두 본인만 보면 됨.</text>
+    <text x="27" y="240" fill="#8b949e" font-size="9">거래 필요 시 별도 Server RPC로 요청, 다른 플레이어 HUD에는 노출 안 함.</text>
     <text x="27" y="254" fill="#d29922" font-size="9" font-weight="600">전송량: 4명(4N) → 1명(N) = 75% 절감</text>
 
     <!-- COND_None -->
@@ -92,11 +92,11 @@
     <text x="532" y="198" fill="#8b949e" font-size="8">ItemDataID + StackCount</text>
 
     <rect x="690" y="168" width="160" height="40" rx="4" fill="#0a0e17" stroke="#3fb95033"/>
-    <text x="702" y="184" fill="#3fb950" font-size="9" font-weight="600">GAS (Mixed)</text>
-    <text x="702" y="198" fill="#8b949e" font-size="8">GE→Owner, Cue→전체</text>
+    <text x="702" y="184" fill="#3fb950" font-size="9" font-weight="600">Health / MaxHealth</text>
+    <text x="702" y="198" fill="#8b949e" font-size="8">PvP HP 표시 확장 가능성</text>
 
-    <text x="517" y="226" fill="#8b949e" font-size="9">근거: 바닥 아이템은 모든 플레이어가 봐야 함 (선착순 픽업).</text>
-    <text x="517" y="240" fill="#8b949e" font-size="9">GAS Mixed: GE는 Owner만, GameplayCue는 전체 전파.</text>
+    <text x="517" y="226" fill="#8b949e" font-size="9">근거: 바닥 아이템은 모두가 봐야 함, Health는 PvP HUD 확장 여지로 OwnerOnly에서 None으로 둠.</text>
+    <text x="517" y="240" fill="#8b949e" font-size="9">Hunger/Thirst/Stamina(+Max)는 본인 HUD 전용이라 OwnerOnly로 분리(feat(Day8)).</text>
 
     <rect x="520" y="254" width="130" height="14" rx="3" fill="#d2992222" stroke="#d2992244"/>
     <text x="585" y="264" fill="#d29922" font-size="8" text-anchor="middle">Reliable (사망)</text>
