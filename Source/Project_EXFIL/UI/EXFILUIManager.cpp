@@ -2,13 +2,16 @@
 
 #include "UI/EXFILUIManager.h"
 #include "CoreMinimal.h"
+#include "AbilitySystemComponent.h"
+#include "Crafting/CraftingComponent.h"
+#include "Data/Equipment/EquipmentComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "Inventory/InventoryComponent.h"
 #include "UI/InventoryPanelWidget.h"
 #include "UI/InventoryViewModel.h"
 #include "UI/EquipmentViewModel.h"
 #include "UI/CraftingViewModel.h"
-#include "UI/CraftingPanelWidget.h"
 #include "GAS/SurvivalViewModel.h"
-#include "Core/EXFILLog.h"
 
 void UEXFILUIManager::Initialize(APlayerController* InPC,
                                   TSubclassOf<UInventoryPanelWidget> InInventoryClass,
@@ -38,34 +41,73 @@ void UEXFILUIManager::Initialize(APlayerController* InPC,
 	}
 }
 
-void UEXFILUIManager::BindPawnUI(UInventoryViewModel* InInventoryVM,
-                                  UEquipmentViewModel* InEquipmentVM,
-                                  UCraftingViewModel* InCraftingVM)
+void UEXFILUIManager::BindModels(UInventoryComponent* InInventoryComponent,
+                                  UEquipmentComponent* InEquipmentComponent,
+                                  UCraftingComponent* InCraftingComponent,
+                                  UAbilitySystemComponent* InAbilitySystemComponent)
 {
-	if (!InventoryPanel) return;
-
-	if (InInventoryVM)
+	if (!InInventoryComponent || !InEquipmentComponent ||
+		!InCraftingComponent || !InAbilitySystemComponent)
 	{
-		InventoryPanel->SetViewModel(InInventoryVM);
+		UnbindModels();
+		return;
 	}
 
-	if (InEquipmentVM)
+	if (BoundInventoryComponent.Get() == InInventoryComponent &&
+		BoundEquipmentComponent.Get() == InEquipmentComponent &&
+		BoundCraftingComponent.Get() == InCraftingComponent &&
+		BoundAbilitySystemComponent.Get() == InAbilitySystemComponent)
 	{
-		InventoryPanel->SetEquipmentViewModel(InEquipmentVM);
+		return;
 	}
 
-	if (InCraftingVM)
+	UnbindModels();
+
+	InventoryViewModel = NewObject<UInventoryViewModel>(this);
+	InventoryViewModel->Initialize(InInventoryComponent);
+
+	EquipmentViewModel = NewObject<UEquipmentViewModel>(this);
+	EquipmentViewModel->Initialize(InEquipmentComponent);
+
+	CraftingViewModel = NewObject<UCraftingViewModel>(this);
+	CraftingViewModel->Initialize(InCraftingComponent, InInventoryComponent);
+
+	SurvivalViewModel = NewObject<USurvivalViewModel>(this);
+	SurvivalViewModel->InitializeWithASC(InAbilitySystemComponent);
+
+	BoundInventoryComponent = InInventoryComponent;
+	BoundEquipmentComponent = InEquipmentComponent;
+	BoundCraftingComponent = InCraftingComponent;
+	BoundAbilitySystemComponent = InAbilitySystemComponent;
+
+	if (InventoryPanel)
 	{
-		InventoryPanel->SetCraftingViewModel(InCraftingVM);
+		InventoryPanel->SetViewModel(InventoryViewModel);
+		InventoryPanel->SetEquipmentViewModel(EquipmentViewModel);
+		InventoryPanel->SetCraftingViewModel(CraftingViewModel);
+		InventoryPanel->BindStatsToViewModel(SurvivalViewModel);
 	}
 }
 
-void UEXFILUIManager::BindSurvivalStats(USurvivalViewModel* InSurvivalVM)
+void UEXFILUIManager::UnbindModels()
 {
-	if (InventoryPanel && InSurvivalVM)
+	if (InventoryPanel)
 	{
-		InventoryPanel->BindStatsToViewModel(InSurvivalVM);
+		InventoryPanel->SetViewModel(nullptr);
+		InventoryPanel->SetEquipmentViewModel(nullptr);
+		InventoryPanel->SetCraftingViewModel(nullptr);
+		InventoryPanel->BindStatsToViewModel(nullptr);
 	}
+
+	InventoryViewModel = nullptr;
+	EquipmentViewModel = nullptr;
+	CraftingViewModel = nullptr;
+	SurvivalViewModel = nullptr;
+
+	BoundInventoryComponent.Reset();
+	BoundEquipmentComponent.Reset();
+	BoundCraftingComponent.Reset();
+	BoundAbilitySystemComponent.Reset();
 }
 
 void UEXFILUIManager::ToggleInventory()
@@ -87,7 +129,7 @@ void UEXFILUIManager::ShowInventory()
 	InventoryPanel->SetVisibility(ESlateVisibility::Visible);
 	InventoryPanel->NotifyPanelShown();
 	InventoryPanel->SetKeyboardFocus();
-	SetInputModeGameAndUI();
+	SetInputModeUIOnly();
 	UpdateCrosshairVisibility();
 }
 
@@ -133,13 +175,12 @@ void UEXFILUIManager::SetInputModeGame()
 	PC->bShowMouseCursor = false;
 }
 
-void UEXFILUIManager::SetInputModeGameAndUI()
+void UEXFILUIManager::SetInputModeUIOnly()
 {
 	APlayerController* PC = OwningPC.Get();
 	if (!PC) return;
 
-	FInputModeGameAndUI InputMode;
-	InputMode.SetHideCursorDuringCapture(false);
+	FInputModeUIOnly InputMode;
 	if (InventoryPanel)
 	{
 		InputMode.SetWidgetToFocus(InventoryPanel->TakeWidget());

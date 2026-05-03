@@ -8,9 +8,13 @@
 
 class UInventoryPanelWidget;
 class UInventoryViewModel;
+class UInventoryComponent;
 class UEquipmentViewModel;
+class UEquipmentComponent;
 class UCraftingViewModel;
+class UCraftingComponent;
 class USurvivalViewModel;
+class UAbilitySystemComponent;
 class UUserWidget;
 
 UCLASS()
@@ -23,11 +27,12 @@ public:
 	                TSubclassOf<UInventoryPanelWidget> InInventoryClass,
 	                TSubclassOf<UUserWidget> InCrosshairClass);
 
-	void BindPawnUI(UInventoryViewModel* InInventoryVM,
-	                UEquipmentViewModel* InEquipmentVM,
-	                UCraftingViewModel* InCraftingVM);
+	void BindModels(UInventoryComponent* InInventoryComponent,
+	                UEquipmentComponent* InEquipmentComponent,
+	                UCraftingComponent* InCraftingComponent,
+	                UAbilitySystemComponent* InAbilitySystemComponent);
 
-	void BindSurvivalStats(USurvivalViewModel* InSurvivalVM);
+	void UnbindModels();
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ToggleInventory();
@@ -55,11 +60,28 @@ private:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> CrosshairWidget;
 
+	TWeakObjectPtr<UInventoryComponent> BoundInventoryComponent;
+	TWeakObjectPtr<UEquipmentComponent> BoundEquipmentComponent;
+	TWeakObjectPtr<UCraftingComponent> BoundCraftingComponent;
+	TWeakObjectPtr<UAbilitySystemComponent> BoundAbilitySystemComponent;
+
+	UPROPERTY()
+	TObjectPtr<UInventoryViewModel> InventoryViewModel;
+
+	UPROPERTY()
+	TObjectPtr<UEquipmentViewModel> EquipmentViewModel;
+
+	UPROPERTY()
+	TObjectPtr<UCraftingViewModel> CraftingViewModel;
+
+	UPROPERTY()
+	TObjectPtr<USurvivalViewModel> SurvivalViewModel;
+
 	bool bWantsCrosshairVisible = false;
 
 	void UpdateCrosshairVisibility();
 
 	void SetInputModeGame();
 
-	void SetInputModeGameAndUI();
+	void SetInputModeUIOnly();
 };

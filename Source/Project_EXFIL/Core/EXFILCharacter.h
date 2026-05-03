@@ -10,18 +10,13 @@ class AWorldItem;
 class UAbilitySystemComponent;
 class UCraftingComponent;
 class UEquipmentComponent;
-class UEquipmentViewModel;
-class UEXFILUIManager;
 class UGameplayAbility;
 class UGameplayEffect;
 class UInputAction;
 class UInventoryComponent;
-class UInventoryViewModel;
-class UCraftingViewModel;
 class UMaterialInterface;
 class USpringArmComponent;
 class USurvivalAttributeSet;
-class USurvivalViewModel;
 struct FInputActionValue;
 
 UENUM(BlueprintType)
@@ -46,6 +41,10 @@ public:
 	UInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
 	UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Crafting")
+	UCraftingComponent* GetCraftingComponent() const { return CraftingComponent; }
+
+	void InitAbilityActorInfoForClient();
 
 	
 	bool IsInventoryUIVisible() const;
@@ -83,36 +82,22 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void PossessedBy(AController* NewController) override;
-	virtual void OnRep_PlayerState() override;
 
 	
-	void InitializeViewModels();
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UInventoryComponent> InventoryComponent;
 
-	UPROPERTY()
-	TObjectPtr<UInventoryViewModel> InventoryViewModel;
-
-	UPROPERTY()
-	TObjectPtr<UEquipmentViewModel> EquipmentViewModel;
-
-	UPROPERTY()
-	TObjectPtr<UCraftingViewModel> CraftingViewModel;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
 	TObjectPtr<UAbilitySystemComponent> AbilitySystemComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS")
 	TObjectPtr<USurvivalAttributeSet> SurvivalAttributes;
 
-	UPROPERTY()
-	TObjectPtr<USurvivalViewModel> SurvivalViewModel;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCraftingComponent> CraftingComponent;
 
-	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Crafting")
-	UCraftingComponent* GetCraftingComponent() const { return CraftingComponent; }
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UEquipmentComponent> EquipmentComponent;
@@ -160,9 +145,6 @@ protected:
 	FVector AimSocketOffset = FVector(0.f, 30.f, 70.f);
 
 	void OnAimToggled();
-
-	
-	void OnToggleInventory();
 
 	
 	UPROPERTY(EditAnywhere, Category = "Interaction")

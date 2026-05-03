@@ -8,11 +8,6 @@
 #include "Inventory/InventoryComponent.h"
 #include "Crafting/CraftingComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
-#include "UI/InventoryViewModel.h"
-#include "UI/EquipmentViewModel.h"
-#include "UI/CraftingViewModel.h"
-#include "UI/EXFILUIManager.h"
-#include "GAS/SurvivalViewModel.h"
 #include "Core/EXFILPlayerController.h"
 #include "EnhancedInputComponent.h"
 #include "EngineUtils.h"
@@ -47,17 +42,28 @@ UAbilitySystemComponent* AEXFILCharacter::GetAbilitySystemComponent() const
     return AbilitySystemComponent;
 }
 
-void AEXFILCharacter::PossessedBy(AController* NewController)
+void AEXFILCharacter::InitAbilityActorInfoForClient()
 {
-    Super::PossessedBy(NewController);
     if (AbilitySystemComponent)
     {
         AbilitySystemComponent->InitAbilityActorInfo(this, this);
-        if (GA_FireClass)
-        {
-            FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
-            AbilitySystemComponent->GiveAbility(FireSpec);
-        }
+    }
+}
+
+void AEXFILCharacter::PossessedBy(AController* NewController)
+{
+    Super::PossessedBy(NewController);
+    if (!AbilitySystemComponent)
+    {
+        return;
+    }
+
+    AbilitySystemComponent->InitAbilityActorInfo(this, this);
+    if (HasAuthority() && GA_FireClass &&
+        !AbilitySystemComponent->FindAbilitySpecFromClass(GA_FireClass))
+    {
+        FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
+        AbilitySystemComponent->GiveAbility(FireSpec);
     }
 }
 
@@ -68,15 +74,6 @@ void AEXFILCharacter::BeginPlay()
     {
         DefaultArmLength = SpringArm->TargetArmLength;
         DefaultSocketOffset = SpringArm->SocketOffset;
-    }
-    if (AbilitySystemComponent && !AbilitySystemComponent->GetOwnerActor())
-    {
-        AbilitySystemComponent->InitAbilityActorInfo(this, this);
-        if (GA_FireClass)
-        {
-            FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
-            AbilitySystemComponent->GiveAbility(FireSpec);
-        }
     }
     if (HasAuthority())
     {
@@ -89,33 +86,6 @@ void AEXFILCharacter::BeginPlay()
             InventoryComponent->AddItemByID_Internal(FName("Medkit"));
             ForceNetUpdate();
         }
-    }
-    if (IsLocallyControlled())
-    {
-        if (InventoryComponent)
-        {
-            InventoryViewModel = NewObject<UInventoryViewModel>(this);
-            InventoryViewModel->Initialize(InventoryComponent);
-        }
-        if (EquipmentComponent)
-        {
-            EquipmentViewModel = NewObject<UEquipmentViewModel>(this);
-            EquipmentViewModel->Initialize(EquipmentComponent);
-        }
-        if (CraftingComponent && InventoryComponent)
-        {
-            CraftingViewModel = NewObject<UCraftingViewModel>(this);
-            CraftingViewModel->Initialize(CraftingComponent, InventoryComponent);
-        }
-        if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
-        {
-            if (UEXFILUIManager* UIManager = PC->GetUIManager())
-            {
-                UIManager->BindPawnUI(
-                    InventoryViewModel, EquipmentViewModel, CraftingViewModel);
-            }
-        }
-        InitializeViewModels();
     }
 }
 
@@ -148,13 +118,12 @@ void AEXFILCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
         }
 
     }
-
-    PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this,
-        &AEXFILCharacter::OnToggleInventory);
 }
 
 void AEXFILCharacter::OnInteractPressed()
 {
+    if (IsInventoryUIVisible()) return;
+
     AWorldItem* Target = TraceForWorldItem();
     if (!Target) return;
 
@@ -214,62 +183,13 @@ void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
     TargetItem->Destroy();
 }
 
-void AEXFILCharacter::OnRep_PlayerState()
-{
-    Super::OnRep_PlayerState();
-    if (AbilitySystemComponent)
-    {
-        AbilitySystemComponent->InitAbilityActorInfo(this, this);
-    }
-    if (IsLocallyControlled())
-    {
-        InitializeViewModels();
-    }
-}
-
-void AEXFILCharacter::InitializeViewModels()
-{
-    if (SurvivalViewModel) return;
-    if (!AbilitySystemComponent) return;
-    const USurvivalAttributeSet* AttrSet = AbilitySystemComponent->GetSet<USurvivalAttributeSet>();
-    if (!AttrSet)
-    {
-        UE_LOG(LogEXFIL, Warning, TEXT("InitializeViewModels: AttributeSet still null"));
-        return;
-    }
-
-    SurvivalViewModel = NewObject<USurvivalViewModel>(this);
-    SurvivalViewModel->InitializeWithASC(AbilitySystemComponent);
-    if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
-    {
-        if (UEXFILUIManager* UIManager = PC->GetUIManager())
-        {
-            UIManager->BindSurvivalStats(SurvivalViewModel);
-        }
-    }
-}
-
 bool AEXFILCharacter::IsInventoryUIVisible() const
 {
     if (const AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
     {
-        if (const UEXFILUIManager* UIManager = PC->GetUIManager())
-        {
-            return UIManager->IsInventoryVisible();
-        }
+        return PC->IsInventoryVisible();
     }
     return false;
-}
-
-void AEXFILCharacter::OnToggleInventory()
-{
-    if (AEXFILPlayerController* PC = Cast<AEXFILPlayerController>(GetController()))
-    {
-        if (UEXFILUIManager* UIManager = PC->GetUIManager())
-        {
-            UIManager->ToggleInventory();
-        }
-    }
 }
 
 void AEXFILCharacter::OnFirePressed()
@@ -311,10 +231,7 @@ void AEXFILCharacter::OnAimToggled()
     }
     if (AEXFILPlayerController* AimPC = Cast<AEXFILPlayerController>(GetController()))
     {
-        if (UEXFILUIManager* UIManager = AimPC->GetUIManager())
-        {
-            UIManager->SetCrosshairVisible(bIsAiming);
-        }
+        AimPC->SetCrosshairVisible(bIsAiming);
     }
 }
 
