@@ -50,6 +50,7 @@ protected:
 private:
     FName RecipeID;
     bool bIsCurrentCraftRecipe = false;
+    bool bPredictedCanCraft = false;
 
     UFUNCTION()
     void OnButtonClicked();

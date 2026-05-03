@@ -47,6 +47,9 @@ struct PROJECT_EXFIL_API FCraftingRecipeViewData
     bool bIsCurrentRecipe = false;
 
     UPROPERTY(BlueprintReadOnly)
+    bool bPredictedCanCraft = false;
+
+    UPROPERTY(BlueprintReadOnly)
     TArray<FCraftingIngredientViewData> Ingredients;
 };
 

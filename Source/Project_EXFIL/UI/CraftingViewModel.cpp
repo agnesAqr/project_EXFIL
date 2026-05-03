@@ -114,6 +114,13 @@ void UCraftingViewModel::HandleCraftingStateChanged(
     {
         ChangedRecipeIDs.Add(CurrentRecipeID);
     }
+    if (UItemDataSubsystem* ItemSub = CachedItemSub.Get())
+    {
+        for (const FName& RecipeID : ItemSub->GetAllRecipeIDs())
+        {
+            ChangedRecipeIDs.Add(RecipeID);
+        }
+    }
 
     LastCurrentRecipeID = CurrentRecipeID;
 
@@ -218,6 +225,9 @@ bool UCraftingViewModel::BuildRecipeViewData(
     }
 
     UInventoryComponent* Inventory = InventoryComp.Get();
+    const bool bAnyRecipeCrafting = CraftingComp.IsValid() && CraftingComp->IsCrafting();
+    bool bHasRequiredIngredients = Inventory != nullptr;
+
     for (const FCraftingIngredient& Ingredient : Recipe->Ingredients)
     {
         FCraftingIngredientViewData IngredientViewData;
@@ -229,8 +239,13 @@ bool UCraftingViewModel::BuildRecipeViewData(
         IngredientViewData.OwnedCount = Inventory
             ? Inventory->GetItemCountByID_Cached(Ingredient.ItemDataID)
             : 0;
+        bHasRequiredIngredients =
+            bHasRequiredIngredients &&
+            IngredientViewData.OwnedCount >= IngredientViewData.RequiredCount;
         OutViewData.Ingredients.Add(IngredientViewData);
     }
+
+    OutViewData.bPredictedCanCraft = bHasRequiredIngredients && !bAnyRecipeCrafting;
 
     return true;
 }

@@ -21,6 +21,7 @@ void UCraftingRecipeWidget::SetRecipe(const FCraftingRecipeViewData& InRecipeVie
 {
     RecipeID = InRecipeViewData.RecipeID;
     bIsCurrentCraftRecipe = InRecipeViewData.bIsCurrentRecipe;
+    bPredictedCanCraft = InRecipeViewData.bPredictedCanCraft;
 
     if (TextBlock_RecipeName)
     {
@@ -80,8 +81,9 @@ void UCraftingRecipeWidget::RefreshVisualState()
         return;
     }
 
-    Button_Craft->SetIsEnabled(true);
-    SetRenderOpacity(bIsCurrentCraftRecipe ? 1.f : 0.85f);
+    const bool bCanTriggerAction = bIsCurrentCraftRecipe || bPredictedCanCraft;
+    Button_Craft->SetIsEnabled(bCanTriggerAction);
+    SetRenderOpacity(bCanTriggerAction ? (bIsCurrentCraftRecipe ? 1.f : 0.85f) : 0.55f);
 
     UTextBlock* CraftLabel = nullptr;
     if (UWidget* Child = Button_Craft->GetChildAt(0))
@@ -102,6 +104,8 @@ void UCraftingRecipeWidget::RefreshVisualState()
     else
     {
         CraftLabel->SetText(NSLOCTEXT("Crafting", "Craft", "CRAFT"));
-        CraftLabel->SetColorAndOpacity(FLinearColor(0.12f, 0.63f, 0.43f, 0.9f));
+        CraftLabel->SetColorAndOpacity(bPredictedCanCraft
+            ? FLinearColor(0.12f, 0.63f, 0.43f, 0.9f)
+            : FLinearColor(0.45f, 0.45f, 0.45f, 0.7f));
     }
 }
