@@ -2,25 +2,25 @@
 
 #include "UI/InventoryPanelWidget.h"
 #include "CoreMinimal.h"
-#include "Core/EXFILPlayerController.h"
-#include "UI/EXFILUIManager.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/Button.h"
+#include "Components/ScrollBox.h"
+#include "Components/TextBlock.h"
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
 #include "Components/WidgetSwitcher.h"
-#include "Components/Button.h"
-#include "Components/TextBlock.h"
-#include "UI/InventoryViewModel.h"
-#include "UI/EquipmentViewModel.h"
-#include "UI/CraftingViewModel.h"
-#include "UI/InventorySlotWidget.h"
-#include "UI/InventoryIconOverlay.h"
-#include "UI/EquipmentSlotWidget.h"
-#include "UI/CraftingPanelWidget.h"
-#include "UI/StatEntryWidget.h"
-#include "GAS/SurvivalViewModel.h"
 #include "Input/CommonUIInputTypes.h"
-#include "Blueprint/WidgetTree.h"
-#include "Components/ScrollBox.h"
+#include "Core/EXFILPlayerController.h"
+#include "GAS/SurvivalViewModel.h"
+#include "UI/CraftingPanelWidget.h"
+#include "UI/CraftingViewModel.h"
+#include "UI/EquipmentSlotWidget.h"
+#include "UI/EquipmentViewModel.h"
+#include "UI/EXFILUIManager.h"
+#include "UI/InventoryIconOverlay.h"
+#include "UI/InventorySlotWidget.h"
+#include "UI/InventoryViewModel.h"
+#include "UI/StatEntryWidget.h"
 
 void UInventoryPanelWidget::NativeOnInitialized()
 {
@@ -65,7 +65,19 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
         ViewModelRefreshedHandle = ViewModel->OnViewModelRefreshed.AddUObject(
             this, &UInventoryPanelWidget::HandleViewModelRefreshed);
         BuildGrid();
+        return;
     }
+
+    ClearGrid();
+    if (IconOverlay)
+    {
+        IconOverlay->ClearIcons();
+    }
+    bHasPendingOverlayRefresh = false;
+    bLayoutReady = false;
+    CachedCellStride = FVector2D::ZeroVector;
+    CachedSquareCellSize = 0.f;
+    bNeedsCellSquareFix = true;
 }
 
 void UInventoryPanelWidget::SetEquipmentViewModel(UEquipmentViewModel* InViewModel)
@@ -201,7 +213,7 @@ FReply UInventoryPanelWidget::NativeOnKeyDown(const FGeometry& InGeometry,
         {
             if (UEXFILUIManager* UIManager = PC->GetUIManager())
             {
-                UIManager->ToggleInventory();
+                UIManager->HideInventory();
                 return FReply::Handled();
             }
         }
@@ -264,6 +276,7 @@ bool UInventoryPanelWidget::ForwardMoveRequest(FGuid ItemInstanceID, FIntPoint N
     {
         return false;
     }
+
     ViewModel->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
     return true;
 }
@@ -319,11 +332,19 @@ void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyInd
 
 void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeometry)
 {
-    if (!GridPanel || !ViewModel) return;
+    if (!GridPanel || !ViewModel)
+    {
+        return;
+    }
+
     const FVector2D GridSize = GridPanel->GetCachedGeometry().GetLocalSize();
     bLayoutReady = (GridSize.X > 1.f && GridSize.Y > 1.f);
 
-    if (!bLayoutReady) return;
+    if (!bLayoutReady)
+    {
+        return;
+    }
+
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
     const FVector2D NewStride(GridSize.X / GridW, GridSize.Y / GridH);
@@ -332,7 +353,18 @@ void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeomet
     if (bStrideChanged)
     {
         CachedCellStride = NewStride;
-        RebuildOverlayFull();
+
+        FInventoryOverlayDeltaViewData PendingDelta;
+        if (bHasPendingOverlayRefresh &&
+            ViewModel->GetPendingOverlayDelta(PendingDelta) &&
+            PendingDelta.bFullRefresh)
+        {
+            FlushOverlayDelta();
+        }
+        else
+        {
+            RebuildOverlayFull();
+        }
         return;
     }
 
@@ -341,39 +373,58 @@ void UInventoryPanelWidget::HandleLayoutMeasured(const FGeometry& AllottedGeomet
 
 void UInventoryPanelWidget::FlushOverlayDelta()
 {
-    if (!bLayoutReady) return;
-    if (!bHasPendingOverlayRefresh) return;
-    if (!IconOverlay || !ViewModel || !GridPanel) return;
+    if (!bLayoutReady)
+    {
+        return;
+    }
+    if (!bHasPendingOverlayRefresh)
+    {
+        return;
+    }
+    if (!IconOverlay || !ViewModel || !GridPanel)
+    {
+        return;
+    }
 
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
 
     FInventoryOverlayDeltaViewData Delta;
-    if (!ViewModel->ConsumePendingOverlayDelta(Delta))
+    if (!ViewModel->GetPendingOverlayDelta(Delta))
     {
         bHasPendingOverlayRefresh = false;
         return;
     }
 
-    IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, Delta);
-
-    bHasPendingOverlayRefresh = false;
+    if (IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, Delta))
+    {
+        ViewModel->DiscardPendingOverlayDelta();
+        bHasPendingOverlayRefresh = false;
+    }
 }
 
 void UInventoryPanelWidget::RebuildOverlayFull()
 {
-    if (!bLayoutReady) return;
-    if (!IconOverlay || !ViewModel || !GridPanel) return;
+    if (!bLayoutReady)
+    {
+        return;
+    }
+    if (!IconOverlay || !ViewModel || !GridPanel)
+    {
+        return;
+    }
 
     const int32 GridW = ViewModel->GetGridWidth();
     const int32 GridH = ViewModel->GetGridHeight();
     FInventoryOverlayDeltaViewData Delta;
     if (ViewModel->BuildFullOverlayDelta(Delta))
     {
-        IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, Delta);
+        if (IconOverlay->RefreshIcons(ViewModel, GridPanel, GridW, GridH, Delta))
+        {
+            ViewModel->DiscardPendingOverlayDelta();
+            bHasPendingOverlayRefresh = false;
+        }
     }
-
-    bHasPendingOverlayRefresh = false;
 }
 
 int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,

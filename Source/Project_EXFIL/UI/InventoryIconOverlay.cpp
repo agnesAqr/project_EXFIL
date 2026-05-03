@@ -42,7 +42,29 @@ void UInventoryIconOverlay::CloseContextMenuIfOpen()
     }
 }
 
-void UInventoryIconOverlay::RefreshIcons(
+void UInventoryIconOverlay::ClearIcons()
+{
+    if (IconCanvas)
+    {
+        IconCanvas->ClearChildren();
+    }
+
+    CachedViewModel = nullptr;
+    CachedEquipmentViewModel = nullptr;
+    CachedGridPanel.Reset();
+    CachedGridWidth = 0;
+    CachedGridHeight = 0;
+    PendingDragInstanceID.Invalidate();
+    PendingDragSource = FInventoryDragSourceViewData();
+    ActiveDragOperation = nullptr;
+    bHasCachedPreview = false;
+    IconImageCache.Empty();
+    StackTextCache.Empty();
+    CachedCellStride = FVector2D::ZeroVector;
+    CloseContextMenuIfOpen();
+}
+
+bool UInventoryIconOverlay::RefreshIcons(
     UInventoryViewModel* InViewModel,
     UUniformGridPanel* InGridPanel,
     int32 InGridWidth,
@@ -56,14 +78,14 @@ void UInventoryIconOverlay::RefreshIcons(
 
     if (!IconCanvas || !InViewModel || !InGridPanel)
     {
-        return;
+        return false;
     }
 
     UWidget* FirstSlot = InGridPanel->GetChildAt(0);
     if (!FirstSlot)
     {
         UE_LOG(LogEXFIL, Error, TEXT("RefreshIcons: FirstSlot is null - grid panel has no children"));
-        return;
+        return false;
     }
 
     const FVector2D SlotSize = FirstSlot->GetCachedGeometry().GetLocalSize();
@@ -72,7 +94,7 @@ void UInventoryIconOverlay::RefreshIcons(
 
     if (GridLocalSize.IsNearlyZero() || CellStride.X < 1.f || CellStride.Y < 1.f)
     {
-        return;
+        return false;
     }
 
     const bool bStrideChanged = !CachedCellStride.Equals(CellStride, 0.5f);
@@ -208,6 +230,8 @@ void UInventoryIconOverlay::RefreshIcons(
     {
         Invalidate(EInvalidateWidgetReason::Layout | EInvalidateWidgetReason::Paint);
     }
+
+    return true;
 }
 
 FReply UInventoryIconOverlay::NativeOnMouseButtonDown(

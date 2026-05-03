@@ -6,7 +6,6 @@
 #include "Inventory/InventoryComponent.h"
 #include "Data/EXFILItemTypes.h"
 #include "Data/ItemDataSubsystem.h"
-#include "Project_EXFIL.h"
 
 void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
 {
@@ -66,10 +65,11 @@ const TArray<UInventorySlotViewModel*>& UInventoryViewModel::GetAllSlots() const
 
 void UInventoryViewModel::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
-    if (!InventoryComp.IsValid())
-    {
-        return;
-    }
+	if (!InventoryComp.IsValid())
+	{
+		return;
+	}
+
     InventoryComp->RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
 }
 
@@ -176,7 +176,7 @@ bool UInventoryViewModel::TryGetItemContextMenuViewDataAtCell(
     return true;
 }
 
-bool UInventoryViewModel::ConsumePendingOverlayDelta(FInventoryOverlayDeltaViewData& OutDelta)
+bool UInventoryViewModel::GetPendingOverlayDelta(FInventoryOverlayDeltaViewData& OutDelta) const
 {
     if (!bHasPendingOverlayDelta)
     {
@@ -184,9 +184,13 @@ bool UInventoryViewModel::ConsumePendingOverlayDelta(FInventoryOverlayDeltaViewD
     }
 
     OutDelta = PendingOverlayDelta;
+    return true;
+}
+
+void UInventoryViewModel::DiscardPendingOverlayDelta()
+{
     PendingOverlayDelta = FInventoryOverlayDeltaViewData();
     bHasPendingOverlayDelta = false;
-    return true;
 }
 
 bool UInventoryViewModel::BuildFullOverlayDelta(FInventoryOverlayDeltaViewData& OutDelta) const
@@ -480,6 +484,22 @@ void UInventoryViewModel::StorePendingOverlayDelta(
     if (Delta.bFullRefresh)
     {
         PendingOverlayDelta = Delta;
+        bHasPendingOverlayDelta = true;
+        return;
+    }
+
+    if (PendingOverlayDelta.bFullRefresh)
+    {
+        FInventoryOverlayDeltaViewData FullDelta;
+        if (BuildFullOverlayDelta(FullDelta))
+        {
+            PendingOverlayDelta = FullDelta;
+        }
+        else
+        {
+            PendingOverlayDelta.UpsertItems.Append(Delta.UpsertItems);
+            PendingOverlayDelta.RemovedItemInstanceIDs.Append(Delta.RemovedItemInstanceIDs);
+        }
         bHasPendingOverlayDelta = true;
         return;
     }

@@ -175,7 +175,9 @@ public:
     bool TryGetItemContextMenuViewDataAtCell(
         FIntPoint Cell, FItemContextMenuViewData& OutViewData) const;
 
-    bool ConsumePendingOverlayDelta(FInventoryOverlayDeltaViewData& OutDelta);
+    bool GetPendingOverlayDelta(FInventoryOverlayDeltaViewData& OutDelta) const;
+
+    void DiscardPendingOverlayDelta();
 
     bool BuildFullOverlayDelta(FInventoryOverlayDeltaViewData& OutDelta) const;
 

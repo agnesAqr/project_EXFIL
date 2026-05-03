@@ -23,21 +23,24 @@ class PROJECT_EXFIL_API UInventoryIconOverlay : public UUserWidget
     GENERATED_BODY()
 
 public:
-    
-    void RefreshIcons(UInventoryViewModel* InViewModel,
+
+    bool RefreshIcons(UInventoryViewModel* InViewModel,
                       UUniformGridPanel* InGridPanel,
                       int32 InGridWidth,
                       int32 InGridHeight,
                       const FInventoryOverlayDeltaViewData& Delta);
 
-    
+
+    void ClearIcons();
+
+
     UPROPERTY(EditAnywhere, Category = "UI")
     TSubclassOf<UItemContextMenuWidget> ContextMenuWidgetClass;
 
-    
+
     void CloseContextMenuIfOpen();
 
-    
+
     void SetParentPanel(UInventoryPanelWidget* InPanel);
 
     
