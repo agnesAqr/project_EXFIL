@@ -23,14 +23,14 @@ void USurvivalAttributeSet::GetLifetimeReplicatedProps(
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Health,    COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxHealth, COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Hunger,    COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxHunger, COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Thirst,    COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxThirst, COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Stamina,   COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxStamina,COND_None, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Health,     COND_None,      REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxHealth,  COND_None,      REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Hunger,     COND_OwnerOnly, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxHunger,  COND_OwnerOnly, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Thirst,     COND_OwnerOnly, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxThirst,  COND_OwnerOnly, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, Stamina,    COND_OwnerOnly, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(USurvivalAttributeSet, MaxStamina, COND_OwnerOnly, REPNOTIFY_Always);
 }
 
 void USurvivalAttributeSet::PreAttributeChange(const FGameplayAttribute& Attribute, float& NewValue)
