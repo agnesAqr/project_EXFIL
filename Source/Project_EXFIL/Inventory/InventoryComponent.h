@@ -20,6 +20,7 @@ struct PROJECT_EXFIL_API FInventoryFastArray : public FFastArraySerializer
 	UInventoryComponent* OwnerComponent = nullptr;
 	TSet<int32> PendingDirtyIndices;
 	TSet<FName> PendingChangedItemDataIDs;
+	bool bPendingFullCacheRebuild = false;
 
 	void PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
 	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
@@ -196,8 +197,6 @@ private:
 #pragma region Incremental Cache Patch
 	void ApplyItemAdded_Local(const FInventoryItemInstance& Item, int32 ItemIndex,
 		TSet<int32>& OutAffected);
-	void ApplyItemRemoved_Local(const FInventoryItemInstance& Item, int32 RemovedIndex,
-		TSet<int32>& OutAffected);
 	void ApplyItemMoved_Local(const FInventoryItemInstance& NewItem, FIntPoint OldPos,
 		FItemSize OldEffSize, TSet<int32>& OutAffected);
 	void ApplyItemStackChanged_Local(const FInventoryItemInstance& NewItem, int32 OldStackCount,
@@ -208,6 +207,7 @@ private:
 	void RecalculateItemCountForID(FName ItemDataID);
 	void CollectFootprintIndices(FIntPoint Position, FItemSize Size,
 		TSet<int32>& OutAffected) const;
+	bool LogCacheConsistencyAgainstInventoryList(const TCHAR* Context) const;
 #pragma endregion
 
 #pragma region Replicated Data

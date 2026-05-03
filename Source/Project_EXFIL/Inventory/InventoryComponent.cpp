@@ -72,9 +72,12 @@ void FInventoryFastArray::PreReplicatedRemove(
 			continue;
 		}
 
-		OwnerComponent->ApplyItemRemoved_Local(
-			Items[RemovedIndex], RemovedIndex, PendingDirtyIndices);
+		OwnerComponent->CollectFootprintIndices(
+			Items[RemovedIndex].RootPosition,
+			Items[RemovedIndex].GetEffectiveSize(),
+			PendingDirtyIndices);
 		PendingChangedItemDataIDs.Add(Items[RemovedIndex].ItemDataID);
+		bPendingFullCacheRebuild = true;
 	}
 }
 
@@ -174,6 +177,7 @@ void FInventoryFastArray::PostReplicatedReceive(
 	{
 		PendingDirtyIndices.Reset();
 		PendingChangedItemDataIDs.Reset();
+		bPendingFullCacheRebuild = false;
 		return;
 	}
 
@@ -182,8 +186,23 @@ void FInventoryFastArray::PostReplicatedReceive(
 		OwnerComponent->HandleReplicatedInventoryReceived();
 		PendingDirtyIndices.Reset();
 		PendingChangedItemDataIDs.Reset();
+		bPendingFullCacheRebuild = false;
 		return;
 	}
+
+	if (bPendingFullCacheRebuild)
+	{
+		const bool bHadCacheMismatch =
+			!OwnerComponent->LogCacheConsistencyAgainstInventoryList(
+				TEXT("PostReplicatedReceive:BeforeRebuild"));
+		OwnerComponent->RebuildAllCachesFromItems();
+		if (bHadCacheMismatch)
+		{
+			OwnerComponent->LogCacheConsistencyAgainstInventoryList(
+				TEXT("PostReplicatedReceive:AfterRebuild"));
+		}
+	}
+	bPendingFullCacheRebuild = false;
 
 	if (PendingDirtyIndices.Num() > 0)
 	{
@@ -384,7 +403,8 @@ bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
 	const FInventoryItemInstance RemovedItem = InventoryList.Items[Index];
 	InventoryList.Items.RemoveAt(Index);
 	InventoryList.MarkArrayDirty();
-	ApplyItemRemoved_Local(RemovedItem, Index, Affected);
+	CollectFootprintIndices(RemovedItem.RootPosition, RemovedItem.GetEffectiveSize(), Affected);
+	RebuildAllCachesFromItems();
 
 	return true;
 }
@@ -544,12 +564,16 @@ bool UInventoryComponent::ConsumeItemByID_Internal(FName ItemDataID, int32 Count
 	for (int32 i = PendingRemovals.Num() - 1; i >= 0; --i)
 	{
 		InventoryList.Items.RemoveAt(PendingRemovals[i].Index);
-		ApplyItemRemoved_Local(PendingRemovals[i].Item, PendingRemovals[i].Index, Affected);
+		CollectFootprintIndices(
+			PendingRemovals[i].Item.RootPosition,
+			PendingRemovals[i].Item.GetEffectiveSize(),
+			Affected);
 	}
 
 	if (PendingRemovals.Num() > 0)
 	{
 		InventoryList.MarkArrayDirty();
+		RebuildAllCachesFromItems();
 	}
 	return true;
 }
@@ -645,27 +669,6 @@ bool UInventoryComponent::CanPlaceItemAtIgnoringInstance(
 void UInventoryComponent::EnsureReplicatedCachesReady()
 {
 	if (GetOwner() && GetOwner()->HasAuthority())
-	{
-		return;
-	}
-
-	if (InventoryList.Items.Num() == 0)
-	{
-		return;
-	}
-
-	bool bHasOccupiedSlot = false;
-	for (const FInventorySlot& Slot : GridSlots)
-	{
-		if (!Slot.IsEmpty())
-		{
-			bHasOccupiedSlot = true;
-			break;
-		}
-	}
-
-	const bool bIndexMapReady = (ItemIndexMap.Num() == InventoryList.Items.Num());
-	if (bHasOccupiedSlot && bIndexMapReady)
 	{
 		return;
 	}
@@ -1003,32 +1006,6 @@ void UInventoryComponent::ApplyItemAdded_Local(const FInventoryItemInstance& Ite
 	CollectFootprintIndices(Item.RootPosition, Item.GetEffectiveSize(), OutAffected);
 }
 
-void UInventoryComponent::ApplyItemRemoved_Local(const FInventoryItemInstance& Item, int32 RemovedIndex,
-	TSet<int32>& OutAffected)
-{
-	CollectFootprintIndices(Item.RootPosition, Item.GetEffectiveSize(), OutAffected);
-	FreeSlots(Item);
-	ItemIndexMap.Remove(Item.InstanceID);
-
-	for (TPair<FGuid, int32>& Pair : ItemIndexMap)
-	{
-		if (Pair.Value > RemovedIndex)
-		{
-			--Pair.Value;
-		}
-	}
-
-	int32* CachedCount = ItemCountCache.Find(Item.ItemDataID);
-	if (CachedCount)
-	{
-		*CachedCount -= Item.StackCount;
-		if (*CachedCount <= 0)
-		{
-			ItemCountCache.Remove(Item.ItemDataID);
-		}
-	}
-}
-
 void UInventoryComponent::ApplyItemMoved_Local(const FInventoryItemInstance& NewItem, FIntPoint OldPos,
 	FItemSize OldEffSize, TSet<int32>& OutAffected)
 {
@@ -1166,6 +1143,282 @@ void UInventoryComponent::CollectFootprintIndices(FIntPoint Position, FItemSize 
 			}
 		}
 	}
+}
+
+bool UInventoryComponent::LogCacheConsistencyAgainstInventoryList(const TCHAR* Context) const
+{
+	static constexpr int32 MaxDetailedLogs = 24;
+
+	bool bConsistent = true;
+	int32 DetailedLogCount = 0;
+
+#define LOG_CACHE_MISMATCH(Format, ...) \
+	do \
+	{ \
+		bConsistent = false; \
+		if (DetailedLogCount < MaxDetailedLogs) \
+		{ \
+			UE_LOG(LogProject_EXFIL, Warning, Format, ##__VA_ARGS__); \
+			++DetailedLogCount; \
+		} \
+	} while (false)
+
+	const FString OwnerName = GetOwner() ? GetOwner()->GetName() : TEXT("NoOwner");
+	const int32 ExpectedSlotCount = GridWidth * GridHeight;
+	if (GridSlots.Num() != ExpectedSlotCount)
+	{
+		LOG_CACHE_MISMATCH(
+			TEXT("[InventoryCacheMismatch][%s][%s] GridSlots.Num=%d Expected=%d Grid=%dx%d Items=%d"),
+			Context,
+			*OwnerName,
+			GridSlots.Num(),
+			ExpectedSlotCount,
+			GridWidth,
+			GridHeight,
+			InventoryList.Items.Num());
+	}
+
+	if (RowBitmap.Num() != GridHeight)
+	{
+		LOG_CACHE_MISMATCH(
+			TEXT("[InventoryCacheMismatch][%s][%s] RowBitmap.Num=%d Expected=%d"),
+			Context,
+			*OwnerName,
+			RowBitmap.Num(),
+			GridHeight);
+	}
+
+	TSet<int32> ExpectedOccupiedIndices;
+	TMap<FName, int32> ExpectedItemCounts;
+	TSet<FGuid> ExpectedItemIDs;
+
+	for (int32 ItemIndex = 0; ItemIndex < InventoryList.Items.Num(); ++ItemIndex)
+	{
+		const FInventoryItemInstance& Item = InventoryList.Items[ItemIndex];
+		const FItemSize EffectiveSize = Item.GetEffectiveSize();
+		ExpectedItemIDs.Add(Item.InstanceID);
+		ExpectedItemCounts.FindOrAdd(Item.ItemDataID) += Item.StackCount;
+
+		const int32* CachedIndex = ItemIndexMap.Find(Item.InstanceID);
+		if (!CachedIndex)
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] ItemIndexMap missing Instance=%s ItemDataID=%s ActualIndex=%d"),
+				Context,
+				*OwnerName,
+				*Item.InstanceID.ToString(),
+				*Item.ItemDataID.ToString(),
+				ItemIndex);
+		}
+		else if (*CachedIndex != ItemIndex)
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] ItemIndexMap wrong Instance=%s ItemDataID=%s CachedIndex=%d ActualIndex=%d"),
+				Context,
+				*OwnerName,
+				*Item.InstanceID.ToString(),
+				*Item.ItemDataID.ToString(),
+				*CachedIndex,
+				ItemIndex);
+		}
+
+		if (EffectiveSize.Width <= 0 || EffectiveSize.Height <= 0)
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] Invalid item size Instance=%s ItemDataID=%s Size=%dx%d Rotated=%s"),
+				Context,
+				*OwnerName,
+				*Item.InstanceID.ToString(),
+				*Item.ItemDataID.ToString(),
+				EffectiveSize.Width,
+				EffectiveSize.Height,
+				Item.bIsRotated ? TEXT("true") : TEXT("false"));
+			continue;
+		}
+
+		for (int32 Y = Item.RootPosition.Y; Y < Item.RootPosition.Y + EffectiveSize.Height; ++Y)
+		{
+			for (int32 X = Item.RootPosition.X; X < Item.RootPosition.X + EffectiveSize.Width; ++X)
+			{
+				const FIntPoint Position(X, Y);
+				if (!IsValidGridPosition(Position))
+				{
+					LOG_CACHE_MISMATCH(
+						TEXT("[InventoryCacheMismatch][%s][%s] Item footprint out of bounds Instance=%s ItemDataID=%s Cell=(%d,%d) Root=(%d,%d) Size=%dx%d"),
+						Context,
+						*OwnerName,
+						*Item.InstanceID.ToString(),
+						*Item.ItemDataID.ToString(),
+						X,
+						Y,
+						Item.RootPosition.X,
+						Item.RootPosition.Y,
+						EffectiveSize.Width,
+						EffectiveSize.Height);
+					continue;
+				}
+
+				const int32 SlotIndex = GridPositionToIndex(Position);
+				if (!GridSlots.IsValidIndex(SlotIndex))
+				{
+					LOG_CACHE_MISMATCH(
+						TEXT("[InventoryCacheMismatch][%s][%s] Expected slot index invalid Instance=%s ItemDataID=%s SlotIndex=%d Cell=(%d,%d) GridSlots.Num=%d"),
+						Context,
+						*OwnerName,
+						*Item.InstanceID.ToString(),
+						*Item.ItemDataID.ToString(),
+						SlotIndex,
+						X,
+						Y,
+						GridSlots.Num());
+					continue;
+				}
+
+				ExpectedOccupiedIndices.Add(SlotIndex);
+
+				const FInventorySlot& Slot = GridSlots[SlotIndex];
+				if (Slot.OccupyingItemID != Item.InstanceID)
+				{
+					LOG_CACHE_MISMATCH(
+						TEXT("[InventoryCacheMismatch][%s][%s] GridSlots owner mismatch Slot=%d Cell=(%d,%d) Expected=%s Actual=%s ItemDataID=%s"),
+						Context,
+						*OwnerName,
+						SlotIndex,
+						X,
+						Y,
+						*Item.InstanceID.ToString(),
+						*Slot.OccupyingItemID.ToString(),
+						*Item.ItemDataID.ToString());
+				}
+
+				const bool bExpectedRoot = (X == Item.RootPosition.X && Y == Item.RootPosition.Y);
+				if (Slot.OccupyingItemID == Item.InstanceID && Slot.bIsRootSlot != bExpectedRoot)
+				{
+					LOG_CACHE_MISMATCH(
+						TEXT("[InventoryCacheMismatch][%s][%s] RootSlot mismatch Slot=%d Cell=(%d,%d) Instance=%s ExpectedRoot=%s ActualRoot=%s"),
+						Context,
+						*OwnerName,
+						SlotIndex,
+						X,
+						Y,
+						*Item.InstanceID.ToString(),
+						bExpectedRoot ? TEXT("true") : TEXT("false"),
+						Slot.bIsRootSlot ? TEXT("true") : TEXT("false"));
+				}
+
+				const bool bRowBitSet = RowBitmap.IsValidIndex(Y) &&
+					((RowBitmap[Y] & static_cast<uint16>(1U << X)) != 0);
+				if (!bRowBitSet)
+				{
+					LOG_CACHE_MISMATCH(
+						TEXT("[InventoryCacheMismatch][%s][%s] RowBitmap missing occupied bit Slot=%d Cell=(%d,%d) Instance=%s ItemDataID=%s"),
+						Context,
+						*OwnerName,
+						SlotIndex,
+						X,
+						Y,
+						*Item.InstanceID.ToString(),
+						*Item.ItemDataID.ToString());
+				}
+			}
+		}
+	}
+
+	for (int32 SlotIndex = 0; SlotIndex < GridSlots.Num(); ++SlotIndex)
+	{
+		const FInventorySlot& Slot = GridSlots[SlotIndex];
+		const FIntPoint Position = IndexToGridPosition(SlotIndex);
+		const bool bExpectedOccupied = ExpectedOccupiedIndices.Contains(SlotIndex);
+		const bool bActualOccupied = !Slot.IsEmpty();
+		const bool bRowBitSet = RowBitmap.IsValidIndex(Position.Y) &&
+			((RowBitmap[Position.Y] & static_cast<uint16>(1U << Position.X)) != 0);
+
+		if (bActualOccupied && !bExpectedOccupied)
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] Stale GridSlots occupancy Slot=%d Cell=(%d,%d) OccupyingItemID=%s RootSlot=%s"),
+				Context,
+				*OwnerName,
+				SlotIndex,
+				Position.X,
+				Position.Y,
+				*Slot.OccupyingItemID.ToString(),
+				Slot.bIsRootSlot ? TEXT("true") : TEXT("false"));
+		}
+
+		if (bRowBitSet != bExpectedOccupied)
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] RowBitmap stale bit Slot=%d Cell=(%d,%d) ExpectedOccupied=%s RowBit=%s"),
+				Context,
+				*OwnerName,
+				SlotIndex,
+				Position.X,
+				Position.Y,
+				bExpectedOccupied ? TEXT("true") : TEXT("false"),
+				bRowBitSet ? TEXT("true") : TEXT("false"));
+		}
+	}
+
+	for (const TPair<FName, int32>& Pair : ExpectedItemCounts)
+	{
+		const int32* CachedCount = ItemCountCache.Find(Pair.Key);
+		if (!CachedCount || *CachedCount != Pair.Value)
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] ItemCountCache mismatch ItemDataID=%s Expected=%d Cached=%d"),
+				Context,
+				*OwnerName,
+				*Pair.Key.ToString(),
+				Pair.Value,
+				CachedCount ? *CachedCount : 0);
+		}
+	}
+
+	for (const TPair<FName, int32>& Pair : ItemCountCache)
+	{
+		if (!ExpectedItemCounts.Contains(Pair.Key))
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] ItemCountCache stale ItemDataID=%s Cached=%d Expected=0"),
+				Context,
+				*OwnerName,
+				*Pair.Key.ToString(),
+				Pair.Value);
+		}
+	}
+
+	for (const TPair<FGuid, int32>& Pair : ItemIndexMap)
+	{
+		if (!ExpectedItemIDs.Contains(Pair.Key))
+		{
+			LOG_CACHE_MISMATCH(
+				TEXT("[InventoryCacheMismatch][%s][%s] ItemIndexMap stale Instance=%s CachedIndex=%d"),
+				Context,
+				*OwnerName,
+				*Pair.Key.ToString(),
+				Pair.Value);
+		}
+	}
+
+	if (!bConsistent)
+	{
+		UE_LOG(LogProject_EXFIL, Warning,
+			TEXT("[InventoryCacheMismatch][%s][%s] Summary Items=%d GridSlots=%d ItemIndexMap=%d ItemCountCache=%d RowBitmap=%d Dirty logs shown=%d MaxDetailedLogs=%d"),
+			Context,
+			*OwnerName,
+			InventoryList.Items.Num(),
+			GridSlots.Num(),
+			ItemIndexMap.Num(),
+			ItemCountCache.Num(),
+			RowBitmap.Num(),
+			DetailedLogCount,
+			MaxDetailedLogs);
+	}
+
+#undef LOG_CACHE_MISMATCH
+
+	return bConsistent;
 }
 
 void UInventoryComponent::RebuildGridSlotsFromItems()
@@ -1336,11 +1589,23 @@ FInventoryItemInstance* UInventoryComponent::FindItemByInstanceID(const FGuid& I
 {
 	if (const int32* Index = ItemIndexMap.Find(InstanceID))
 	{
-		if (InventoryList.Items.IsValidIndex(*Index))
+		if (InventoryList.Items.IsValidIndex(*Index) &&
+			InventoryList.Items[*Index].InstanceID == InstanceID)
 		{
 			return &InventoryList.Items[*Index];
 		}
 	}
+
+	for (int32 Index = 0; Index < InventoryList.Items.Num(); ++Index)
+	{
+		if (InventoryList.Items[Index].InstanceID == InstanceID)
+		{
+			ItemIndexMap.FindOrAdd(InstanceID) = Index;
+			return &InventoryList.Items[Index];
+		}
+	}
+
+	ItemIndexMap.Remove(InstanceID);
 	return nullptr;
 }
 
@@ -1348,11 +1613,21 @@ const FInventoryItemInstance* UInventoryComponent::FindItemByInstanceID(const FG
 {
 	if (const int32* Index = ItemIndexMap.Find(InstanceID))
 	{
-		if (InventoryList.Items.IsValidIndex(*Index))
+		if (InventoryList.Items.IsValidIndex(*Index) &&
+			InventoryList.Items[*Index].InstanceID == InstanceID)
 		{
 			return &InventoryList.Items[*Index];
 		}
 	}
+
+	for (const FInventoryItemInstance& Item : InventoryList.Items)
+	{
+		if (Item.InstanceID == InstanceID)
+		{
+			return &Item;
+		}
+	}
+
 	return nullptr;
 }
 
@@ -1360,11 +1635,21 @@ int32 UInventoryComponent::FindItemIndexByInstanceID(const FGuid& InstanceID) co
 {
 	if (const int32* Index = ItemIndexMap.Find(InstanceID))
 	{
-		if (InventoryList.Items.IsValidIndex(*Index))
+		if (InventoryList.Items.IsValidIndex(*Index) &&
+			InventoryList.Items[*Index].InstanceID == InstanceID)
 		{
 			return *Index;
 		}
 	}
+
+	for (int32 Index = 0; Index < InventoryList.Items.Num(); ++Index)
+	{
+		if (InventoryList.Items[Index].InstanceID == InstanceID)
+		{
+			return Index;
+		}
+	}
+
 	return INDEX_NONE;
 }
 #pragma endregion
