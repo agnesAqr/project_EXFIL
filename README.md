@@ -31,7 +31,7 @@
   Source/Project_EXFIL/
   ├── Core/              EXFILCharacter · EXFILGameMode · EXFILPlayerController + EXFILLog
   ├── Inventory/         InventoryComponent + FastArray/슬롯/아이템 구조체
-  ├── GAS/               SurvivalAttributeSet · GA_Fire · GA_Craft · SurvivalViewModel
+  ├── GAS/               SurvivalAttributeSet · GA_Fire · SurvivalViewModel
   ├── Crafting/          CraftingComponent
   ├── Data/              ItemDataSubsystem + Item/Crafting 데이터 타입
   │   └── Equipment/     EquipmentComponent + Equipment 슬롯 타입
@@ -56,6 +56,7 @@
 | GAS | AbilitySystemComponent (Mixed Mode), AttributeSet, GameplayAbility, GameplayEffect |
 | 네트워크 | Dedicated Server, Server RPC, OnRep, Multicast, **FFastArraySerializer (NetDeltaSerialize)** |
 | UI | CommonUI (UCommonActivatableWidget), **MVVM (ModelViewViewModel · FieldNotify)**, Slate NativePaint |
+| 입력 | Enhanced Input (`UInputAction` + `IMC_Default`), 캐릭터 레벨 직접 `BindKey` 미사용 |
 | 데이터 | UDataTable + CSV, UItemDataSubsystem (GameInstanceSubsystem), TSoftObjectPtr / TSoftClassPtr 지연 로드 |
 
 ---
@@ -66,7 +67,7 @@
 |--------|------|
 | **Grid Inventory (10×12)** | 다중 크기 아이템 배치, 회전, 드래그앤드롭, 스택 병합, 비트맵 기반 O(H) 슬롯 검색 |
 | **FastArray Replication** | `FInventoryFastArray` + `NetDeltaSerialize`, 변경 인덱스 단위 PostReplicatedAdd/Change/Remove 콜백 |
-| **Crafting** | DataTable 레시피 기반, 원자적 재료 소모 + 실패 시 롤백, 타이머 + GA_Craft |
+| **Crafting** | DataTable 레시피 기반, 원자적 재료 소모 + 실패 시 롤백, 서버 타이머 기반 결과 지급 |
 | **Equipment** | 6슬롯 (Head/Face/Eyewear/Body/Weapon1/Weapon2), 장착 시 GE Apply / 해제 시 Remove |
 | **Survival Stats** | GAS AttributeSet 8속성 (Health, Hunger, Thirst, Stamina + Max), Pre/Post 클램핑 2단계 |
 | **Line Trace Shooting** | LocalPredicted GA_Fire → Server_ConfirmHit (서버 라인 트레이스 재검증) |
@@ -83,7 +84,7 @@ ViewModel Layer (InventoryViewModel · EquipmentViewModel · CraftingViewModel �
     │  Delegate
 Model Layer (UInventoryComponent · UCraftingComponent · UEquipmentComponent)
     │
-GAS Layer (USurvivalAttributeSet · GA_Fire · GA_Craft · GE_Damage 등)
+GAS Layer (USurvivalAttributeSet · GA_Fire · GE_Damage/Consumable/Equipment 등)
     │
 Data Layer (UItemDataSubsystem · UDataTable · CSV)
     │
@@ -95,6 +96,8 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - **MVVM 단방향:** View → ViewModel → Model 방향으로만 참조. 게임플레이 상태 동기화는 Delegate / OnRep / FieldNotify 기반이며 Tick/Timer 기반 Model polling은 금지
 - **Server Authority:** 모든 게임 로직은 서버에서만 실행. 클라이언트는 Request → Server RPC → `_Internal` 3계층으로 요청만 전달
 - **Data-Driven:** 아이템 / 레시피 / 장비 스펙은 DataTable CSV. 텍스처·GE 클래스는 TSoftObjectPtr / TSoftClassPtr로 지연 로드 후 Subsystem 캐시
+- **Input routing:** 인벤토리 Tab 입력은 상태에 따라 처리 계층이 다릅니다. 닫힌 상태의 열기만 Enhanced Input `IA_ToggleInventory`가 담당하고, 열린 상태에서는 UI가 `UIOnly/Menu`로 포커스를 잡은 뒤 `UInventoryPanelWidget::NativeOnKeyDown()`이 Tab 닫기와 드래그 중 R 회전을 처리합니다. 따라서 인벤토리 열린 상태의 Tab은 캐릭터 입력으로 내려가지 않습니다. `PlayerInputComponent->BindKey(EKeys::Tab, ...)` 직접 바인딩은 사용하지 않습니다.
+- **Crafting GA 제거 결정:** 제작은 UI 선택형 서버 권한 시스템이라 `UCraftingComponent`가 검증/재료 소모/타이머/결과 지급을 직접 처리합니다. 프로토타입 단계에서는 `UGA_Craft`가 별도 GA lifecycle 가치를 만들지 못해 제거했고, 제작 중 태그 기반 차단·쿨다운·코스트가 필요해지는 시점에만 GA 재도입을 검토합니다.
 - **Incremental Cache Patch:** FastArray의 변경 인덱스만 받아 캐시(`ItemIndexMap`, `ItemCountCache`, `RowBitmap`, `GridSlots`)를 부분 갱신
 
 ---
@@ -127,8 +130,8 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
   - Character RPC(`Server_ConfirmHit`, `Server_RequestPickupItem`)도 동일 정책으로 정리
   - `_Validate` 실패는 클라이언트 disconnect 성격이므로, 정상 플레이에서도 발생 가능한 요청 실패는 `_Implementation`에서 서버 상태 기준으로 거부 처리
 - 리플리케이션 조건 전략 분리:
-  - `COND_OwnerOnly` — Inventory(`InventoryList`), Equipment(`ReplicatedSlots`), Crafting(`bIsCrafting`, `CurrentRecipeID`)
-  - `COND_None` — WorldItem, AttributeSet, ERespawnPhase (전체 가시성 필요)
+  - `COND_OwnerOnly` — Inventory(`InventoryList`), Equipment(`ReplicatedSlots`), Crafting(`bIsCrafting`, `CurrentRecipeID`), Survival 상세 스탯(`Hunger`, `Thirst`, `Stamina` 계열)
+  - `COND_None` — WorldItem, `Health`/`MaxHealth`, ERespawnPhase (전체 가시성 또는 확장 가능성 필요)
 - 치트 방어 3계층: 파라미터 sanity check → 서버 라인 트레이스 재검증 → `HasAuthority` 가드
 
 ### FEATURE 05 — Deferred UI Refresh + Drag & Drop
@@ -277,14 +280,15 @@ classDiagram
 classDiagram
     direction LR
 
-    class GA_Craft {
-        +ActivateAbility()
-        delegates → CraftingComponent.RequestStartCraft
-    }
-
     class GA_Fire {
         +CanActivateAbility() — 무기 장착 검사
         +ActivateAbility() — LineTrace → Server_ConfirmHit
+    }
+
+    class UCraftingComponent {
+        +RequestStartCraft()
+        +StartCraft_Internal()
+        Server RPC → 재료 검증/타이머/결과 지급
     }
 
     class GE_Consumable {
