@@ -3,7 +3,6 @@
 #include "GAS/SurvivalViewModel.h"
 #include "CoreMinimal.h"
 #include "GAS/SurvivalAttributeSet.h"
-#include "Core/EXFILLog.h"
 
 void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
 {
@@ -11,7 +10,6 @@ void USurvivalViewModel::InitializeWithASC(UAbilitySystemComponent* ASC)
 
     if (!ASC)
     {
-        UE_LOG(LogEXFIL, Warning, TEXT("SurvivalViewModel::InitializeWithASC — ASC NULL"));
         return;
     }
 

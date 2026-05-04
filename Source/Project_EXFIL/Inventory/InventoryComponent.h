@@ -207,7 +207,6 @@ private:
 	void RecalculateItemCountForID(FName ItemDataID);
 	void CollectFootprintIndices(FIntPoint Position, FItemSize Size,
 		TSet<int32>& OutAffected) const;
-	bool LogCacheConsistencyAgainstInventoryList(const TCHAR* Context) const;
 #pragma endregion
 
 #pragma region Replicated Data

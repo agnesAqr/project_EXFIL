@@ -12,7 +12,6 @@
 #include "UI/InventoryDragDropOp.h"
 #include "UI/InventoryPanelWidget.h"
 #include "UI/ItemContextMenuWidget.h"
-#include "Core/EXFILLog.h"
 
 namespace
 {
@@ -84,7 +83,6 @@ bool UInventoryIconOverlay::RefreshIcons(
     UWidget* FirstSlot = InGridPanel->GetChildAt(0);
     if (!FirstSlot)
     {
-        UE_LOG(LogEXFIL, Error, TEXT("RefreshIcons: FirstSlot is null - grid panel has no children"));
         return false;
     }
 
@@ -299,7 +297,6 @@ void UInventoryIconOverlay::NativeOnDragDetected(
 {
     if (!PendingDragInstanceID.IsValid())
     {
-        UE_LOG(LogEXFIL, Error, TEXT("IconOverlay NativeOnDragDetected: no pending drag source"));
         return;
     }
 
