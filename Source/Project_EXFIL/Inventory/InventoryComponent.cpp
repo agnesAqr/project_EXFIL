@@ -72,12 +72,12 @@ void FInventoryFastArray::PreReplicatedRemove(
 			continue;
 		}
 
-		OwnerComponent->CollectFootprintIndices(
-			Items[RemovedIndex].RootPosition,
-			Items[RemovedIndex].GetEffectiveSize(),
-			PendingDirtyIndices);
+		FPendingRemove Pending;
+		Pending.Removed = Items[RemovedIndex];
+		Pending.RemovedIndex = RemovedIndex;
+		PendingRemoves.Add(Pending);
+
 		PendingChangedItemDataIDs.Add(Items[RemovedIndex].ItemDataID);
-		bPendingFullCacheRebuild = true;
 	}
 }
 
@@ -170,6 +170,9 @@ void FInventoryFastArray::PostReplicatedReceive(
 {
 	if (!OwnerComponent)
 	{
+		PendingDirtyIndices.Reset();
+		PendingChangedItemDataIDs.Reset();
+		PendingRemoves.Reset();
 		return;
 	}
 
@@ -177,7 +180,7 @@ void FInventoryFastArray::PostReplicatedReceive(
 	{
 		PendingDirtyIndices.Reset();
 		PendingChangedItemDataIDs.Reset();
-		bPendingFullCacheRebuild = false;
+		PendingRemoves.Reset();
 		return;
 	}
 
@@ -186,15 +189,16 @@ void FInventoryFastArray::PostReplicatedReceive(
 		OwnerComponent->HandleReplicatedInventoryReceived();
 		PendingDirtyIndices.Reset();
 		PendingChangedItemDataIDs.Reset();
-		bPendingFullCacheRebuild = false;
+		PendingRemoves.Reset();
 		return;
 	}
 
-	if (bPendingFullCacheRebuild)
+	for (const FPendingRemove& Pending : PendingRemoves)
 	{
-		OwnerComponent->RebuildAllCachesFromItems();
+		OwnerComponent->ApplyItemRemoved_Local(
+			Pending.Removed, Pending.RemovedIndex, PendingDirtyIndices);
 	}
-	bPendingFullCacheRebuild = false;
+	PendingRemoves.Reset();
 
 	if (PendingDirtyIndices.Num() > 0)
 	{
@@ -207,6 +211,8 @@ void FInventoryFastArray::PostReplicatedReceive(
 		OwnerComponent->OnInventoryItemCountsChanged.Broadcast(PendingChangedItemDataIDs);
 		PendingChangedItemDataIDs.Reset();
 	}
+
+	OwnerComponent->EnsureCacheConsistency_Debug();
 }
 
 UInventoryComponent::UInventoryComponent()
@@ -393,10 +399,10 @@ bool UInventoryComponent::RemoveItem_Internal(const FGuid& InstanceID)
 
 	TSet<int32> Affected;
 	const FInventoryItemInstance RemovedItem = InventoryList.Items[Index];
-	InventoryList.Items.RemoveAt(Index);
+	InventoryList.Items.RemoveAtSwap(Index, 1, EAllowShrinking::No);
 	InventoryList.MarkArrayDirty();
-	CollectFootprintIndices(RemovedItem.RootPosition, RemovedItem.GetEffectiveSize(), Affected);
-	RebuildAllCachesFromItems();
+	ApplyItemRemoved_Local(RemovedItem, Index, Affected);
+	EnsureCacheConsistency_Debug();
 
 	return true;
 }
@@ -491,19 +497,19 @@ bool UInventoryComponent::ConsumeItemByID_Internal(FName ItemDataID, int32 Count
 		}
 	}
 
+	// PendingRemovals is collected in ascending index order. Iterate backward so
+	// RemoveAtSwap does not invalidate indices that have not been processed yet.
 	for (int32 i = PendingRemovals.Num() - 1; i >= 0; --i)
 	{
-		InventoryList.Items.RemoveAt(PendingRemovals[i].Index);
-		CollectFootprintIndices(
-			PendingRemovals[i].Item.RootPosition,
-			PendingRemovals[i].Item.GetEffectiveSize(),
-			Affected);
+		const int32 RemovedIndex = PendingRemovals[i].Index;
+		InventoryList.Items.RemoveAtSwap(RemovedIndex, 1, EAllowShrinking::No);
+		ApplyItemRemoved_Local(PendingRemovals[i].Item, RemovedIndex, Affected);
 	}
 
 	if (PendingRemovals.Num() > 0)
 	{
 		InventoryList.MarkArrayDirty();
-		RebuildAllCachesFromItems();
+		EnsureCacheConsistency_Debug();
 	}
 	return true;
 }
@@ -962,6 +968,50 @@ void UInventoryComponent::ApplyItemStackChanged_Local(const FInventoryItemInstan
 	CollectFootprintIndices(NewItem.RootPosition, NewItem.GetEffectiveSize(), OutAffected);
 }
 
+void UInventoryComponent::ApplyItemRemoved_Local(const FInventoryItemInstance& Removed,
+	int32 RemovedIndex, TSet<int32>& OutAffected)
+{
+	const FItemSize EffectiveSize = Removed.GetEffectiveSize();
+	for (int32 Y = Removed.RootPosition.Y; Y < Removed.RootPosition.Y + EffectiveSize.Height; ++Y)
+	{
+		for (int32 X = Removed.RootPosition.X; X < Removed.RootPosition.X + EffectiveSize.Width; ++X)
+		{
+			const FIntPoint Position(X, Y);
+			if (!IsValidGridPosition(Position))
+			{
+				continue;
+			}
+
+			const int32 Index = GridPositionToIndex(Position);
+			if (!GridSlots.IsValidIndex(Index))
+			{
+				continue;
+			}
+
+			if (GridSlots[Index].OccupyingItemID == Removed.InstanceID)
+			{
+				GridSlots[Index].Clear();
+				SetBit(X, Y, false);
+			}
+			OutAffected.Add(Index);
+		}
+	}
+
+	ItemIndexMap.Remove(Removed.InstanceID);
+	if (InventoryList.Items.IsValidIndex(RemovedIndex))
+	{
+		const FGuid& MovedID = InventoryList.Items[RemovedIndex].InstanceID;
+		ItemIndexMap.FindOrAdd(MovedID) = RemovedIndex;
+	}
+
+	int32& CachedCount = ItemCountCache.FindOrAdd(Removed.ItemDataID);
+	CachedCount -= Removed.StackCount;
+	if (CachedCount <= 0)
+	{
+		ItemCountCache.Remove(Removed.ItemDataID);
+	}
+}
+
 void UInventoryComponent::ApplyItemMovedByScan_Local(const FInventoryItemInstance& NewItem,
 	TSet<int32>& OutAffected)
 {
@@ -1030,6 +1080,24 @@ bool UInventoryComponent::DoesGridMatchItemFootprint(const FInventoryItemInstanc
 	}
 
 	return OccupiedCellCount == (EffectiveSize.Width * EffectiveSize.Height);
+}
+
+void UInventoryComponent::EnsureCacheConsistency_Debug() const
+{
+#if !UE_BUILD_SHIPPING
+	ensureMsgf(ItemIndexMap.Num() == InventoryList.Items.Num(),
+		TEXT("ItemIndexMap size mismatch: %d vs %d"),
+		ItemIndexMap.Num(), InventoryList.Items.Num());
+
+	for (int32 Index = 0; Index < InventoryList.Items.Num(); ++Index)
+	{
+		const FInventoryItemInstance& Item = InventoryList.Items[Index];
+		const int32* MappedIndex = ItemIndexMap.Find(Item.InstanceID);
+		ensureMsgf(MappedIndex && *MappedIndex == Index,
+			TEXT("ItemIndexMap stale at %d for %s"),
+			Index, *Item.InstanceID.ToString());
+	}
+#endif
 }
 
 void UInventoryComponent::RecalculateItemCountForID(FName ItemDataID)

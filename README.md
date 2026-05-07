@@ -66,7 +66,7 @@
 | 시스템 | 설명 |
 |--------|------|
 | **Grid Inventory (10×12)** | 다중 크기 아이템 배치, 회전, 드래그앤드롭, 스택 병합, 비트맵 기반 O(H) 슬롯 검색 |
-| **FastArray Replication** | `FInventoryFastArray` + `NetDeltaSerialize`, 변경 인덱스 단위 PostReplicatedAdd/Change/Remove 콜백 |
+| **FastArray Replication** | `FInventoryFastArray` + `NetDeltaSerialize`, `PreReplicatedRemove` 캡처 + `PostReplicatedAdd/Change` 부분 패치 + `PostReplicatedReceive` flush |
 | **Crafting** | DataTable 레시피 기반, 원자적 재료 소모 + 실패 시 롤백, 서버 타이머 기반 결과 지급 |
 | **Equipment** | 6슬롯 (Head/Face/Eyewear/Body/Weapon1/Weapon2), 장착 시 GE Apply / 해제 시 Remove |
 | **Survival Stats** | GAS AttributeSet 8속성 (Health, Hunger, Thirst, Stamina + Max), Pre/Post 클램핑 2단계 |
@@ -98,7 +98,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - **Data-Driven:** 아이템 / 레시피 / 장비 스펙은 DataTable CSV. 텍스처·GE 클래스는 TSoftObjectPtr / TSoftClassPtr로 지연 로드 후 Subsystem 캐시
 - **Input routing:** 인벤토리 Tab 입력은 상태에 따라 처리 계층이 다릅니다. 닫힌 상태의 열기만 Enhanced Input `IA_ToggleInventory`가 담당하고, 열린 상태에서는 UI가 `UIOnly/Menu`로 포커스를 잡은 뒤 `UInventoryPanelWidget::NativeOnKeyDown()`이 Tab 닫기와 드래그 중 R 회전을 처리합니다. 따라서 인벤토리 열린 상태의 Tab은 캐릭터 입력으로 내려가지 않습니다. `PlayerInputComponent->BindKey(EKeys::Tab, ...)` 직접 바인딩은 사용하지 않습니다.
 - **Crafting GA 제거 결정:** 제작은 UI 선택형 서버 권한 시스템이라 `UCraftingComponent`가 검증/재료 소모/타이머/결과 지급을 직접 처리합니다. 프로토타입 단계에서는 `UGA_Craft`가 별도 GA lifecycle 가치를 만들지 못해 제거했고, 제작 중 태그 기반 차단·쿨다운·코스트가 필요해지는 시점에만 GA 재도입을 검토합니다.
-- **Incremental Cache Patch:** FastArray의 변경 인덱스만 받아 캐시(`ItemIndexMap`, `ItemCountCache`, `RowBitmap`, `GridSlots`)를 부분 갱신
+- **Incremental Cache Patch:** FastArray의 Add/Change/Remove 변경분만 받아 캐시(`ItemIndexMap`, `ItemCountCache`, `RowBitmap`, `GridSlots`)를 부분 갱신. Remove는 `RemoveAtSwap`과 pending remove 캡처로 처리하며 전체 리빌드에 의존하지 않음
 
 ---
 
@@ -111,7 +111,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - `ItemCountCache (TMap<FName, int32>)`로 ID별 수량 합계: **O(1)**
 - Replicated 데이터(`FInventoryFastArray InventoryList`) + 로컬 전용 캐시(GridSlots / TMap / Bitmap) 분리
 - FastArray 콜백(`PreReplicatedRemove` / `PostReplicatedAdd` / `PostReplicatedChange` / `PostReplicatedReceive`)에서 변경분만 캐시에 패치 후 ViewModel → IconOverlay까지 dirty 인덱스 전파
-- **Remove 경로는 풀 리빌드로 전환:** 서버 `RemoveItem_Internal` / `ConsumeItemByID_Internal`(full-stack)은 호출 직후 `RebuildAllCachesFromItems()`. 클라이언트는 `PreReplicatedRemove`에서 `bPendingFullCacheRebuild` 플래그만 세우고, 실제 재빌드는 `PostReplicatedReceive`에서 1회 실행. Add/Change는 부분 패치 유지 — `RemoveAt`로 인한 후행 인덱스 시프트가 `ItemIndexMap` stale 캐시를 만들던 문제를 정리
+- **Remove 경로도 부분 패치:** 서버 `RemoveItem_Internal` / `ConsumeItemByID_Internal`(full-stack)은 `RemoveAtSwap(Index, 1, EAllowShrinking::No)` 직후 `ApplyItemRemoved_Local`로 캐시를 갱신. 클라이언트는 `PreReplicatedRemove`에서 제거 항목을 `PendingRemoves`에 캡처하고, FastArray 내부 mutation 완료 후 `PostReplicatedReceive`에서 같은 헬퍼를 호출. 제거 footprint는 같은 replication batch의 Add/Change가 선처리될 수 있으므로 `OccupyingItemID == Removed.InstanceID`일 때만 슬롯을 clear
 
 ### FEATURE 02 — 서버 히트 재검증 슈팅
 - `GA_Fire` (LocalPredicted, InstancedPerActor) → 클라이언트가 카메라 기준 라인 트레이스 (5000cm, ECC_Pawn)

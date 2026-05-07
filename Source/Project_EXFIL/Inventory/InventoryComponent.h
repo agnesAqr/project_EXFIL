@@ -17,10 +17,16 @@ struct PROJECT_EXFIL_API FInventoryFastArray : public FFastArraySerializer
 	UPROPERTY()
 	TArray<FInventoryItemInstance> Items;
 
+	struct FPendingRemove
+	{
+		FInventoryItemInstance Removed;
+		int32 RemovedIndex = INDEX_NONE;
+	};
+
 	UInventoryComponent* OwnerComponent = nullptr;
 	TSet<int32> PendingDirtyIndices;
 	TSet<FName> PendingChangedItemDataIDs;
-	bool bPendingFullCacheRebuild = false;
+	TArray<FPendingRemove> PendingRemoves;
 
 	void PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);
 	void PostReplicatedAdd(const TArrayView<int32>& AddedIndices, int32 FinalSize);
@@ -201,9 +207,12 @@ private:
 		FItemSize OldEffSize, TSet<int32>& OutAffected);
 	void ApplyItemStackChanged_Local(const FInventoryItemInstance& NewItem, int32 OldStackCount,
 		TSet<int32>& OutAffected);
+	void ApplyItemRemoved_Local(const FInventoryItemInstance& Removed, int32 RemovedIndex,
+		TSet<int32>& OutAffected);
 	void ApplyItemMovedByScan_Local(const FInventoryItemInstance& NewItem,
 		TSet<int32>& OutAffected);
 	bool DoesGridMatchItemFootprint(const FInventoryItemInstance& Item) const;
+	void EnsureCacheConsistency_Debug() const;
 	void RecalculateItemCountForID(FName ItemDataID);
 	void CollectFootprintIndices(FIntPoint Position, FItemSize Size,
 		TSet<int32>& OutAffected) const;
