@@ -305,13 +305,3 @@ void UCraftingComponent::OnCraftTimerComplete()
 
     OnCraftingCompleted.Broadcast(CompletedRecipe);
 }
-
-UInventoryComponent* UCraftingComponent::GetInventoryComp() const
-{
-    return CachedInventoryComp.Get();
-}
-
-UItemDataSubsystem* UCraftingComponent::GetItemDataSubsystem() const
-{
-    return CachedItemSub.Get();
-}

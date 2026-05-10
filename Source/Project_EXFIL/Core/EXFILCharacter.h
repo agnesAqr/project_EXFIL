@@ -36,7 +36,7 @@ class PROJECT_EXFIL_API AEXFILCharacter : public AProject_EXFILCharacter,
 
 public:
 	AEXFILCharacter();
-	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override { return AbilitySystemComponent; }
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	UInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")

@@ -22,86 +22,86 @@ public:
     UFUNCTION(BlueprintPure, FieldNotify)
     bool IsEmpty() const { return bEmpty; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     FName GetItemDataID() const { return ItemDataID; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     int32 GetStackCount() const { return StackCount; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     bool IsRootSlot() const { return bIsRootSlot; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     FIntPoint GetGridPosition() const { return GridPosition; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     FGuid GetItemInstanceID() const { return ItemInstanceID; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     TSoftObjectPtr<UTexture2D> GetIcon() const { return Icon; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     int32 GetItemSizeX() const { return ItemSizeX; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     int32 GetItemSizeY() const { return ItemSizeY; }
 
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     bool IsRotated() const { return bRotated; }
     UFUNCTION(BlueprintCallable, Category = "Inventory|Request")
     void RequestDrop();
 
 protected:
     void SetEmpty(bool bNewValue);
-    void SetItemDataID(FName NewValue);
-    void SetStackCount(int32 NewValue);
-    void SetIsRootSlot(bool bNewValue);
-    void SetGridPosition(FIntPoint NewValue);
-    void SetItemInstanceID(FGuid NewValue);
-    void SetIcon(TSoftObjectPtr<UTexture2D> NewValue);
-    void SetItemSizeX(int32 NewValue);
-    void SetItemSizeY(int32 NewValue);
-    void SetRotated(bool bNewValue);
+    void SetItemDataID(FName NewValue) { ItemDataID = NewValue; }
+    void SetStackCount(int32 NewValue) { StackCount = NewValue; }
+    void SetIsRootSlot(bool bNewValue) { bIsRootSlot = bNewValue; }
+    void SetGridPosition(FIntPoint NewValue) { GridPosition = NewValue; }
+    void SetItemInstanceID(FGuid NewValue) { ItemInstanceID = NewValue; }
+    void SetIcon(TSoftObjectPtr<UTexture2D> NewValue) { Icon = NewValue; }
+    void SetItemSizeX(int32 NewValue) { ItemSizeX = NewValue; }
+    void SetItemSizeY(int32 NewValue) { ItemSizeY = NewValue; }
+    void SetRotated(bool bNewValue) { bRotated = bNewValue; }
 private:
     UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsEmpty", Setter = "SetEmpty",
               meta = (AllowPrivateAccess = true))
     bool bEmpty = true;
 
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter, Setter = "SetItemDataID",
+    UPROPERTY(BlueprintReadWrite, Getter, Setter = "SetItemDataID",
               meta = (AllowPrivateAccess = true))
     FName ItemDataID;
 
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter, Setter = "SetStackCount",
+    UPROPERTY(BlueprintReadWrite, Getter, Setter = "SetStackCount",
               meta = (AllowPrivateAccess = true))
     int32 StackCount = 0;
 
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsRootSlot", Setter = "SetIsRootSlot",
+    UPROPERTY(BlueprintReadWrite, Getter = "IsRootSlot", Setter = "SetIsRootSlot",
               meta = (AllowPrivateAccess = true))
     bool bIsRootSlot = false;
 
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter, Setter = "SetGridPosition",
+    UPROPERTY(BlueprintReadWrite, Getter, Setter = "SetGridPosition",
               meta = (AllowPrivateAccess = true))
     FIntPoint GridPosition = FIntPoint::ZeroValue;
 
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter, Setter = "SetItemInstanceID",
+    UPROPERTY(BlueprintReadWrite, Getter, Setter = "SetItemInstanceID",
               meta = (AllowPrivateAccess = true))
     FGuid ItemInstanceID;
 
     
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetIcon", Setter = "SetIcon",
+    UPROPERTY(BlueprintReadWrite, Getter = "GetIcon", Setter = "SetIcon",
               meta = (AllowPrivateAccess = true))
     TSoftObjectPtr<UTexture2D> Icon;
 
     
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetItemSizeX", Setter = "SetItemSizeX",
+    UPROPERTY(BlueprintReadWrite, Getter = "GetItemSizeX", Setter = "SetItemSizeX",
               meta = (AllowPrivateAccess = true))
     int32 ItemSizeX = 1;
 
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "GetItemSizeY", Setter = "SetItemSizeY",
+    UPROPERTY(BlueprintReadWrite, Getter = "GetItemSizeY", Setter = "SetItemSizeY",
               meta = (AllowPrivateAccess = true))
     int32 ItemSizeY = 1;
 
-    UPROPERTY(BlueprintReadWrite, FieldNotify, Getter = "IsRotated", Setter = "SetRotated",
+    UPROPERTY(BlueprintReadWrite, Getter = "IsRotated", Setter = "SetRotated",
               meta = (AllowPrivateAccess = true))
     bool bRotated = false;
 

@@ -37,11 +37,6 @@ AEXFILCharacter::AEXFILCharacter()
     SurvivalAttributes = CreateDefaultSubobject<USurvivalAttributeSet>(TEXT("SurvivalAttributes"));
 }
 
-UAbilitySystemComponent* AEXFILCharacter::GetAbilitySystemComponent() const
-{
-    return AbilitySystemComponent;
-}
-
 void AEXFILCharacter::InitAbilityActorInfoForClient()
 {
     if (AbilitySystemComponent)

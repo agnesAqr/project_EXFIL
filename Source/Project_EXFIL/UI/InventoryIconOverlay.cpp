@@ -324,16 +324,6 @@ void UInventoryIconOverlay::NativeOnDragDetected(
     PendingDragSource = FInventoryDragSourceViewData();
 }
 
-void UInventoryIconOverlay::SetParentPanel(UInventoryPanelWidget* InPanel)
-{
-    ParentPanel = InPanel;
-}
-
-void UInventoryIconOverlay::SetEquipmentViewModel(UEquipmentViewModel* InViewModel)
-{
-    CachedEquipmentViewModel = InViewModel;
-}
-
 bool UInventoryIconOverlay::RotateActiveDragItem()
 {
     if (!ActiveDragOperation || ActiveDragOperation->bFromEquipment ||

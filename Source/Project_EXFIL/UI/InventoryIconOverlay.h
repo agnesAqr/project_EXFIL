@@ -41,10 +41,10 @@ public:
     void CloseContextMenuIfOpen();
 
 
-    void SetParentPanel(UInventoryPanelWidget* InPanel);
+    void SetParentPanel(UInventoryPanelWidget* InPanel) { ParentPanel = InPanel; }
 
     
-    void SetEquipmentViewModel(UEquipmentViewModel* InViewModel);
+    void SetEquipmentViewModel(UEquipmentViewModel* InViewModel) { CachedEquipmentViewModel = InViewModel; }
 
     
     bool RotateActiveDragItem();

@@ -22,7 +22,7 @@ public:
     void SetSlotViewModel(UInventorySlotViewModel* InSlotVM);
 
     
-    void SetParentPanel(UInventoryPanelWidget* InPanel);
+    void SetParentPanel(UInventoryPanelWidget* InPanel) { ParentPanel = InPanel; }
 
 protected:
     

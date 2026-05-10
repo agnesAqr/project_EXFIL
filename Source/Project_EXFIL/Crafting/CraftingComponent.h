@@ -96,8 +96,8 @@ private:
 
     void OnCraftTimerComplete();
 
-    UInventoryComponent* GetInventoryComp() const;
-    class UItemDataSubsystem* GetItemDataSubsystem() const;
+    UInventoryComponent* GetInventoryComp() const { return CachedInventoryComp.Get(); }
+    class UItemDataSubsystem* GetItemDataSubsystem() const { return CachedItemSub.Get(); }
 
     UPROPERTY()
     TObjectPtr<UInventoryComponent> CachedInventoryComp;

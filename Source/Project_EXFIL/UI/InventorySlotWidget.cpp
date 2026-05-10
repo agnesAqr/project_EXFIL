@@ -26,11 +26,6 @@ void UInventorySlotWidget::SetSlotViewModel(UInventorySlotViewModel* InSlotVM)
     RefreshVisuals();
 }
 
-void UInventorySlotWidget::SetParentPanel(UInventoryPanelWidget* InPanel)
-{
-    ParentPanel = InPanel;
-}
-
 void UInventorySlotWidget::RefreshVisuals()
 {
     if (!SlotVM)
