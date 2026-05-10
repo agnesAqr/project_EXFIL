@@ -71,17 +71,45 @@ void USurvivalAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCa
             }
         }
     }
+    else if (Data.EvaluatedData.Attribute == GetMaxHealthAttribute())
+    {
+        if (GetHealth() > GetMaxHealth())
+        {
+            SetHealth(GetMaxHealth());
+        }
+    }
     else if (Data.EvaluatedData.Attribute == GetHungerAttribute())
     {
         SetHunger(FMath::Clamp(GetHunger(), 0.f, GetMaxHunger()));
+    }
+    else if (Data.EvaluatedData.Attribute == GetMaxHungerAttribute())
+    {
+        if (GetHunger() > GetMaxHunger())
+        {
+            SetHunger(GetMaxHunger());
+        }
     }
     else if (Data.EvaluatedData.Attribute == GetThirstAttribute())
     {
         SetThirst(FMath::Clamp(GetThirst(), 0.f, GetMaxThirst()));
     }
+    else if (Data.EvaluatedData.Attribute == GetMaxThirstAttribute())
+    {
+        if (GetThirst() > GetMaxThirst())
+        {
+            SetThirst(GetMaxThirst());
+        }
+    }
     else if (Data.EvaluatedData.Attribute == GetStaminaAttribute())
     {
         SetStamina(FMath::Clamp(GetStamina(), 0.f, GetMaxStamina()));
+    }
+    else if (Data.EvaluatedData.Attribute == GetMaxStaminaAttribute())
+    {
+        if (GetStamina() > GetMaxStamina())
+        {
+            SetStamina(GetMaxStamina());
+        }
     }
 }
 
