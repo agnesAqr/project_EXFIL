@@ -28,11 +28,11 @@ void AEXFILPlayerController::SetupInputComponent()
 	}
 }
 
-void AEXFILPlayerController::AcknowledgePossession(APawn* P)
+void AEXFILPlayerController::AcknowledgePossession(APawn* pawn)
 {
-	Super::AcknowledgePossession(P);
+	Super::AcknowledgePossession(pawn);
 
-	if (AEXFILCharacter* EXFILCharacter = Cast<AEXFILCharacter>(P))
+	if (AEXFILCharacter* EXFILCharacter = Cast<AEXFILCharacter>(pawn))
 	{
 		EXFILCharacter->InitAbilityActorInfoForClient();
 	}
