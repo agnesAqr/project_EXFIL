@@ -223,6 +223,12 @@ UInventoryComponent::UInventoryComponent()
 }
 
 #pragma region Engine Lifecycle / Replication
+void UInventoryComponent::OnRegister()
+{
+	Super::OnRegister();
+	InventoryList.OwnerComponent = this;
+}
+
 void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -699,12 +705,12 @@ void UInventoryComponent::BeginPlay()
 		}
 	}
 
-	InitializeGridStorage();
-	if (GetOwner() && GetOwner()->HasAuthority())
+	RebuildAllCachesFromItems();
+	if (GetOwner() && !GetOwner()->HasAuthority() && InventoryList.Items.Num() > 0)
 	{
-		RebuildAllCachesFromItems();
-		bCachesInitialized = true;
+		BroadcastFullInventoryRefresh();
 	}
+	bCachesInitialized = true;
 }
 #pragma endregion
 

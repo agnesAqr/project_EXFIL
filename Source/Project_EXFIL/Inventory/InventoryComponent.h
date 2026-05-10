@@ -153,6 +153,7 @@ public:
 
 protected:
 #pragma region Engine Lifecycle
+	virtual void OnRegister() override;
 	virtual void BeginPlay() override;
 #pragma endregion
 
