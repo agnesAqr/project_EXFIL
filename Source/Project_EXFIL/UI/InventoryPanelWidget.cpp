@@ -265,7 +265,6 @@ void UInventoryPanelWidget::BuildGrid()
     if (IconOverlay)
     {
         IconOverlay->SetParentPanel(this);
-        IconOverlay->SetEquipmentViewModel(EquipmentViewModel);
     }
     bHasPendingOverlayRefresh = true;
 }
@@ -326,7 +325,6 @@ void UInventoryPanelWidget::HandleViewModelRefreshed(const TSet<int32>& DirtyInd
     }
 
     bHasPendingOverlayRefresh = true;
-
     FlushOverlayDelta();
 }
 

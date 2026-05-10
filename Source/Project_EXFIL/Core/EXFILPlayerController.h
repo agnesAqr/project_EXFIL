@@ -32,7 +32,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
-	virtual void AcknowledgePossession(APawn* P) override;
+	virtual void AcknowledgePossession(APawn* pawn) override;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UInventoryPanelWidget> InventoryPanelWidgetClass;
