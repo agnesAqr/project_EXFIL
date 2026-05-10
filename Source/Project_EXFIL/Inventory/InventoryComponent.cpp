@@ -240,7 +240,13 @@ void UInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& 
 #pragma region External Entry: Request API
 void UInventoryComponent::RequestRemoveItem(FGuid ItemInstanceID)
 {
-	if (GetOwner() && !GetOwner()->HasAuthority())
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	if (!Owner->HasAuthority())
 	{
 		Server_RequestRemoveItem(ItemInstanceID);
 		return;
@@ -251,17 +257,30 @@ void UInventoryComponent::RequestRemoveItem(FGuid ItemInstanceID)
 
 void UInventoryComponent::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
 {
-	if (GetOwner() && !GetOwner()->HasAuthority())
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	if (!Owner->HasAuthority())
 	{
 		Server_RequestMoveItem(ItemInstanceID, NewPosition, bNewRotated);
 		return;
 	}
+
 	MoveItem_Internal(ItemInstanceID, NewPosition, bNewRotated);
 }
 
 void UInventoryComponent::RequestConsumeItemByID(FName ItemDataID, int32 Count)
 {
-	if (GetOwner() && !GetOwner()->HasAuthority())
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	if (!Owner->HasAuthority())
 	{
 		Server_RequestConsumeItemByID(ItemDataID, Count);
 		return;
@@ -272,7 +291,13 @@ void UInventoryComponent::RequestConsumeItemByID(FName ItemDataID, int32 Count)
 
 void UInventoryComponent::RequestDropItem(FGuid ItemInstanceID)
 {
-	if (GetOwner() && !GetOwner()->HasAuthority())
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	if (!Owner->HasAuthority())
 	{
 		Server_RequestDropItem(ItemInstanceID);
 		return;
@@ -706,7 +731,8 @@ void UInventoryComponent::BeginPlay()
 	}
 
 	RebuildAllCachesFromItems();
-	if (GetOwner() && !GetOwner()->HasAuthority() && InventoryList.Items.Num() > 0)
+	const AActor* Owner = GetOwner();
+	if (Owner && !Owner->HasAuthority() && InventoryList.Items.Num() > 0)
 	{
 		BroadcastFullInventoryRefresh();
 	}

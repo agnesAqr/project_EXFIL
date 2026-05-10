@@ -65,13 +65,13 @@ public:
 	void OnDeath();
 
 	
-	void Server_PrepareRespawn();
+	void BeginRespawn();
 
 	
-	void Server_FinishRespawn();
+	void CompleteRespawn();
 
 	
-	void Server_HideDeadBody();
+	void EnterHiddenDeadState();
 
 	
 	UFUNCTION(Client, Reliable)
@@ -183,7 +183,7 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void Server_RequestPickupItem(AWorldItem* TargetItem);
 
-	void ExecutePickup(AWorldItem* TargetItem);
+	void ExecutePickup_Internal(AWorldItem* TargetItem);
 
 	
 	FTimerHandle HideCorpseTimerHandle;

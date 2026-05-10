@@ -68,7 +68,13 @@ void UCraftingComponent::RequestStartCraft(FName RecipeID)
         return;
     }
 
-    if (GetOwner() && !GetOwner()->HasAuthority())
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return;
+    }
+
+    if (!Owner->HasAuthority())
     {
         Server_RequestStartCraft(RecipeID);
         return;
@@ -82,7 +88,13 @@ void UCraftingComponent::RequestStartCraft(FName RecipeID)
 
 void UCraftingComponent::RequestCancelCraft()
 {
-    if (GetOwner() && !GetOwner()->HasAuthority())
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return;
+    }
+
+    if (!Owner->HasAuthority())
     {
         Server_RequestCancelCraft();
         return;

@@ -31,9 +31,7 @@ AEXFILCharacter::AEXFILCharacter()
     EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
     AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
     AbilitySystemComponent->SetIsReplicated(true);
-    
     AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
-
     SurvivalAttributes = CreateDefaultSubobject<USurvivalAttributeSet>(TEXT("SurvivalAttributes"));
 }
 
@@ -48,14 +46,13 @@ void AEXFILCharacter::InitAbilityActorInfoForClient()
 void AEXFILCharacter::PossessedBy(AController* NewController)
 {
     Super::PossessedBy(NewController);
-    if (!AbilitySystemComponent)
+    if (!AbilitySystemComponent || !HasAuthority())
     {
         return;
     }
 
     AbilitySystemComponent->InitAbilityActorInfo(this, this);
-    if (HasAuthority() && GA_FireClass &&
-        !AbilitySystemComponent->FindAbilitySpecFromClass(GA_FireClass))
+    if (GA_FireClass && !AbilitySystemComponent->FindAbilitySpecFromClass(GA_FireClass))
     {
         FGameplayAbilitySpec FireSpec(GA_FireClass, 1, INDEX_NONE, this);
         AbilitySystemComponent->GiveAbility(FireSpec);
@@ -145,20 +142,16 @@ AWorldItem* AEXFILCharacter::TraceForWorldItem() const
 
 void AEXFILCharacter::Server_RequestPickupItem_Implementation(AWorldItem* TargetItem)
 {
-    ExecutePickup(TargetItem);
+    ExecutePickup_Internal(TargetItem);
 }
 
-void AEXFILCharacter::ExecutePickup(AWorldItem* TargetItem)
+void AEXFILCharacter::ExecutePickup_Internal(AWorldItem* TargetItem)
 {
-    if (!HasAuthority())
-    {
-        return;
-    }
     if (!IsValid(TargetItem)) return;
     const float Distance = FVector::Dist(GetActorLocation(), TargetItem->GetActorLocation());
     if (Distance > MaxPickupDistance)
     {
-        UE_LOG(LogEXFIL, Warning, TEXT("ExecutePickup: distance exceeded - %.1fcm > %.1fcm"),
+        UE_LOG(LogEXFIL, Warning, TEXT("ExecutePickup_Internal: distance exceeded - %.1fcm > %.1fcm"),
             Distance, MaxPickupDistance);
         return;
     }
@@ -313,12 +306,12 @@ void AEXFILCharacter::OnDeath()
     GetWorldTimerManager().SetTimer(
         HideCorpseTimerHandle,
         this,
-        &AEXFILCharacter::Server_HideDeadBody,
+        &AEXFILCharacter::EnterHiddenDeadState,
         CorpseVisibleDuration,
         false);
 }
 
-void AEXFILCharacter::Server_HideDeadBody()
+void AEXFILCharacter::EnterHiddenDeadState()
 {
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::Dead) return;
@@ -330,12 +323,12 @@ void AEXFILCharacter::Server_HideDeadBody()
     GetWorldTimerManager().SetTimer(
         RespawnPrepareTimerHandle,
         this,
-        &AEXFILCharacter::Server_PrepareRespawn,
+        &AEXFILCharacter::BeginRespawn,
         HiddenRespawnDelay,
         false);
 }
 
-void AEXFILCharacter::Server_PrepareRespawn()
+void AEXFILCharacter::BeginRespawn()
 {
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::HiddenDead) return;
@@ -352,7 +345,7 @@ void AEXFILCharacter::Server_PrepareRespawn()
         }
         else
         {
-            UE_LOG(LogEXFIL, Warning, TEXT("Server_PrepareRespawn: FindPlayerStart failed - respawning at current location"));
+            UE_LOG(LogEXFIL, Warning, TEXT("BeginRespawn: FindPlayerStart failed - respawning at current location"));
         }
     }
 
@@ -381,12 +374,12 @@ void AEXFILCharacter::Server_PrepareRespawn()
     GetWorldTimerManager().SetTimer(
         RespawnRevealTimerHandle,
         this,
-        &AEXFILCharacter::Server_FinishRespawn,
+        &AEXFILCharacter::CompleteRespawn,
         RespawnRevealDelay,
         false);
 }
 
-void AEXFILCharacter::Server_FinishRespawn()
+void AEXFILCharacter::CompleteRespawn()
 {
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::Respawning) return;

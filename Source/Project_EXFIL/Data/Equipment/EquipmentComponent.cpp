@@ -88,7 +88,13 @@ void UEquipmentComponent::OnRep_Slots()
 
 void UEquipmentComponent::RequestEquipFromInventory(EEquipmentSlot Slot, FGuid ItemInstanceID)
 {
-    if (GetOwner() && !GetOwner()->HasAuthority())
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return;
+    }
+
+    if (!Owner->HasAuthority())
     {
         Server_RequestEquipFromInventory(Slot, ItemInstanceID);
         return;
@@ -99,7 +105,13 @@ void UEquipmentComponent::RequestEquipFromInventory(EEquipmentSlot Slot, FGuid I
 
 void UEquipmentComponent::RequestUnequipToInventory(EEquipmentSlot Slot)
 {
-    if (GetOwner() && !GetOwner()->HasAuthority())
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return;
+    }
+
+    if (!Owner->HasAuthority())
     {
         Server_RequestUnequipToInventory(Slot);
         return;
@@ -111,7 +123,13 @@ void UEquipmentComponent::RequestUnequipToInventory(EEquipmentSlot Slot)
 void UEquipmentComponent::RequestUnequipToInventoryAt(
     EEquipmentSlot Slot, FIntPoint Position, bool bRotated)
 {
-    if (GetOwner() && !GetOwner()->HasAuthority())
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return;
+    }
+
+    if (!Owner->HasAuthority())
     {
         Server_RequestUnequipToInventoryAt(Slot, Position, bRotated);
         return;
@@ -122,7 +140,13 @@ void UEquipmentComponent::RequestUnequipToInventoryAt(
 
 void UEquipmentComponent::RequestDropEquippedItem(EEquipmentSlot Slot)
 {
-    if (GetOwner() && !GetOwner()->HasAuthority())
+    AActor* Owner = GetOwner();
+    if (!Owner)
+    {
+        return;
+    }
+
+    if (!Owner->HasAuthority())
     {
         Server_RequestDropEquippedItem(Slot);
         return;
