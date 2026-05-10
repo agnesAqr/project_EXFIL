@@ -2,6 +2,7 @@
 
 #include "UI/CraftingPanelWidget.h"
 #include "CoreMinimal.h"
+#include "Internationalization/StringTableRegistry.h"
 #include "Components/Border.h"
 #include "Components/Image.h"
 #include "Components/ScrollBox.h"
@@ -216,7 +217,7 @@ void UCraftingPanelWidget::HandleCraftingProgressStarted(float Duration)
 
     if (TextBlock_CraftingLabel)
     {
-        TextBlock_CraftingLabel->SetText(NSLOCTEXT("Crafting", "CraftingLabel", "Crafting..."));
+        TextBlock_CraftingLabel->SetText(LOCTABLE("/Game/Localization/ST_UI", "Crafting.CraftingLabel"));
     }
 
     StartProgressTimer(Duration);

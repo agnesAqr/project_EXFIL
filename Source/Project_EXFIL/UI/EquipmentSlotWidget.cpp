@@ -2,6 +2,7 @@
 
 #include "UI/EquipmentSlotWidget.h"
 #include "CoreMinimal.h"
+#include "Internationalization/StringTableRegistry.h"
 #include "Blueprint/DragDropOperation.h"
 #include "Components/Border.h"
 #include "Components/Image.h"
@@ -14,12 +15,12 @@ void UEquipmentSlotWidget::NativeOnInitialized()
     Super::NativeOnInitialized();
     static const TMap<EEquipmentSlot, FText> SlotLabels =
     {
-        { EEquipmentSlot::Head,    NSLOCTEXT("Equip", "Head",    "HEAD")     },
-        { EEquipmentSlot::Face,    NSLOCTEXT("Equip", "Face",    "FACE")     },
-        { EEquipmentSlot::Eyewear, NSLOCTEXT("Equip", "Eye",     "EYEWEAR")  },
-        { EEquipmentSlot::Body,    NSLOCTEXT("Equip", "Body",    "BODY")     },
-        { EEquipmentSlot::Weapon1, NSLOCTEXT("Equip", "W1",      "WEAPON 1") },
-        { EEquipmentSlot::Weapon2, NSLOCTEXT("Equip", "W2",      "WEAPON 2") },
+        { EEquipmentSlot::Head,    LOCTABLE("/Game/Localization/ST_UI", "Equip.Head")    },
+        { EEquipmentSlot::Face,    LOCTABLE("/Game/Localization/ST_UI", "Equip.Face")    },
+        { EEquipmentSlot::Eyewear, LOCTABLE("/Game/Localization/ST_UI", "Equip.Eyewear") },
+        { EEquipmentSlot::Body,    LOCTABLE("/Game/Localization/ST_UI", "Equip.Body")    },
+        { EEquipmentSlot::Weapon1, LOCTABLE("/Game/Localization/ST_UI", "Equip.Weapon1") },
+        { EEquipmentSlot::Weapon2, LOCTABLE("/Game/Localization/ST_UI", "Equip.Weapon2") },
     };
 
     if (TextBlock_SlotLabel)

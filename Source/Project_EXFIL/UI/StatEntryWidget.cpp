@@ -2,6 +2,7 @@
 
 #include "UI/StatEntryWidget.h"
 #include "CoreMinimal.h"
+#include "Internationalization/StringTableRegistry.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "GAS/SurvivalViewModel.h"
@@ -30,10 +31,10 @@ void UStatEntryWidget::NativeOnInitialized()
     {
         static const TMap<EExfilStatType, FText> StatLabels =
         {
-            { EExfilStatType::Health,  NSLOCTEXT("Stat", "HP", "HP") },
-            { EExfilStatType::Hunger,  NSLOCTEXT("Stat", "HU", "HU") },
-            { EExfilStatType::Thirst,  NSLOCTEXT("Stat", "TH", "TH") },
-            { EExfilStatType::Stamina, NSLOCTEXT("Stat", "ST", "ST") },
+            { EExfilStatType::Health,  LOCTABLE("/Game/Localization/ST_UI", "Stat.Health")  },
+            { EExfilStatType::Hunger,  LOCTABLE("/Game/Localization/ST_UI", "Stat.Hunger")  },
+            { EExfilStatType::Thirst,  LOCTABLE("/Game/Localization/ST_UI", "Stat.Thirst")  },
+            { EExfilStatType::Stamina, LOCTABLE("/Game/Localization/ST_UI", "Stat.Stamina") },
         };
         if (const FText* Label = StatLabels.Find(StatType))
         {

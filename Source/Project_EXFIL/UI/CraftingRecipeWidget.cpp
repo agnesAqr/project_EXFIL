@@ -2,6 +2,7 @@
 
 #include "UI/CraftingRecipeWidget.h"
 #include "CoreMinimal.h"
+#include "Internationalization/StringTableRegistry.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -98,12 +99,12 @@ void UCraftingRecipeWidget::RefreshVisualState()
 
     if (bIsCurrentCraftRecipe)
     {
-        CraftLabel->SetText(NSLOCTEXT("Crafting", "Cancel", "CANCEL"));
+        CraftLabel->SetText(LOCTABLE("/Game/Localization/ST_UI", "Crafting.Cancel"));
         CraftLabel->SetColorAndOpacity(FLinearColor(0.94f, 0.62f, 0.15f, 0.9f));
     }
     else
     {
-        CraftLabel->SetText(NSLOCTEXT("Crafting", "Craft", "CRAFT"));
+        CraftLabel->SetText(LOCTABLE("/Game/Localization/ST_UI", "Crafting.Craft"));
         CraftLabel->SetColorAndOpacity(bPredictedCanCraft
             ? FLinearColor(0.12f, 0.63f, 0.43f, 0.9f)
             : FLinearColor(0.45f, 0.45f, 0.45f, 0.7f));
