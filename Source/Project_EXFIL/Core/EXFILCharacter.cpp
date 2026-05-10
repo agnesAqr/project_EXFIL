@@ -297,6 +297,13 @@ void AEXFILCharacter::Multicast_PlayHitReact_Implementation()
 void AEXFILCharacter::OnDeath()
 {
     if (!HasAuthority()) return;
+
+    EnterDeadState_Internal();
+}
+
+void AEXFILCharacter::EnterDeadState_Internal()
+{
+    if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::Alive) return;
 
     RespawnPhase = ERespawnPhase::Dead;
@@ -306,12 +313,12 @@ void AEXFILCharacter::OnDeath()
     GetWorldTimerManager().SetTimer(
         HideCorpseTimerHandle,
         this,
-        &AEXFILCharacter::EnterHiddenDeadState,
+        &AEXFILCharacter::EnterHiddenDeadState_Internal,
         CorpseVisibleDuration,
         false);
 }
 
-void AEXFILCharacter::EnterHiddenDeadState()
+void AEXFILCharacter::EnterHiddenDeadState_Internal()
 {
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::Dead) return;
@@ -323,12 +330,12 @@ void AEXFILCharacter::EnterHiddenDeadState()
     GetWorldTimerManager().SetTimer(
         RespawnPrepareTimerHandle,
         this,
-        &AEXFILCharacter::BeginRespawn,
+        &AEXFILCharacter::BeginRespawn_Internal,
         HiddenRespawnDelay,
         false);
 }
 
-void AEXFILCharacter::BeginRespawn()
+void AEXFILCharacter::BeginRespawn_Internal()
 {
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::HiddenDead) return;
@@ -345,7 +352,7 @@ void AEXFILCharacter::BeginRespawn()
         }
         else
         {
-            UE_LOG(LogEXFIL, Warning, TEXT("BeginRespawn: FindPlayerStart failed - respawning at current location"));
+            UE_LOG(LogEXFIL, Warning, TEXT("BeginRespawn_Internal: FindPlayerStart failed - respawning at current location"));
         }
     }
 
@@ -374,12 +381,12 @@ void AEXFILCharacter::BeginRespawn()
     GetWorldTimerManager().SetTimer(
         RespawnRevealTimerHandle,
         this,
-        &AEXFILCharacter::CompleteRespawn,
+        &AEXFILCharacter::CompleteRespawn_Internal,
         RespawnRevealDelay,
         false);
 }
 
-void AEXFILCharacter::CompleteRespawn()
+void AEXFILCharacter::CompleteRespawn_Internal()
 {
     if (!HasAuthority()) return;
     if (RespawnPhase != ERespawnPhase::Respawning) return;
@@ -392,14 +399,10 @@ void AEXFILCharacter::CompleteRespawn()
 
 void AEXFILCharacter::ApplyDeadState()
 {
-    SetActorHiddenInGame(false);
-    SetActorEnableCollision(true);
-
     if (USkeletalMeshComponent* MeshComp = GetMesh())
     {
         MeshComp->SetSimulatePhysics(true);
         MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));
-        MeshComp->SetVisibility(true, true);
     }
 
     if (UCapsuleComponent* Capsule = GetCapsuleComponent())

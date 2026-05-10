@@ -65,15 +65,6 @@ public:
 	void OnDeath();
 
 	
-	void BeginRespawn();
-
-	
-	void CompleteRespawn();
-
-	
-	void EnterHiddenDeadState();
-
-	
 	UFUNCTION(Client, Reliable)
 	void Client_ShowNotification(const FString& Message);
 
@@ -208,6 +199,18 @@ protected:
 
 	UFUNCTION()
 	void OnRep_RespawnPhase();
+
+	
+	void EnterDeadState_Internal();
+
+	
+	void EnterHiddenDeadState_Internal();
+
+	
+	void BeginRespawn_Internal();
+
+	
+	void CompleteRespawn_Internal();
 
 	
 	void ApplyDeadState();
