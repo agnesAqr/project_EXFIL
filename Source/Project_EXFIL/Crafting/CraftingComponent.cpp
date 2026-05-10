@@ -298,10 +298,7 @@ void UCraftingComponent::OnCraftTimerComplete()
         }
     }
 
-    const FName CompletedRecipe = CurrentRecipeID;
     bIsCrafting = false;
     CurrentRecipeID = NAME_None;
     ConsumedIngredients.Empty();
-
-    OnCraftingCompleted.Broadcast(CompletedRecipe);
 }

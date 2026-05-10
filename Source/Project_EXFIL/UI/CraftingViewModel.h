@@ -108,12 +108,12 @@ private:
 
     TMap<FName, TSet<FName>> IngredientToRecipeIDs;
     FDelegateHandle InventoryItemCountsChangedHandle;
+    FDelegateHandle CraftingStateChangedHandle;
+    FDelegateHandle CraftStartFailedHandle;
     FName LastCurrentRecipeID;
 
-    UFUNCTION()
     void HandleCraftingStateChanged(bool bIsCrafting, float Duration);
 
-    UFUNCTION()
     void HandleCraftStartFailed(FName RecipeID);
 
     void HandleInventoryItemCountsChanged(const TSet<FName>& ChangedItemDataIDs);

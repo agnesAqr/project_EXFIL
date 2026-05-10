@@ -47,9 +47,13 @@ void UStatEntryWidget::NativeDestruct()
 {
     if (BoundViewModel.IsValid())
     {
-        BoundViewModel->OnStatChanged.RemoveDynamic(this, &UStatEntryWidget::OnStatUpdated);
-        BoundViewModel.Reset();
+        if (StatChangedHandle.IsValid())
+        {
+            BoundViewModel->OnStatChanged.Remove(StatChangedHandle);
+        }
     }
+    StatChangedHandle.Reset();
+    BoundViewModel.Reset();
 
     Super::NativeDestruct();
 }
@@ -91,8 +95,12 @@ void UStatEntryWidget::BindToViewModel(USurvivalViewModel* ViewModel, EExfilStat
 
     if (BoundViewModel.IsValid())
     {
-        BoundViewModel->OnStatChanged.RemoveDynamic(this, &UStatEntryWidget::OnStatUpdated);
+        if (StatChangedHandle.IsValid())
+        {
+            BoundViewModel->OnStatChanged.Remove(StatChangedHandle);
+        }
     }
+    StatChangedHandle.Reset();
 
     BoundViewModel = ViewModel;
     if (!ViewModel)
@@ -103,7 +111,8 @@ void UStatEntryWidget::BindToViewModel(USurvivalViewModel* ViewModel, EExfilStat
     UpdateStat(
         ViewModel->GetStatValue(InStatType),
         ViewModel->GetMaxStatValue(InStatType));
-    ViewModel->OnStatChanged.AddDynamic(this, &UStatEntryWidget::OnStatUpdated);
+    StatChangedHandle = ViewModel->OnStatChanged.AddUObject(
+        this, &UStatEntryWidget::OnStatUpdated);
 }
 
 void UStatEntryWidget::OnStatUpdated(

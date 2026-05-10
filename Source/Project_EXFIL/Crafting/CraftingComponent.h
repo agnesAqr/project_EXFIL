@@ -8,14 +8,8 @@
 
 class UInventoryComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
-    FOnCraftingStateChanged, bool, bIsCrafting, float, RemainingTime);
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-    FOnCraftingCompleted, FName, RecipeID);
-
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
-    FOnCraftStartFailed, FName, RecipeID);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnCraftingStateChanged, bool, float);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnCraftStartFailed, FName);
 
 UCLASS(ClassGroup=(Crafting), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UCraftingComponent : public UActorComponent
@@ -43,13 +37,8 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Crafting")
     TArray<FName> GetAvailableRecipes() const;
 
-    UPROPERTY(BlueprintAssignable, Category = "Crafting|Events")
     FOnCraftingStateChanged OnCraftingStateChanged;
 
-    UPROPERTY(BlueprintAssignable, Category = "Crafting|Events")
-    FOnCraftingCompleted OnCraftingCompleted;
-
-    UPROPERTY(BlueprintAssignable, Category = "Crafting|Events")
     FOnCraftStartFailed OnCraftStartFailed;
 
     virtual void GetLifetimeReplicatedProps(

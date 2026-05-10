@@ -30,9 +30,9 @@ void UCraftingViewModel::Initialize(
 
     if (InCraftingComponent)
     {
-        InCraftingComponent->OnCraftingStateChanged.AddDynamic(
+        CraftingStateChangedHandle = InCraftingComponent->OnCraftingStateChanged.AddUObject(
             this, &UCraftingViewModel::HandleCraftingStateChanged);
-        InCraftingComponent->OnCraftStartFailed.AddDynamic(
+        CraftStartFailedHandle = InCraftingComponent->OnCraftStartFailed.AddUObject(
             this, &UCraftingViewModel::HandleCraftStartFailed);
     }
 
@@ -269,12 +269,18 @@ void UCraftingViewModel::UnbindModelDelegates()
 {
     if (CraftingComp.IsValid())
     {
-        CraftingComp->OnCraftingStateChanged.RemoveDynamic(
-            this, &UCraftingViewModel::HandleCraftingStateChanged);
-        CraftingComp->OnCraftStartFailed.RemoveDynamic(
-            this, &UCraftingViewModel::HandleCraftStartFailed);
+        if (CraftingStateChangedHandle.IsValid())
+        {
+            CraftingComp->OnCraftingStateChanged.Remove(CraftingStateChangedHandle);
+        }
+        if (CraftStartFailedHandle.IsValid())
+        {
+            CraftingComp->OnCraftStartFailed.Remove(CraftStartFailedHandle);
+        }
         CraftingComp.Reset();
     }
+    CraftingStateChangedHandle.Reset();
+    CraftStartFailedHandle.Reset();
 
     if (InventoryComp.IsValid() && InventoryItemCountsChangedHandle.IsValid())
     {

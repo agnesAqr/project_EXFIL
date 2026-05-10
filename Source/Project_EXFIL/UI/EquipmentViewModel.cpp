@@ -25,9 +25,9 @@ void UEquipmentViewModel::Initialize(UEquipmentComponent* InEquipmentComponent)
         }
     }
 
-    InEquipmentComponent->OnItemEquipped.AddDynamic(
+    ItemEquippedHandle = InEquipmentComponent->OnItemEquipped.AddUObject(
         this, &UEquipmentViewModel::HandleItemEquipped);
-    InEquipmentComponent->OnItemUnequipped.AddDynamic(
+    ItemUnequippedHandle = InEquipmentComponent->OnItemUnequipped.AddUObject(
         this, &UEquipmentViewModel::HandleItemUnequipped);
 
     BroadcastSlot(EEquipmentSlot::Head);
@@ -176,14 +176,18 @@ void UEquipmentViewModel::BroadcastSlot(EEquipmentSlot Slot)
 
 void UEquipmentViewModel::UnbindEquipmentComponent()
 {
-    if (!EquipmentComp.IsValid())
+    if (EquipmentComp.IsValid())
     {
-        return;
+        if (ItemEquippedHandle.IsValid())
+        {
+            EquipmentComp->OnItemEquipped.Remove(ItemEquippedHandle);
+        }
+        if (ItemUnequippedHandle.IsValid())
+        {
+            EquipmentComp->OnItemUnequipped.Remove(ItemUnequippedHandle);
+        }
     }
-
-    EquipmentComp->OnItemEquipped.RemoveDynamic(
-        this, &UEquipmentViewModel::HandleItemEquipped);
-    EquipmentComp->OnItemUnequipped.RemoveDynamic(
-        this, &UEquipmentViewModel::HandleItemUnequipped);
+    ItemEquippedHandle.Reset();
+    ItemUnequippedHandle.Reset();
     EquipmentComp.Reset();
 }

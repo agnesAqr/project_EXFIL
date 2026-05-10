@@ -19,11 +19,11 @@ enum class EExfilStatType : uint8
     Stamina  UMETA(DisplayName = "Stamina")
 };
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(
+DECLARE_MULTICAST_DELEGATE_ThreeParams(
     FOnStatChanged,
-    EExfilStatType, StatType,
-    float, CurrentValue,
-    float, MaxValue);
+    EExfilStatType,
+    float,
+    float);
 
 UCLASS()
 class PROJECT_EXFIL_API USurvivalViewModel : public UObject
@@ -35,7 +35,6 @@ public:
 
     virtual void BeginDestroy() override;
 
-    UPROPERTY(BlueprintAssignable)
     FOnStatChanged OnStatChanged;
 
     float GetStatValue(EExfilStatType StatType) const;

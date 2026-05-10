@@ -93,11 +93,12 @@ private:
     UPROPERTY()
     TWeakObjectPtr<UItemDataSubsystem> CachedItemSub;
 
-    UFUNCTION()
     void HandleItemEquipped(EEquipmentSlot Slot, const FInventoryItemInstance& Item);
 
-    UFUNCTION()
     void HandleItemUnequipped(EEquipmentSlot Slot, const FInventoryItemInstance& Item);
+
+    FDelegateHandle ItemEquippedHandle;
+    FDelegateHandle ItemUnequippedHandle;
 
     void BroadcastSlot(EEquipmentSlot Slot);
     void UnbindEquipmentComponent();

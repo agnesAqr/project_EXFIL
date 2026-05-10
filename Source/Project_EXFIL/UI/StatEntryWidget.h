@@ -62,8 +62,8 @@ private:
     int32 CachedRoundedMax = 0;
 
     TWeakObjectPtr<USurvivalViewModel> BoundViewModel;
+    FDelegateHandle StatChangedHandle;
 
-    UFUNCTION()
     void OnStatUpdated(EExfilStatType ChangedStatType, float CurrentValue, float MaxValue);
 
     FLinearColor GetFillColor(bool bIsLow) const;

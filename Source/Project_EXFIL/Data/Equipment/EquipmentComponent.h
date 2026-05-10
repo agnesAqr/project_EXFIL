@@ -12,10 +12,10 @@ class UAbilitySystemComponent;
 class UItemDataSubsystem;
 class UInventoryComponent;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+DECLARE_MULTICAST_DELEGATE_TwoParams(
     FOnEquipmentChanged,
-    EEquipmentSlot, Slot,
-    const FInventoryItemInstance&, Item);
+    EEquipmentSlot,
+    const FInventoryItemInstance&);
 
 UCLASS(ClassGroup=(Equipment), meta=(BlueprintSpawnableComponent))
 class PROJECT_EXFIL_API UEquipmentComponent : public UActorComponent
@@ -46,10 +46,8 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Equipment")
     bool HasWeaponEquipped() const;
 
-    UPROPERTY(BlueprintAssignable, Category = "Equipment|Events")
     FOnEquipmentChanged OnItemEquipped;
 
-    UPROPERTY(BlueprintAssignable, Category = "Equipment|Events")
     FOnEquipmentChanged OnItemUnequipped;
 
     virtual void GetLifetimeReplicatedProps(
