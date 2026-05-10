@@ -17,7 +17,6 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
     }
 
 	InventoryComp = InInventoryComponent;
-    InInventoryComponent->EnsureReplicatedCachesReady();
 
     if (UWorld* World = InInventoryComponent->GetWorld())
     {
@@ -26,8 +25,8 @@ void UInventoryViewModel::Initialize(UInventoryComponent* InInventoryComponent)
             CachedItemSub = GI->GetSubsystem<UItemDataSubsystem>();
         }
     }
-	UE_MVVM_SET_PROPERTY_VALUE(GridWidth, InInventoryComponent->GridWidth);
-	UE_MVVM_SET_PROPERTY_VALUE(GridHeight, InInventoryComponent->GridHeight);
+	GridWidth = InInventoryComponent->GridWidth;
+	GridHeight = InInventoryComponent->GridHeight;
     const int32 TotalSlots = GridWidth * GridHeight;
     SlotViewModels.SetNum(TotalSlots);
 
@@ -56,11 +55,6 @@ UInventorySlotViewModel* UInventoryViewModel::GetSlotAt(FIntPoint Position) cons
         return SlotViewModels[Index];
     }
     return nullptr;
-}
-
-const TArray<UInventorySlotViewModel*>& UInventoryViewModel::GetAllSlots() const
-{
-    return SlotViewModels;
 }
 
 void UInventoryViewModel::RequestMoveItem(FGuid ItemInstanceID, FIntPoint NewPosition, bool bNewRotated)
@@ -265,11 +259,6 @@ void UInventoryViewModel::HandleInventoryUpdated(const TSet<int32>& DirtyIndices
     if (DirtyIndices.Num() == 0)
     {
         return;
-    }
-
-    if (UInventoryComponent* Inventory = InventoryComp.Get())
-    {
-        Inventory->EnsureReplicatedCachesReady();
     }
 
     BuildPendingOverlayDelta(DirtyIndices);

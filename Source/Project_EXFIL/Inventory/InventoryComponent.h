@@ -124,9 +124,6 @@ public:
 	bool CanPlaceItemAtIgnoringInstance(FIntPoint Position, FItemSize Size,
 		FGuid IgnoreInstanceID) const;
 
-	
-	void EnsureReplicatedCachesReady();
-
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	bool FindFirstAvailableSlot(FItemSize Size, FIntPoint& OutPosition) const;
 
@@ -137,10 +134,10 @@ public:
 	bool GetItemByID(const FGuid& InstanceID, FInventoryItemInstance& OutItem) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	TArray<FInventoryItemInstance> GetAllItems() const;
+	TArray<FInventoryItemInstance> GetAllItems() const { return InventoryList.Items; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
-	bool IsEmpty() const;
+	bool IsEmpty() const { return InventoryList.Items.Num() == 0; }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	int32 GetItemCountByID(FName ItemDataID) const;
@@ -184,12 +181,12 @@ private:
 #pragma region Server Authority: Mutation Helpers
 	bool AddItem_Internal(FName ItemDataID, FItemSize Size,
 		int32 StackCount, int32 MaxStack,
-		TSet<int32>& OutAffected);
+		TSet<int32>* OutAffected = nullptr);
 
 	bool AddItemAt_Internal(FName ItemDataID, FItemSize Size,
 		FIntPoint Position, bool bRotated,
 		int32 StackCount, int32 MaxStack,
-		TSet<int32>& OutAffected);
+		TSet<int32>* OutAffected = nullptr);
 #pragma endregion
 
 #pragma region State Sync / Cache Rebuild
@@ -201,16 +198,17 @@ private:
 #pragma endregion
 
 #pragma region Incremental Cache Patch
+	// OutAffected is only passed by client replication callbacks to accumulate dirty slot indices.
 	void ApplyItemAdded_Local(const FInventoryItemInstance& Item, int32 ItemIndex,
-		TSet<int32>& OutAffected);
+		TSet<int32>* OutAffected = nullptr);
 	void ApplyItemMoved_Local(const FInventoryItemInstance& NewItem, FIntPoint OldPos,
-		FItemSize OldEffSize, TSet<int32>& OutAffected);
+		FItemSize OldEffSize, TSet<int32>* OutAffected = nullptr);
 	void ApplyItemStackChanged_Local(const FInventoryItemInstance& NewItem, int32 OldStackCount,
-		TSet<int32>& OutAffected);
+		TSet<int32>* OutAffected = nullptr);
 	void ApplyItemRemoved_Local(const FInventoryItemInstance& Removed, int32 RemovedIndex,
-		TSet<int32>& OutAffected);
+		TSet<int32>* OutAffected = nullptr);
 	void ApplyItemMovedByScan_Local(const FInventoryItemInstance& NewItem,
-		TSet<int32>& OutAffected);
+		TSet<int32>* OutAffected = nullptr);
 	bool DoesGridMatchItemFootprint(const FInventoryItemInstance& Item) const;
 	void EnsureCacheConsistency_Debug() const;
 	void RecalculateItemCountForID(FName ItemDataID);
@@ -231,6 +229,8 @@ private:
 	bool AreSlotsFree(FIntPoint Position, FItemSize Size) const;
 	bool AreSlotsFreeForItem(FIntPoint Position, FItemSize Size,
 		const FGuid& IgnoreInstanceID) const;
+	bool AreSlotsFree_Internal(FIntPoint Position, FItemSize Size,
+		const FGuid* IgnoreInstanceID) const;
 	void OccupySlots(FIntPoint Position, FItemSize Size, const FGuid& ItemID);
 	void FreeSlots(const FInventoryItemInstance& Item);
 	void FreeSlotsAt(FIntPoint Position, FItemSize EffectiveSize);

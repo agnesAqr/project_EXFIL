@@ -80,11 +80,6 @@ bool UCraftingViewModel::BuildInitialRecipeListDelta(
         return false;
     }
 
-    if (InventoryComp.IsValid())
-    {
-        InventoryComp->EnsureReplicatedCachesReady();
-    }
-
     for (const FName& RecipeID : ItemSub->GetAllRecipeIDs())
     {
         FCraftingRecipeViewData RecipeViewData;
@@ -150,11 +145,6 @@ void UCraftingViewModel::HandleInventoryItemCountsChanged(
     if (ChangedItemDataIDs.Num() == 0)
     {
         return;
-    }
-
-    if (InventoryComp.IsValid())
-    {
-        InventoryComp->EnsureReplicatedCachesReady();
     }
 
     TSet<FName> AffectedRecipeIDs;

@@ -138,14 +138,13 @@ public:
 
     
     UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory|ViewModel")
-    const TArray<UInventorySlotViewModel*>& GetAllSlots() const;
+    const TArray<UInventorySlotViewModel*>& GetAllSlots() const { return SlotViewModels; }
 
     
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     int32 GetGridWidth() const { return GridWidth; }
-
     
-    UFUNCTION(BlueprintPure, FieldNotify)
+    UFUNCTION(BlueprintPure)
     int32 GetGridHeight() const { return GridHeight; }
 
     UFUNCTION(BlueprintCallable, Category = "Inventory|ViewModel")
@@ -201,11 +200,11 @@ private:
     UPROPERTY()
     TArray<UInventorySlotViewModel*> SlotViewModels;
 
-    UPROPERTY(BlueprintReadOnly, FieldNotify, Getter,
+    UPROPERTY(BlueprintReadOnly, Getter,
               meta = (AllowPrivateAccess = true))
     int32 GridWidth = 0;
 
-    UPROPERTY(BlueprintReadOnly, FieldNotify, Getter,
+    UPROPERTY(BlueprintReadOnly, Getter,
               meta = (AllowPrivateAccess = true))
     int32 GridHeight = 0;
 
