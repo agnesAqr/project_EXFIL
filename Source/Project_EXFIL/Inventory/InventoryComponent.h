@@ -8,6 +8,7 @@
 #include "InventoryComponent.generated.h"
 
 class UInventoryComponent;
+class UItemDataSubsystem;
 
 USTRUCT()
 struct PROJECT_EXFIL_API FInventoryFastArray : public FFastArraySerializer
@@ -150,6 +151,32 @@ public:
 	FOnInventoryUpdated OnInventoryUpdated;
 	FOnInventoryItemCountsChanged OnInventoryItemCountsChanged;
 #pragma endregion
+
+#if WITH_DEV_AUTOMATION_TESTS
+#pragma region Test Hooks
+	void SetCachedItemSubForTests(UItemDataSubsystem* InSub) { CachedItemSub = InSub; }
+	void BootstrapForTests()
+	{
+		InitializeGridStorage();
+		RebuildAllCachesFromItems();
+		bCachesInitialized = true;
+	}
+	bool IsValidGridPositionForTests(FIntPoint Position) const { return IsValidGridPosition(Position); }
+	int32 GridPositionToIndexForTests(FIntPoint Position) const { return GridPositionToIndex(Position); }
+	FIntPoint IndexToGridPositionForTests(int32 Index) const { return IndexToGridPosition(Index); }
+	bool IsRowBitmapClearForTests() const
+	{
+		for (const uint16 RowBits : RowBitmap)
+		{
+			if (RowBits != 0)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+#pragma endregion
+#endif
 
 protected:
 #pragma region Engine Lifecycle

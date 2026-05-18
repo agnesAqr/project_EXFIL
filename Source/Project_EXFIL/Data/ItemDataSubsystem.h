@@ -39,6 +39,14 @@ public:
     
     TSubclassOf<UGameplayEffect> GetCachedEffect(const TSoftClassPtr<UGameplayEffect>& SoftPtr);
 
+#if WITH_DEV_AUTOMATION_TESTS
+    void SetTablesForTests(UDataTable* InItemTable, UDataTable* InRecipeTable)
+    {
+        ItemDataTable = InItemTable;
+        CraftingRecipeTable = InRecipeTable;
+    }
+#endif
+
 private:
     UPROPERTY()
     TObjectPtr<UDataTable> ItemDataTable;
