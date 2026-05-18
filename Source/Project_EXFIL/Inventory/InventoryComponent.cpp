@@ -334,7 +334,7 @@ bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCoun
 		return false;
 	}
 
-	const int32 MaxStack = ItemData->MaxStackCount;
+	const int32 MaxStack = FMath::Max(1, ItemData->MaxStackCount);
 	int32 Remaining = StackCount;
 
 	if (MaxStack > 1)
@@ -366,14 +366,17 @@ bool UInventoryComponent::AddItemByID_Internal(FName ItemDataID, int32 StackCoun
 		}
 	}
 
-	bool bAddedNewStack = true;
-	if (Remaining > 0)
+	while (Remaining > 0)
 	{
-		bAddedNewStack = AddItem_Internal(
-			ItemDataID, ItemData->GetItemSize(), Remaining, MaxStack);
+		const int32 StackToAdd = FMath::Min(Remaining, MaxStack);
+		if (!AddItem_Internal(ItemDataID, ItemData->GetItemSize(), StackToAdd, MaxStack))
+		{
+			return false;
+		}
+		Remaining -= StackToAdd;
 	}
 
-	return Remaining <= 0 || bAddedNewStack;
+	return true;
 }
 
 bool UInventoryComponent::AddItemByIDAt_Internal(FName ItemDataID, FIntPoint Position,
