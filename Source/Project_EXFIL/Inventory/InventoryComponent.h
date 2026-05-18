@@ -72,7 +72,7 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config",
 		meta = (ClampMin = "1", UIMin = "1"))
-	int32 GridHeight = 12;
+	int32 GridHeight = 20;
 
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory|Config")
