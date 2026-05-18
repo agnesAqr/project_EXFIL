@@ -320,6 +320,7 @@ void UInventoryIconOverlay::NativeOnDragDetected(
     bHasCachedPreview = false;
 
     OutOperation = DragOp;
+
     PendingDragInstanceID.Invalidate();
     PendingDragSource = FInventoryDragSourceViewData();
 }
@@ -468,8 +469,38 @@ bool UInventoryIconOverlay::NativeOnDragOver(
 
     const FVector2D GridLocalPos = CachedGridPanel->GetCachedGeometry().AbsoluteToLocal(
         InDragDropEvent.GetScreenSpacePosition());
+
     UpdateDragPreview(DragOp, GridLocalPos);
-    ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
+
+    const FGeometry& GridGeo = CachedGridPanel->GetCachedGeometry();
+    const FVector2D GridLocalSize = GridGeo.GetLocalSize();
+    if (GridLocalSize.IsNearlyZero())
+    {
+        ParentPanel->UpdateDragAutoScroll(InDragDropEvent.GetScreenSpacePosition());
+        return true;
+    }
+
+    const FVector2D CellStride(
+        GridLocalSize.X / CachedGridWidth,
+        GridLocalSize.Y / CachedGridHeight);
+    const FVector2D ItemTopLocalPositionByCursor(
+        GridLocalPos.X - DragOp->DragOffset.X * CellStride.X,
+        GridLocalPos.Y - DragOp->DragOffset.Y * CellStride.Y);
+    const FVector2D ItemBottomLocalPositionByCursor(
+        ItemTopLocalPositionByCursor.X + DragOp->DragItemSize.Width * CellStride.X,
+        ItemTopLocalPositionByCursor.Y + DragOp->DragItemSize.Height * CellStride.Y);
+    const FVector2D ItemTopLocalPosition(
+        0.f,
+        ItemTopLocalPositionByCursor.Y);
+    const FVector2D ItemBottomLocalPosition(
+        0.f,
+        ItemBottomLocalPositionByCursor.Y);
+
+    ParentPanel->UpdateDragAutoScroll(
+        InDragDropEvent.GetScreenSpacePosition(),
+        true,
+        GridGeo.LocalToAbsolute(ItemTopLocalPosition),
+        GridGeo.LocalToAbsolute(ItemBottomLocalPosition));
     return true;
 }
 
@@ -483,7 +514,7 @@ void UInventoryIconOverlay::NativeOnDragLeave(
     if (ParentPanel.IsValid())
     {
         ParentPanel->ClearAreaHighlights();
-        ParentPanel->StopDragAutoScroll();
+        ParentPanel->HandleDragAutoScrollLeave(InDragDropEvent.GetScreenSpacePosition());
     }
 }
 

@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/PanelWidget.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/UniformGridPanel.h"
@@ -35,6 +36,7 @@ void UInventoryPanelWidget::NativeOnInitialized()
         Button_CraftingTab->OnClicked.AddDynamic(this, &UInventoryPanelWidget::OnCraftingTabClicked);
     }
     UpdateTabStyles(0);
+    ResolveInventoryScrollBox();
 }
 
 void UInventoryPanelWidget::NativeDestruct()
@@ -114,7 +116,6 @@ void UInventoryPanelWidget::SetCraftingViewModel(UCraftingViewModel* InViewModel
 
 void UInventoryPanelWidget::NotifyPanelShown()
 {
-
     if (!CraftingPanel)
     {
         return;
@@ -134,6 +135,7 @@ void UInventoryPanelWidget::NotifyPanelShown()
 
 void UInventoryPanelWidget::NotifyPanelHidden()
 {
+    StopDragAutoScroll();
 
     if (CraftingPanel)
     {
@@ -154,6 +156,7 @@ void UInventoryPanelWidget::NativeOnActivated()
 void UInventoryPanelWidget::NativeOnDeactivated()
 {
     Super::NativeOnDeactivated();
+    StopDragAutoScroll();
     NotifyPanelHidden();
 }
 
@@ -437,11 +440,27 @@ int32 UInventoryPanelWidget::NativePaint(const FPaintArgs& Args,
     if (GridPanel && GridPanel->GetChildrenCount() > 0 && ViewModel)
     {
         const int32 GridWidth = FMath::Max(1, ViewModel->GetGridWidth());
-        const float GridPixelWidth = GridPanel->GetCachedGeometry().GetLocalSize().X;
-        const float DesiredCellSize = GridPixelWidth / GridWidth;
+        const float RawGridPixelWidth = GridPanel->GetCachedGeometry().GetLocalSize().X;
+        float StableGridPixelWidth = RawGridPixelWidth;
+        float ScrollViewportWidth = -1.f;
+        float ReservedScrollbarWidth = 0.f;
+        if (InventoryScrollBox)
+        {
+            ScrollViewportWidth = InventoryScrollBox->GetCachedGeometry().GetLocalSize().X;
+            ReservedScrollbarWidth = InventoryScrollBox->GetScrollbarThickness().X;
+            if (ScrollViewportWidth > 1.f && ReservedScrollbarWidth > 0.f)
+            {
+                StableGridPixelWidth = FMath::Max(1.f, ScrollViewportWidth - ReservedScrollbarWidth);
+            }
+        }
+        const float DesiredCellSize = StableGridPixelWidth / GridWidth;
 
         if (DesiredCellSize > 1.f &&
-            (bNeedsCellSquareFix || !FMath::IsNearlyEqual(CachedSquareCellSize, DesiredCellSize, 0.5f)))
+            (bNeedsCellSquareFix ||
+                !FMath::IsNearlyEqual(
+                    CachedSquareCellSize,
+                    DesiredCellSize,
+                    GridSquareCellResizeTolerance)))
         {
             MutableThis->bNeedsCellSquareFix = false;
             MutableThis->CachedSquareCellSize = DesiredCellSize;
@@ -517,55 +536,261 @@ void UInventoryPanelWidget::UpdateTabStyles(int32 ActiveIndex)
         ActiveIndex == 1 ? FLinearColor(1.f, 1.f, 1.f, 0.8f) : FLinearColor(1.f, 1.f, 1.f, 0.35f));
 }
 
-void UInventoryPanelWidget::UpdateDragAutoScroll(const FVector2D& ScreenSpacePosition)
+UScrollBox* UInventoryPanelWidget::ResolveInventoryScrollBox()
 {
-    if (!InventoryScrollBox) return;
+    if (InventoryScrollBox)
+    {
+        ConfigureInventoryScrollBox(InventoryScrollBox);
+        return InventoryScrollBox;
+    }
 
-    const FGeometry& ScrollGeo = InventoryScrollBox->GetCachedGeometry();
-    const FVector2D LocalPos = ScrollGeo.AbsoluteToLocal(ScreenSpacePosition);
+    if (GridPanel)
+    {
+        for (UPanelWidget* Parent = GridPanel->GetParent(); Parent; Parent = Parent->GetParent())
+        {
+            if (UScrollBox* ScrollBox = Cast<UScrollBox>(Parent))
+            {
+                InventoryScrollBox = ScrollBox;
+                ConfigureInventoryScrollBox(InventoryScrollBox);
+                return InventoryScrollBox;
+            }
+        }
+    }
+
+    UScrollBox* SingleScrollBox = nullptr;
+    int32 ScrollBoxCount = 0;
+    if (WidgetTree)
+    {
+        WidgetTree->ForEachWidget([&SingleScrollBox, &ScrollBoxCount](UWidget* Widget)
+        {
+            if (UScrollBox* ScrollBox = Cast<UScrollBox>(Widget))
+            {
+                SingleScrollBox = ScrollBox;
+                ++ScrollBoxCount;
+            }
+        });
+    }
+
+    if (ScrollBoxCount == 1 && SingleScrollBox)
+    {
+        InventoryScrollBox = SingleScrollBox;
+        ConfigureInventoryScrollBox(InventoryScrollBox);
+        return InventoryScrollBox;
+    }
+
+    return nullptr;
+}
+
+void UInventoryPanelWidget::ConfigureInventoryScrollBox(UScrollBox* ScrollBox)
+{
+    if (!ScrollBox)
+    {
+        return;
+    }
+
+    if (bInventoryScrollBoxConfigured)
+    {
+        return;
+    }
+
+    const bool bWasAllowOverscroll = ScrollBox->IsAllowOverscroll();
+    const bool bWasAnimateWheelScrolling = ScrollBox->IsAnimateWheelScrolling();
+
+    if (bWasAllowOverscroll)
+    {
+        ScrollBox->SetAllowOverscroll(false);
+    }
+
+    if (bWasAnimateWheelScrolling)
+    {
+        ScrollBox->SetAnimateWheelScrolling(false);
+    }
+
+    ScrollBox->EndInertialScrolling();
+
+    bInventoryScrollBoxConfigured = true;
+}
+
+void UInventoryPanelWidget::UpdateDragAutoScroll(
+    const FVector2D& ScreenSpacePosition,
+    bool bUseItemBounds,
+    const FVector2D& ItemTopScreenPosition,
+    const FVector2D& ItemBottomScreenPosition)
+{
+    UScrollBox* ScrollBox = ResolveInventoryScrollBox();
+    if (!ScrollBox)
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    const FGeometry& ScrollGeo = ScrollBox->GetCachedGeometry();
+    const FVector2D CursorLocalPos = ScrollGeo.AbsoluteToLocal(ScreenSpacePosition);
     const FVector2D ScrollSize = ScrollGeo.GetLocalSize();
-    if (LocalPos.Y < ScrollEdgeZone)
+    const FVector2D ItemTopLocalPos = bUseItemBounds
+        ? ScrollGeo.AbsoluteToLocal(ItemTopScreenPosition)
+        : FVector2D::ZeroVector;
+    const FVector2D ItemBottomLocalPos = bUseItemBounds
+        ? ScrollGeo.AbsoluteToLocal(ItemBottomScreenPosition)
+        : FVector2D::ZeroVector;
+    const float TopOverflow = bUseItemBounds
+        ? FMath::Max(0.f, -ItemTopLocalPos.Y)
+        : 0.f;
+    const float BottomOverflow = bUseItemBounds
+        ? FMath::Max(0.f, ItemBottomLocalPos.Y - ScrollSize.Y)
+        : 0.f;
+    const float PreviousSpeed = AutoScrollSpeed;
+    const int32 PreviousZone = LastAutoScrollZone;
+    const bool bWasTimerActive =
+        World->GetTimerManager().IsTimerActive(AutoScrollTimerHandle);
+    AutoScrollLastUpdateTimeSeconds = FPlatformTime::Seconds();
+
+    int32 NewZone = 0;
+    if (TopOverflow > 0.f || BottomOverflow > 0.f)
+    {
+        if (TopOverflow > BottomOverflow)
+        {
+            AutoScrollSpeed = -ScrollRate;
+            NewZone = -1;
+        }
+        else
+        {
+            AutoScrollSpeed = ScrollRate;
+            NewZone = 1;
+        }
+    }
+    else if (CursorLocalPos.Y < ScrollEdgeZone)
     {
         AutoScrollSpeed = -ScrollRate;
+        NewZone = -1;
     }
-    else if (LocalPos.Y > ScrollSize.Y - ScrollEdgeZone)
+    else if (CursorLocalPos.Y > ScrollSize.Y - ScrollEdgeZone)
     {
         AutoScrollSpeed = ScrollRate;
+        NewZone = 1;
     }
     else
     {
         AutoScrollSpeed = 0.f;
     }
-    if (AutoScrollSpeed != 0.f && !GetWorld()->GetTimerManager().IsTimerActive(AutoScrollTimerHandle))
+
+    const float CurrentScrollOffset = ScrollBox->GetScrollOffset();
+    const float MaxScrollOffset = FMath::Max(0.f, ScrollBox->GetScrollOffsetOfEnd());
+    if ((AutoScrollSpeed < 0.f && CurrentScrollOffset <= AutoScrollBoundaryTolerance) ||
+        (AutoScrollSpeed > 0.f && CurrentScrollOffset >= MaxScrollOffset - AutoScrollBoundaryTolerance))
     {
-        GetWorld()->GetTimerManager().SetTimer(
+        AutoScrollSpeed = 0.f;
+        NewZone = 0;
+    }
+
+    LastAutoScrollZone = NewZone;
+    const bool bShouldScrollImmediately =
+        AutoScrollSpeed != 0.f &&
+        (PreviousZone != NewZone ||
+            !FMath::IsNearlyEqual(PreviousSpeed, AutoScrollSpeed) ||
+            !bWasTimerActive);
+
+    if (AutoScrollSpeed != 0.f && !bWasTimerActive)
+    {
+        World->GetTimerManager().SetTimer(
             AutoScrollTimerHandle, this,
             &UInventoryPanelWidget::TickAutoScroll,
             AutoScrollUpdateInterval, true);
     }
     else if (AutoScrollSpeed == 0.f)
     {
-        GetWorld()->GetTimerManager().ClearTimer(AutoScrollTimerHandle);
+        World->GetTimerManager().ClearTimer(AutoScrollTimerHandle);
     }
-}
 
-void UInventoryPanelWidget::StopDragAutoScroll()
-{
-    AutoScrollSpeed = 0.f;
-    if (GetWorld())
+    if (bShouldScrollImmediately)
     {
-        GetWorld()->GetTimerManager().ClearTimer(AutoScrollTimerHandle);
+        TickAutoScroll();
     }
 }
 
-void UInventoryPanelWidget::TickAutoScroll()
+void UInventoryPanelWidget::HandleDragAutoScrollLeave(const FVector2D& ScreenSpacePosition)
 {
-    if (!InventoryScrollBox || AutoScrollSpeed == 0.f)
+    UScrollBox* ScrollBox = ResolveInventoryScrollBox();
+    if (!ScrollBox || AutoScrollSpeed == 0.f)
     {
         StopDragAutoScroll();
         return;
     }
 
-    const float CurrentOffset = InventoryScrollBox->GetScrollOffset();
-    InventoryScrollBox->SetScrollOffset(CurrentOffset + AutoScrollSpeed);
+    const FGeometry& ScrollGeo = ScrollBox->GetCachedGeometry();
+    const FVector2D LocalPos = ScrollGeo.AbsoluteToLocal(ScreenSpacePosition);
+    const FVector2D ScrollSize = ScrollGeo.GetLocalSize();
+    const bool bInsideHorizontalBounds = LocalPos.X >= 0.f && LocalPos.X <= ScrollSize.X;
+    const bool bLeavingThroughActiveVerticalEdge =
+        bInsideHorizontalBounds &&
+        ((AutoScrollSpeed < 0.f && LocalPos.Y < ScrollEdgeZone) ||
+            (AutoScrollSpeed > 0.f && LocalPos.Y > ScrollSize.Y - ScrollEdgeZone));
+
+    if (bLeavingThroughActiveVerticalEdge)
+    {
+        return;
+    }
+
+    StopDragAutoScroll();
+}
+
+void UInventoryPanelWidget::StopDragAutoScroll()
+{
+    UWorld* World = GetWorld();
+
+    AutoScrollSpeed = 0.f;
+    LastAutoScrollZone = 0;
+    AutoScrollLastUpdateTimeSeconds = 0.0;
+
+    if (World)
+    {
+        World->GetTimerManager().ClearTimer(AutoScrollTimerHandle);
+    }
+}
+
+void UInventoryPanelWidget::TickAutoScroll()
+{
+    UScrollBox* ScrollBox = ResolveInventoryScrollBox();
+    if (!ScrollBox)
+    {
+        StopDragAutoScroll();
+        return;
+    }
+
+    if (AutoScrollSpeed == 0.f)
+    {
+        StopDragAutoScroll();
+        return;
+    }
+
+    const double NowSeconds = FPlatformTime::Seconds();
+    const double SecondsSinceLastUpdate = AutoScrollLastUpdateTimeSeconds > 0.0
+        ? NowSeconds - AutoScrollLastUpdateTimeSeconds
+        : 0.0;
+
+    if (AutoScrollLastUpdateTimeSeconds <= 0.0 ||
+        SecondsSinceLastUpdate > AutoScrollStaleUpdateTimeout)
+    {
+        StopDragAutoScroll();
+        return;
+    }
+
+    const float CurrentOffset = ScrollBox->GetScrollOffset();
+    const float MaxOffset = FMath::Max(0.f, ScrollBox->GetScrollOffsetOfEnd());
+    const float RequestedOffset = CurrentOffset + AutoScrollSpeed;
+    const float ClampedOffset = FMath::Clamp(RequestedOffset, 0.f, MaxOffset);
+
+    if (FMath::IsNearlyEqual(CurrentOffset, ClampedOffset, AutoScrollBoundaryTolerance) &&
+        !FMath::IsNearlyEqual(RequestedOffset, ClampedOffset, AutoScrollBoundaryTolerance))
+    {
+        StopDragAutoScroll();
+        return;
+    }
+
+    ScrollBox->SetScrollOffset(ClampedOffset);
 }

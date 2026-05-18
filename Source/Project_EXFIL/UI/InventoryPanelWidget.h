@@ -57,10 +57,16 @@ public:
     void BindStatsToViewModel(USurvivalViewModel* InSurvivalViewModel);
 
     
-    void UpdateDragAutoScroll(const FVector2D& ScreenSpacePosition);
+    void UpdateDragAutoScroll(
+        const FVector2D& ScreenSpacePosition,
+        bool bUseItemBounds = false,
+        const FVector2D& ItemTopScreenPosition = FVector2D::ZeroVector,
+        const FVector2D& ItemBottomScreenPosition = FVector2D::ZeroVector);
 
     
     void StopDragAutoScroll();
+
+    void HandleDragAutoScrollLeave(const FVector2D& ScreenSpacePosition);
 
 protected:
     virtual void NativeOnInitialized() override;
@@ -177,11 +183,21 @@ private:
     
     void UpdateTabStyles(int32 ActiveIndex);
 
+    UScrollBox* ResolveInventoryScrollBox();
+
+    void ConfigureInventoryScrollBox(UScrollBox* ScrollBox);
+
     
     FTimerHandle AutoScrollTimerHandle;
 
     
     float AutoScrollSpeed = 0.f;
+
+    int32 LastAutoScrollZone = 0;
+
+    double AutoScrollLastUpdateTimeSeconds = 0.0;
+
+    bool bInventoryScrollBoxConfigured = false;
 
     
     static constexpr float ScrollEdgeZone = 60.f;
@@ -190,6 +206,12 @@ private:
     static constexpr float ScrollRate = 15.f;
 
     static constexpr float AutoScrollUpdateInterval = 0.016f;
+
+    static constexpr float AutoScrollStaleUpdateTimeout = 0.12f;
+
+    static constexpr float AutoScrollBoundaryTolerance = 0.1f;
+
+    static constexpr float GridSquareCellResizeTolerance = 0.5f;
 
     void TickAutoScroll();
 };
