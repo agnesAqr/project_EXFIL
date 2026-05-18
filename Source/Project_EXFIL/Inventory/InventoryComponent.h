@@ -8,7 +8,9 @@
 #include "InventoryComponent.generated.h"
 
 class UInventoryComponent;
+class UAbilitySystemComponent;
 class UItemDataSubsystem;
+struct FGameplayEffectSpecHandle;
 
 USTRUCT()
 struct PROJECT_EXFIL_API FInventoryFastArray : public FFastArraySerializer
@@ -203,7 +205,13 @@ private:
 
 #pragma region Gameplay Integration: Consumable / World Interaction
 	void HandleConsumeRequest_Internal(FName ItemDataID, int32 Count);
-	void ApplyConsumableEffect_Internal(FName ItemDataID);
+	bool BuildConsumableEffectSpec_Internal(
+		FName ItemDataID,
+		UAbilitySystemComponent*& OutASC,
+		FGameplayEffectSpecHandle& OutSpec);
+	bool ApplyConsumableEffect_Internal(
+		UAbilitySystemComponent* ASC,
+		const FGameplayEffectSpecHandle& EffectSpec);
 #pragma endregion
 
 #pragma region Server Authority: Mutation Helpers

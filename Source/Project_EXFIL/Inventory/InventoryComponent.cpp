@@ -794,7 +794,7 @@ void UInventoryComponent::Server_RequestDropItem_Implementation(FGuid ItemInstan
 #pragma region Gameplay Integration: Consumable / World Interaction
 void UInventoryComponent::HandleConsumeRequest_Internal(FName ItemDataID, int32 Count)
 {
-	if (ItemDataID.IsNone() || Count <= 0)
+	if (ItemDataID.IsNone() || Count != 1)
 	{
 		return;
 	}
@@ -808,42 +808,72 @@ void UInventoryComponent::HandleConsumeRequest_Internal(FName ItemDataID, int32 
 		return;
 	}
 
-	if (GetItemCountByID_Cached(ItemDataID) < Count)
+	UAbilitySystemComponent* ConsumableASC = nullptr;
+	FGameplayEffectSpecHandle ConsumableEffectSpec;
+	if (!BuildConsumableEffectSpec_Internal(ItemDataID, ConsumableASC, ConsumableEffectSpec))
 	{
 		return;
 	}
 
-	ApplyConsumableEffect_Internal(ItemDataID);
-	ConsumeItemByID_Internal(ItemDataID, Count);
+	if (!ConsumeItemByID_Internal(ItemDataID, 1))
+	{
+		return;
+	}
+
+	ApplyConsumableEffect_Internal(ConsumableASC, ConsumableEffectSpec);
 }
 
-void UInventoryComponent::ApplyConsumableEffect_Internal(FName ItemDataID)
+bool UInventoryComponent::BuildConsumableEffectSpec_Internal(
+	FName ItemDataID,
+	UAbilitySystemComponent*& OutASC,
+	FGameplayEffectSpecHandle& OutSpec)
 {
-	if (AActor* Owner = GetOwner())
+	OutASC = nullptr;
+	OutSpec = FGameplayEffectSpecHandle();
+
+	AActor* Owner = GetOwner();
+	if (!Owner || !CachedItemSub)
 	{
-		if (UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>())
-		{
-			if (CachedItemSub)
-			{
-				const FItemData* ItemData = CachedItemSub->GetItemData(ItemDataID);
-				if (ItemData && !ItemData->ConsumableEffect.IsNull())
-				{
-					TSubclassOf<UGameplayEffect> GEClass =
-						CachedItemSub->GetCachedEffect(ItemData->ConsumableEffect);
-					if (GEClass)
-					{
-						FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext();
-						FGameplayEffectSpecHandle Spec =
-							ASC->MakeOutgoingSpec(GEClass, 1.f, Ctx);
-						if (Spec.IsValid())
-						{
-							ASC->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
-						}
-					}
-				}
-			}
-		}
+		return false;
 	}
+
+	UAbilitySystemComponent* ASC = Owner->FindComponentByClass<UAbilitySystemComponent>();
+	if (!ASC)
+	{
+		return false;
+	}
+
+	const FItemData* ItemData = CachedItemSub->GetItemData(ItemDataID);
+	if (!ItemData || ItemData->ConsumableEffect.IsNull())
+	{
+		return false;
+	}
+
+	const TSubclassOf<UGameplayEffect> GEClass =
+		CachedItemSub->GetCachedEffect(ItemData->ConsumableEffect);
+	if (!GEClass)
+	{
+		return false;
+	}
+
+	FGameplayEffectContextHandle Ctx = ASC->MakeEffectContext();
+	Ctx.AddSourceObject(Owner);
+	OutSpec = ASC->MakeOutgoingSpec(GEClass, 1.f, Ctx);
+	OutASC = ASC;
+	return OutSpec.IsValid();
+}
+
+bool UInventoryComponent::ApplyConsumableEffect_Internal(
+	UAbilitySystemComponent* ASC,
+	const FGameplayEffectSpecHandle& EffectSpec)
+{
+	if (!ASC || !EffectSpec.IsValid())
+	{
+		return false;
+	}
+
+	ASC->ApplyGameplayEffectSpecToSelf(*EffectSpec.Data.Get());
+	return true;
 }
 #pragma endregion
 
