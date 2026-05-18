@@ -218,7 +218,6 @@ private:
 #pragma endregion
 
 #pragma region State Sync / Cache Rebuild
-	void HandleReplicatedInventoryReceived();
 	void RebuildGridSlotsFromItems();
 	void RebuildAllCachesFromItems();
 	void BroadcastFullInventoryRefresh();

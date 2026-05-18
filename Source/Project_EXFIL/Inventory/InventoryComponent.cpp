@@ -186,7 +186,21 @@ void FInventoryFastArray::PostReplicatedReceive(
 
 	if (!OwnerComponent->bCachesInitialized)
 	{
-		OwnerComponent->HandleReplicatedInventoryReceived();
+		const TMap<FName, int32> OldCounts = OwnerComponent->ItemCountCache;
+		OwnerComponent->RebuildAllCachesFromItems();
+
+		TSet<FName> ChangedItemDataIDs;
+		CollectChangedItemCountIDs(
+			OldCounts, OwnerComponent->ItemCountCache, ChangedItemDataIDs);
+
+		OwnerComponent->BroadcastFullInventoryRefresh();
+		OwnerComponent->bCachesInitialized = true;
+
+		if (ChangedItemDataIDs.Num() > 0)
+		{
+			OwnerComponent->OnInventoryItemCountsChanged.Broadcast(ChangedItemDataIDs);
+		}
+
 		PendingDirtyIndices.Reset();
 		PendingChangedItemDataIDs.Reset();
 		PendingRemoves.Reset();
@@ -219,7 +233,6 @@ UInventoryComponent::UInventoryComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
-	InventoryList.OwnerComponent = this;
 }
 
 #pragma region Engine Lifecycle / Replication
@@ -723,8 +736,6 @@ void UInventoryComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	InventoryList.OwnerComponent = this;
-
 	if (UWorld* World = GetWorld())
 	{
 		if (UGameInstance* GI = World->GetGameInstance())
@@ -896,26 +907,8 @@ bool UInventoryComponent::AddItemAt_Internal(FName ItemDataID, FItemSize Size,
 #pragma endregion
 
 #pragma region State Sync / Cache Rebuild
-void UInventoryComponent::HandleReplicatedInventoryReceived()
-{
-	const TMap<FName, int32> OldCounts = ItemCountCache;
-	RebuildAllCachesFromItems();
-	TSet<FName> ChangedItemDataIDs;
-	CollectChangedItemCountIDs(OldCounts, ItemCountCache, ChangedItemDataIDs);
-	BroadcastFullInventoryRefresh();
-	bCachesInitialized = true;
-
-	if (ChangedItemDataIDs.Num() > 0)
-	{
-		OnInventoryItemCountsChanged.Broadcast(ChangedItemDataIDs);
-	}
-}
-
 void UInventoryComponent::BroadcastFullInventoryRefresh()
 {
-	ensureAlwaysMsgf(!bCachesInitialized,
-		TEXT("BroadcastFullInventoryRefresh called after cache initialization."));
-
 	TSet<int32> AllIndices;
 	AllIndices.Reserve(GridSlots.Num());
 	for (int32 i = 0; i < GridSlots.Num(); ++i)
