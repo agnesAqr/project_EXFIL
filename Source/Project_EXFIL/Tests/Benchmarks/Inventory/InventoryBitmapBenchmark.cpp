@@ -60,6 +60,8 @@ struct FMeasuredMs
 
 static volatile int32 GBenchmarkSink = 0;
 
+constexpr int32 FindBenchmarkIterations = 100000;
+
 const FGuid OccupiedSlotID(0x13572468, 0x24681357, 0xABCDEF01, 0x10203040);
 
 const TCHAR* PatternToString(EOccupancyPattern Pattern)
@@ -478,21 +480,6 @@ bool VerifyCorrectness(
 	return bPassed;
 }
 
-int32 GetFindIterations(EOccupancyPattern Pattern, bool bMainGrid)
-{
-	if (Pattern == EOccupancyPattern::WorstNoFit)
-	{
-		return bMainGrid ? 10000 : 5000;
-	}
-
-	if (Pattern == EOccupancyPattern::NearFull)
-	{
-		return bMainGrid ? 25000 : 10000;
-	}
-
-	return bMainGrid ? 100000 : 50000;
-}
-
 int32 GetFreeIterations(bool bMainGrid)
 {
 	return bMainGrid ? 1000000 : 500000;
@@ -534,7 +521,7 @@ void AddCasesForGrid(
 				ItemSize,
 				Pattern,
 				SeedCounter++,
-				GetFindIterations(Pattern, bMainGrid),
+				FindBenchmarkIterations,
 				GetFreeIterations(bMainGrid)
 			});
 		}
