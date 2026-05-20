@@ -3,8 +3,8 @@
 ## TL;DR
 
 - `FindFirstAvailableSlot`의 기존 `GridSlots` 셀 스캔 방식과 현재 `RowBitmap` 방식을 UE Automation Test로 비교했다.
-- 대표 케이스인 `10x20 Grid / Fragmented50 / 2x3 Item`에서 `27.2453ms -> 5.7104ms`, `4.77x` 개선을 확인했다.
-- `10x20` 빈 슬롯 탐색 30개 케이스 평균 개선폭은 `2.91x`, 최대 개선폭은 `5.57x`였다.
+- 대표 케이스인 `10x20 Grid / Fragmented50 / 2x3 Item`에서 `31.0585ms -> 5.7698ms`, `5.38x` 개선을 확인했다.
+- `10x20` 빈 슬롯 탐색 30개 케이스 평균 개선폭은 `2.96x`, 최대 개선폭은 `5.71x`였다.
 
 ## Benchmark Target
 
@@ -15,7 +15,7 @@
 | 비교 대상 | `GridSlots` 기반 셀 스캔 vs `RowBitmap` 기반 비트마스크 검사 |
 | 주요 함수 | `FindFirstAvailableSlot`, `AreSlotsFree` |
 | 측정 환경 | UE Automation Test / Development Editor |
-| 최근 검증 | 2026-05-18 |
+| 최근 검증 | 2026-05-19 |
 
 ## Methodology
 
@@ -23,6 +23,7 @@
 - 측정 전 Before / After 결과가 동일한지 먼저 검증했다.
 - 고정 시드(`3579` 시작)를 사용해 점유 패턴을 재현 가능하게 구성했다.
 - 각 케이스는 워밍업 후 3회 실행하고, 최단 시간을 결과로 사용했다.
+- `FindFirstAvailableSlot`은 점유 패턴 간 절대 시간도 비교할 수 있도록 모든 케이스를 `100,000`회 반복으로 고정했다.
 - 측정에는 `FPlatformTime::Seconds()`를 사용했다.
 - 반복 실행이 최적화로 제거되지 않도록 accumulator sink를 사용했다.
 
@@ -53,40 +54,40 @@
 | 함수 | `FindFirstAvailableSlot` |
 | 시나리오 | `10x20 Grid / Fragmented50 / 2x3 Item` |
 | 반복 횟수 | `100,000` |
-| Before | `27.2453ms` |
-| After | `5.7104ms` |
-| Speedup | `4.77x` |
-| 시간 감소율 | `79.0%` |
+| Before | `31.0585ms` |
+| After | `5.7698ms` |
+| Speedup | `5.38x` |
+| 시간 감소율 | `81.4%` |
 
 포트폴리오 표기용:
 
 ```text
 10x20 Grid / Fragmented50 / 2x3 Item
 FindFirstAvailableSlot 100,000 iterations
-27.25ms -> 5.71ms
-4.77x faster / -79.0% search time
+31.06ms -> 5.77ms
+5.38x faster / -81.4% search time
 ```
 
 ## 10x20 FindFirstAvailableSlot Highlights
 
 | Pattern | Item | Iter | Before | After | Speedup | 감소율 |
 |---|---:|---:|---:|---:|---:|---:|
-| `WorstNoFit` | `4x2` | `10,000` | `3.3679ms` | `0.6042ms` | `5.57x` | `82.1%` |
-| `Fragmented50` | `4x2` | `100,000` | `31.8237ms` | `6.4819ms` | `4.91x` | `79.6%` |
-| `WorstNoFit` | `2x1` | `10,000` | `2.9420ms` | `0.6158ms` | `4.78x` | `79.1%` |
-| `Fragmented50` | `2x3` | `100,000` | `27.2453ms` | `5.7104ms` | `4.77x` | `79.0%` |
-| `NearFull` | `1x1` | `25,000` | `7.6219ms` | `1.6594ms` | `4.59x` | `78.2%` |
+| `WorstNoFit` | `4x2` | `100,000` | `36.4463ms` | `6.3820ms` | `5.71x` | `82.5%` |
+| `Fragmented50` | `2x3` | `100,000` | `31.0585ms` | `5.7698ms` | `5.38x` | `81.4%` |
+| `Fragmented50` | `4x2` | `100,000` | `32.5618ms` | `6.4167ms` | `5.07x` | `80.3%` |
+| `WorstNoFit` | `2x1` | `100,000` | `33.4687ms` | `6.7912ms` | `4.93x` | `79.7%` |
+| `WorstNoFit` | `1x1` | `100,000` | `33.4295ms` | `6.8358ms` | `4.89x` | `79.6%` |
 
 ## Summary
 
 | 범위 | Count | Avg Speedup | Min | Max |
 |---|---:|---:|---:|---:|
-| `10x20 / FindFirstAvailableSlot` | `30` | `2.91x` | `0.97x` | `5.57x` |
-| `10x20 / AreSlotsFree` | `30` | `1.37x` | `1.11x` | `2.97x` |
-| `10x10 / FindFirstAvailableSlot` | `30` | `2.76x` | `0.97x` | `5.74x` |
-| `10x10 / AreSlotsFree` | `30` | `1.36x` | `1.13x` | `2.83x` |
-| `16x20 / FindFirstAvailableSlot` | `30` | `3.49x` | `0.97x` | `7.63x` |
-| `16x20 / AreSlotsFree` | `30` | `1.36x` | `1.12x` | `2.82x` |
+| `10x20 / FindFirstAvailableSlot` | `30` | `2.96x` | `0.97x` | `5.71x` |
+| `10x20 / AreSlotsFree` | `30` | `1.36x` | `1.03x` | `2.73x` |
+| `10x10 / FindFirstAvailableSlot` | `30` | `3.05x` | `0.97x` | `7.80x` |
+| `10x10 / AreSlotsFree` | `30` | `1.39x` | `0.89x` | `3.41x` |
+| `16x20 / FindFirstAvailableSlot` | `30` | `3.51x` | `0.97x` | `7.82x` |
+| `16x20 / AreSlotsFree` | `30` | `1.35x` | `1.11x` | `2.83x` |
 
 ## Interpretation
 
@@ -108,6 +109,6 @@ FindFirstAvailableSlot 100,000 iterations
 
 ```text
 고정 시드 기반의 다양한 그리드 점유 패턴에서 빈 슬롯 탐색 알고리즘을 비교했다.
-대표 케이스인 10x20 Fragmented50 / 2x3 아이템 탐색에서 27.25ms -> 5.71ms로 감소해 4.77x 개선됐다.
-10x20 placement-search 30개 케이스 평균 개선폭은 2.91x였다.
+대표 케이스인 10x20 Fragmented50 / 2x3 아이템 탐색에서 31.06ms -> 5.77ms로 감소해 5.38x 개선됐다.
+10x20 placement-search 30개 케이스 평균 개선폭은 2.96x였다.
 ```
