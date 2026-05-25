@@ -47,8 +47,6 @@ public:
 
     
     UInventoryViewModel* GetViewModel() const { return ViewModel; }
-    UEquipmentViewModel* GetEquipmentViewModelForDebug() const { return EquipmentViewModel; }
-    UCraftingViewModel* GetCraftingViewModelForDebug() const { return CraftingViewModel; }
 
     
     UCraftingPanelWidget* GetCraftingPanel() const { return CraftingPanel; }
@@ -75,9 +73,6 @@ protected:
     virtual void NativeDestruct() override;
     virtual void NativeOnActivated() override;
     virtual void NativeOnDeactivated() override;
-    virtual FReply NativeOnFocusReceived(const FGeometry& InGeometry,
-                                         const FFocusEvent& InFocusEvent) override;
-    virtual void NativeOnFocusLost(const FFocusEvent& InFocusEvent) override;
     virtual bool NativeOnHandleBackAction() override;
     virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
     virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry,

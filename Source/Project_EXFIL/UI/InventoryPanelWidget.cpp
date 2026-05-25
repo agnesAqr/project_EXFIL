@@ -10,10 +10,7 @@
 #include "Components/UniformGridPanel.h"
 #include "Components/UniformGridSlot.h"
 #include "Components/WidgetSwitcher.h"
-#include "Framework/Application/SlateApplication.h"
 #include "Input/CommonUIInputTypes.h"
-#include "Widgets/SWidget.h"
-#include "Core/EXFILLog.h"
 #include "Core/EXFILPlayerController.h"
 #include "GAS/SurvivalViewModel.h"
 #include "UI/CraftingPanelWidget.h"
@@ -26,70 +23,10 @@
 #include "UI/InventoryViewModel.h"
 #include "UI/StatEntryWidget.h"
 
-namespace
-{
-const TCHAR* LexBoolForEXFILUIFlow(const bool bValue)
-{
-    return bValue ? TEXT("true") : TEXT("false");
-}
-
-FString LexSlateVisibilityForEXFILUIFlow(const ESlateVisibility Visibility)
-{
-    if (const UEnum* Enum = StaticEnum<ESlateVisibility>())
-    {
-        return Enum->GetNameStringByValue(static_cast<int64>(Visibility));
-    }
-
-    return FString::FromInt(static_cast<int32>(Visibility));
-}
-
-FString GetFocusedSlateWidgetForEXFILUIFlow()
-{
-    if (!FSlateApplication::IsInitialized())
-    {
-        return TEXT("SlateNotInitialized");
-    }
-
-    const TSharedPtr<SWidget> FocusedWidget =
-        FSlateApplication::Get().GetKeyboardFocusedWidget();
-    return FocusedWidget.IsValid()
-        ? FocusedWidget->GetTypeAsString()
-        : FString(TEXT("None"));
-}
-
-void LogPanelStateForEXFILUIFlow(const TCHAR* Context, const UInventoryPanelWidget* Panel)
-{
-    const APlayerController* PC = Panel ? Panel->GetOwningPlayer() : nullptr;
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel %s] Panel=%s OwningPC=%s Pawn=%s Visibility=%s InViewport=%s KeyboardFocus=%s AnyUserFocus=%s MouseCapture=%s Cursor=%s ViewModel=%s EquipmentVM=%s CraftingVM=%s SlateFocus=%s"),
-        Context ? Context : TEXT("Unknown"),
-        *GetNameSafe(Panel),
-        *GetNameSafe(PC),
-        PC ? *GetNameSafe(PC->GetPawn()) : TEXT("None"),
-        Panel ? *LexSlateVisibilityForEXFILUIFlow(Panel->GetVisibility()) : TEXT("None"),
-        Panel ? LexBoolForEXFILUIFlow(Panel->IsInViewport()) : TEXT("false"),
-        Panel ? LexBoolForEXFILUIFlow(Panel->HasKeyboardFocus()) : TEXT("false"),
-        Panel ? LexBoolForEXFILUIFlow(Panel->HasAnyUserFocus()) : TEXT("false"),
-        Panel ? LexBoolForEXFILUIFlow(Panel->HasMouseCapture()) : TEXT("false"),
-        PC ? LexBoolForEXFILUIFlow(PC->bShowMouseCursor) : TEXT("false"),
-        Panel ? *GetNameSafe(Panel->GetViewModel()) : TEXT("None"),
-        Panel ? *GetNameSafe(Panel->GetEquipmentViewModelForDebug()) : TEXT("None"),
-        Panel ? *GetNameSafe(Panel->GetCraftingViewModelForDebug()) : TEXT("None"),
-        *GetFocusedSlateWidgetForEXFILUIFlow());
-}
-}
-
 void UInventoryPanelWidget::NativeOnInitialized()
 {
     Super::NativeOnInitialized();
     SetIsFocusable(true);
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel NativeOnInitialized] Panel=%s Focusable=%s GridPanel=%s IconOverlay=%s SlotWidgetClass=%s"),
-        *GetNameSafe(this),
-        LexBoolForEXFILUIFlow(true),
-        *GetNameSafe(GridPanel),
-        *GetNameSafe(IconOverlay),
-        *GetNameSafe(SlotWidgetClass.Get()));
 
     if (Button_InventoryTab)
     {
@@ -101,12 +38,10 @@ void UInventoryPanelWidget::NativeOnInitialized()
     }
     UpdateTabStyles(0);
     ResolveInventoryScrollBox();
-    LogPanelStateForEXFILUIFlow(TEXT("NativeOnInitialized:After"), this);
 }
 
 void UInventoryPanelWidget::NativeDestruct()
 {
-    LogPanelStateForEXFILUIFlow(TEXT("NativeDestruct:Before"), this);
     StopDragAutoScroll();
 
     if (ViewModel && ViewModelRefreshedHandle.IsValid())
@@ -120,13 +55,6 @@ void UInventoryPanelWidget::NativeDestruct()
 
 void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
 {
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel SetViewModel:Before] Panel=%s OldVM=%s NewVM=%s ViewModelHandleValid=%s"),
-        *GetNameSafe(this),
-        *GetNameSafe(ViewModel),
-        *GetNameSafe(InViewModel),
-        LexBoolForEXFILUIFlow(ViewModelRefreshedHandle.IsValid()));
-
     if (ViewModel)
     {
         ViewModel->OnViewModelRefreshed.Remove(ViewModelRefreshedHandle);
@@ -140,7 +68,6 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
         ViewModelRefreshedHandle = ViewModel->OnViewModelRefreshed.AddUObject(
             this, &UInventoryPanelWidget::HandleViewModelRefreshed);
         BuildGrid();
-        LogPanelStateForEXFILUIFlow(TEXT("SetViewModel:AfterBind"), this);
         return;
     }
 
@@ -154,18 +81,10 @@ void UInventoryPanelWidget::SetViewModel(UInventoryViewModel* InViewModel)
     CachedCellStride = FVector2D::ZeroVector;
     CachedSquareCellSize = 0.f;
     bNeedsCellSquareFix = true;
-    LogPanelStateForEXFILUIFlow(TEXT("SetViewModel:AfterClear"), this);
 }
 
 void UInventoryPanelWidget::SetEquipmentViewModel(UEquipmentViewModel* InViewModel)
 {
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel SetEquipmentViewModel] Panel=%s OldVM=%s NewVM=%s IconOverlay=%s"),
-        *GetNameSafe(this),
-        *GetNameSafe(EquipmentViewModel),
-        *GetNameSafe(InViewModel),
-        *GetNameSafe(IconOverlay));
-
     EquipmentViewModel = InViewModel;
 
     if (IconOverlay)
@@ -189,13 +108,6 @@ void UInventoryPanelWidget::SetEquipmentViewModel(UEquipmentViewModel* InViewMod
 
 void UInventoryPanelWidget::SetCraftingViewModel(UCraftingViewModel* InViewModel)
 {
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel SetCraftingViewModel] Panel=%s OldVM=%s NewVM=%s CraftingPanel=%s"),
-        *GetNameSafe(this),
-        *GetNameSafe(CraftingViewModel),
-        *GetNameSafe(InViewModel),
-        *GetNameSafe(CraftingPanel));
-
     CraftingViewModel = InViewModel;
     if (CraftingPanel)
     {
@@ -205,11 +117,8 @@ void UInventoryPanelWidget::SetCraftingViewModel(UCraftingViewModel* InViewModel
 
 void UInventoryPanelWidget::NotifyPanelShown()
 {
-    LogPanelStateForEXFILUIFlow(TEXT("NotifyPanelShown:Before"), this);
-
     if (!CraftingPanel)
     {
-        LogPanelStateForEXFILUIFlow(TEXT("NotifyPanelShown:NoCraftingPanel"), this);
         return;
     }
 
@@ -223,26 +132,21 @@ void UInventoryPanelWidget::NotifyPanelShown()
     {
         CraftingPanel->NotifyPanelHidden();
     }
-
-    LogPanelStateForEXFILUIFlow(TEXT("NotifyPanelShown:After"), this);
 }
 
 void UInventoryPanelWidget::NotifyPanelHidden()
 {
-    LogPanelStateForEXFILUIFlow(TEXT("NotifyPanelHidden:Before"), this);
     StopDragAutoScroll();
 
     if (CraftingPanel)
     {
         CraftingPanel->NotifyPanelHidden();
     }
-    LogPanelStateForEXFILUIFlow(TEXT("NotifyPanelHidden:After"), this);
 }
 
 void UInventoryPanelWidget::NativeOnActivated()
 {
     Super::NativeOnActivated();
-    LogPanelStateForEXFILUIFlow(TEXT("NativeOnActivated"), this);
     bNeedsCellSquareFix = true;
     bLayoutReady = false;
     CachedCellStride = FVector2D::ZeroVector;
@@ -253,30 +157,8 @@ void UInventoryPanelWidget::NativeOnActivated()
 void UInventoryPanelWidget::NativeOnDeactivated()
 {
     Super::NativeOnDeactivated();
-    LogPanelStateForEXFILUIFlow(TEXT("NativeOnDeactivated"), this);
     StopDragAutoScroll();
     NotifyPanelHidden();
-}
-
-FReply UInventoryPanelWidget::NativeOnFocusReceived(const FGeometry& InGeometry,
-    const FFocusEvent& InFocusEvent)
-{
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel NativeOnFocusReceived] Panel=%s Cause=%d"),
-        *GetNameSafe(this),
-        static_cast<int32>(InFocusEvent.GetCause()));
-    LogPanelStateForEXFILUIFlow(TEXT("NativeOnFocusReceived"), this);
-    return Super::NativeOnFocusReceived(InGeometry, InFocusEvent);
-}
-
-void UInventoryPanelWidget::NativeOnFocusLost(const FFocusEvent& InFocusEvent)
-{
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel NativeOnFocusLost] Panel=%s Cause=%d"),
-        *GetNameSafe(this),
-        static_cast<int32>(InFocusEvent.GetCause()));
-    LogPanelStateForEXFILUIFlow(TEXT("NativeOnFocusLost"), this);
-    Super::NativeOnFocusLost(InFocusEvent);
 }
 
 bool UInventoryPanelWidget::NativeOnHandleBackAction()
@@ -287,19 +169,12 @@ bool UInventoryPanelWidget::NativeOnHandleBackAction()
 FReply UInventoryPanelWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry,
     const FPointerEvent& InMouseEvent)
 {
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel NativeOnMouseButtonDown] Panel=%s Button=%s HasCaptureBefore=%s"),
-        *GetNameSafe(this),
-        *InMouseEvent.GetEffectingButton().ToString(),
-        LexBoolForEXFILUIFlow(HasMouseCapture()));
-
     if (IconOverlay)
     {
         IconOverlay->CloseContextMenuIfOpen();
     }
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
     {
-        LogPanelStateForEXFILUIFlow(TEXT("NativeOnMouseButtonDown:CaptureMouse"), this);
         return FReply::Handled().CaptureMouse(TakeWidget());
     }
 
@@ -309,15 +184,8 @@ FReply UInventoryPanelWidget::NativeOnMouseButtonDown(const FGeometry& InGeometr
 FReply UInventoryPanelWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry,
     const FPointerEvent& InMouseEvent)
 {
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel NativeOnMouseButtonUp] Panel=%s Button=%s HasCaptureBefore=%s"),
-        *GetNameSafe(this),
-        *InMouseEvent.GetEffectingButton().ToString(),
-        LexBoolForEXFILUIFlow(HasMouseCapture()));
-
     if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && HasMouseCapture())
     {
-        LogPanelStateForEXFILUIFlow(TEXT("NativeOnMouseButtonUp:ReleaseMouse"), this);
         return FReply::Handled().ReleaseMouseCapture();
     }
 
@@ -338,20 +206,8 @@ FReply UInventoryPanelWidget::NativeOnMouseMove(const FGeometry& InGeometry,
 FReply UInventoryPanelWidget::NativeOnKeyDown(const FGeometry& InGeometry,
     const FKeyEvent& InKeyEvent)
 {
-    UE_LOG(LogEXFIL, Log,
-        TEXT("[UIFlow][Panel NativeOnKeyDown] Panel=%s Key=%s Visibility=%s KeyboardFocus=%s AnyUserFocus=%s MouseCapture=%s"),
-        *GetNameSafe(this),
-        *InKeyEvent.GetKey().ToString(),
-        *LexSlateVisibilityForEXFILUIFlow(GetVisibility()),
-        LexBoolForEXFILUIFlow(HasKeyboardFocus()),
-        LexBoolForEXFILUIFlow(HasAnyUserFocus()),
-        LexBoolForEXFILUIFlow(HasMouseCapture()));
-
     if (InKeyEvent.GetKey() == EKeys::R && IconOverlay && IconOverlay->RotateActiveDragItem())
     {
-        UE_LOG(LogEXFIL, Log,
-            TEXT("[UIFlow][Panel NativeOnKeyDown] Handled R rotate. Panel=%s"),
-            *GetNameSafe(this));
         return FReply::Handled();
     }
 
@@ -361,20 +217,10 @@ FReply UInventoryPanelWidget::NativeOnKeyDown(const FGeometry& InGeometry,
         {
             if (UEXFILUIManager* UIManager = PC->GetUIManager())
             {
-                UE_LOG(LogEXFIL, Log,
-                    TEXT("[UIFlow][Panel NativeOnKeyDown] Handling Tab close through UIManager. Panel=%s PC=%s UIManager=%s"),
-                    *GetNameSafe(this),
-                    *GetNameSafe(PC),
-                    *GetNameSafe(UIManager));
                 UIManager->HideInventory();
                 return FReply::Handled();
             }
         }
-
-        UE_LOG(LogEXFIL, Warning,
-            TEXT("[UIFlow][Panel NativeOnKeyDown] Tab pressed but UIManager route failed. Panel=%s OwningPlayer=%s"),
-            *GetNameSafe(this),
-            *GetNameSafe(GetOwningPlayer()));
     }
 
     return Super::NativeOnKeyDown(InGeometry, InKeyEvent);

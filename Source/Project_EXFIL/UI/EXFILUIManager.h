@@ -94,6 +94,4 @@ private:
 	void SetInputModeGame();
 
 	void SetInputModeUIOnly();
-
-	void LogUIState(const TCHAR* Context) const;
 };
