@@ -11,12 +11,12 @@
 </head>
 <body>
 <div class="container">
-  <svg width="1000" height="520" viewBox="0 0 1000 520" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
+  <svg width="1000" height="800" viewBox="0 0 1000 800" fill="none" xmlns="http://www.w3.org/2000/svg" style="font-family: Consolas, Courier New, monospace;">
 
     <text x="0" y="20" fill="#00e5ff" font-size="12" letter-spacing="3" font-weight="400">— GRID INVENTORY + BITMAP VISUALIZATION</text>
 
     <!-- LEFT: Grid -->
-    <text x="30" y="55" fill="#58a6ff" font-size="11" letter-spacing="2" font-weight="600">2D GRID (실제 10 × 12, 예시 표시 10 × 7)</text>
+    <text x="30" y="55" fill="#58a6ff" font-size="11" letter-spacing="2" font-weight="600">2D GRID (실제 10 × 20, 예시 표시 10 × 7)</text>
     <text x="30" y="70" fill="#8b949e" font-size="9">1D TArray — Index = Row × Width + Col</text>
 
     <rect x="30" y="82" width="400" height="280" rx="4" fill="#0d1117" stroke="#30363d"/>
@@ -93,7 +93,17 @@
     <!-- Header -->
     <rect x="480" y="82" width="500" height="22" rx="4" fill="#161b22"/>
     <text x="500" y="97" fill="#8b949e" font-size="9" font-weight="600">Row</text>
-    <text x="550" y="97" fill="#8b949e" font-size="9" font-weight="600">bit9  8  7  6  5  4  3  2  1  0</text>
+    <text x="525" y="97" fill="#8b949e" font-size="9" font-weight="600">bit:</text>
+    <text x="554" y="97" fill="#8b949e" font-size="10" font-weight="600">9</text>
+    <text x="580" y="97" fill="#8b949e" font-size="10" font-weight="600">8</text>
+    <text x="606" y="97" fill="#8b949e" font-size="10" font-weight="600">7</text>
+    <text x="632" y="97" fill="#8b949e" font-size="10" font-weight="600">6</text>
+    <text x="658" y="97" fill="#8b949e" font-size="10" font-weight="600">5</text>
+    <text x="684" y="97" fill="#8b949e" font-size="10" font-weight="600">4</text>
+    <text x="710" y="97" fill="#8b949e" font-size="10" font-weight="600">3</text>
+    <text x="736" y="97" fill="#8b949e" font-size="10" font-weight="600">2</text>
+    <text x="762" y="97" fill="#8b949e" font-size="10" font-weight="600">1</text>
+    <text x="788" y="97" fill="#8b949e" font-size="10" font-weight="600">0</text>
     <text x="830" y="97" fill="#8b949e" font-size="9" font-weight="600">Hex</text>
     <text x="900" y="97" fill="#8b949e" font-size="9" font-weight="600">상태</text>
 
@@ -120,9 +130,9 @@
     <text x="632" y="162" fill="#3fb950" font-size="11">0</text>
     <text x="658" y="162" fill="#3fb950" font-size="11">0</text>
     <text x="684" y="162" fill="#3fb950" font-size="11">0</text>
-    <text x="710" y="162" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="162" fill="#f85149" font-size="11" font-weight="700">1</text>
     <text x="736" y="162" fill="#f85149" font-size="11" font-weight="700">1</text>
-    <text x="762" y="162" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="762" y="162" fill="#3fb950" font-size="11">0</text>
     <text x="788" y="162" fill="#3fb950" font-size="11">0</text>
     <text x="838" y="162" fill="#d29922" font-size="10">0x0C</text>
     <text x="900" y="162" fill="#8b949e" font-size="9">2칸 점유</text>
@@ -135,9 +145,9 @@
     <text x="632" y="198" fill="#3fb950" font-size="11">0</text>
     <text x="658" y="198" fill="#3fb950" font-size="11">0</text>
     <text x="684" y="198" fill="#3fb950" font-size="11">0</text>
-    <text x="710" y="198" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="198" fill="#f85149" font-size="11" font-weight="700">1</text>
     <text x="736" y="198" fill="#f85149" font-size="11" font-weight="700">1</text>
-    <text x="762" y="198" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="762" y="198" fill="#3fb950" font-size="11">0</text>
     <text x="788" y="198" fill="#3fb950" font-size="11">0</text>
     <text x="838" y="198" fill="#d29922" font-size="10">0x0C</text>
     <text x="900" y="198" fill="#8b949e" font-size="9">2칸 점유</text>
@@ -150,47 +160,105 @@
     <text x="632" y="234" fill="#3fb950" font-size="11">0</text>
     <text x="658" y="234" fill="#3fb950" font-size="11">0</text>
     <text x="684" y="234" fill="#3fb950" font-size="11">0</text>
-    <text x="710" y="234" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="234" fill="#f85149" font-size="11" font-weight="700">1</text>
     <text x="736" y="234" fill="#f85149" font-size="11" font-weight="700">1</text>
-    <text x="762" y="234" fill="#f85149" font-size="11" font-weight="700">1</text>
+    <text x="762" y="234" fill="#3fb950" font-size="11">0</text>
     <text x="788" y="234" fill="#3fb950" font-size="11">0</text>
     <text x="838" y="234" fill="#d29922" font-size="10">0x0C</text>
     <text x="900" y="234" fill="#8b949e" font-size="9">2칸 점유</text>
 
     <!-- Row 4-6: empty -->
     <text x="508" y="270" fill="#e6edf3" font-size="10">4</text>
-    <text x="554" y="270" fill="#3fb950" font-size="11">0  0  0  0  0  0  0  0  0  0</text>
+    <text x="554" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="580" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="606" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="632" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="658" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="684" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="736" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="762" y="270" fill="#3fb950" font-size="11">0</text>
+    <text x="788" y="270" fill="#3fb950" font-size="11">0</text>
     <text x="838" y="270" fill="#d29922" font-size="10">0x00</text>
     <text x="900" y="270" fill="#3fb950" font-size="9">빈 행 ✓</text>
 
     <text x="508" y="306" fill="#e6edf3" font-size="10">5</text>
-    <text x="554" y="306" fill="#3fb950" font-size="11">0  0  0  0  0  0  0  0  0  0</text>
+    <text x="554" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="580" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="606" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="632" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="658" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="684" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="736" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="762" y="306" fill="#3fb950" font-size="11">0</text>
+    <text x="788" y="306" fill="#3fb950" font-size="11">0</text>
     <text x="838" y="306" fill="#d29922" font-size="10">0x00</text>
     <text x="900" y="306" fill="#3fb950" font-size="9">빈 행 ✓</text>
 
     <text x="508" y="342" fill="#e6edf3" font-size="10">6</text>
-    <text x="554" y="342" fill="#3fb950" font-size="11">0  0  0  0  0  0  0  0  0  0</text>
+    <text x="554" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="580" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="606" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="632" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="658" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="684" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="710" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="736" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="762" y="342" fill="#3fb950" font-size="11">0</text>
+    <text x="788" y="342" fill="#3fb950" font-size="11">0</text>
     <text x="838" y="342" fill="#d29922" font-size="10">0x00</text>
     <text x="900" y="342" fill="#3fb950" font-size="9">빈 행 ✓</text>
 
-    <!-- Bottom: Check example -->
-    <rect x="30" y="385" width="950" height="125" rx="6" fill="#161b22" stroke="#30363d"/>
-    <text x="50" y="408" fill="#d29922" font-size="11" font-weight="600">AreSlotsFree(Col=5, Row=0, W=3, H=2)  — "3×2 아이템을 (5,0)에 배치 가능한가?"</text>
+    <!-- Bottom: FindFirstAvailableSlot walkthrough -->
+    <rect x="30" y="385" width="950" height="370" rx="6" fill="#161b22" stroke="#30363d"/>
+    <text x="50" y="408" fill="#d29922" font-size="11" font-weight="600">FindFirstAvailableSlot(Size = 3×2)</text>
+    <text x="290" y="408" fill="#8b949e" font-size="10">— 위 인벤토리 상태에서 3×2 아이템을 넣을 첫 가능 위치를 비트 슬라이딩으로 찾는 과정</text>
 
-    <text x="50" y="435" fill="#8b949e" font-size="10">Mask = ((1 &lt;&lt; 3) - 1) &lt;&lt; 5  =  0b 00000 </text>
-    <text x="363" y="435" fill="#3fb950" font-size="10" font-weight="700">111</text>
-    <text x="390" y="435" fill="#8b949e" font-size="10"> 00000</text>
-    <text x="460" y="435" fill="#58a6ff" font-size="10">→ col 5, 6, 7 마스크</text>
+    <!-- Summary -->
+    <text x="50" y="432" fill="#58a6ff" font-size="10" font-weight="600">요약 흐름</text>
+    <text x="120" y="432" fill="#8b949e" font-size="9">위에서 아래로 Y 후보를 훑고, 각 Y에서 3칸짜리 마스크를 왼쪽에서 오른쪽으로 민다.</text>
 
-    <text x="50" y="460" fill="#8b949e" font-size="10">Row[0] &amp; Mask  =  0x17 &amp; 0xE0  =  </text>
-    <text x="345" y="460" fill="#3fb950" font-size="10" font-weight="700">0x00  →  빈칸 ✓</text>
-    <text x="530" y="460" fill="#8b949e" font-size="9">(비트 AND 연산 1회)</text>
+    <text x="65" y="460" fill="#d29922" font-size="10" font-weight="600">1. 입력 크기</text>
+    <text x="170" y="460" fill="#8b949e" font-size="10">W=3, H=2 → BaseMask = 0b111. GridWidth=10이므로 X 후보는 0..7.</text>
 
-    <text x="50" y="483" fill="#8b949e" font-size="10">Row[1] &amp; Mask  =  0x0C &amp; 0xE0  =  </text>
-    <text x="345" y="483" fill="#3fb950" font-size="10" font-weight="700">0x00  →  빈칸 ✓</text>
-    <text x="530" y="483" fill="#8b949e" font-size="9">(비트 AND 연산 1회)</text>
+    <text x="65" y="488" fill="#d29922" font-size="10" font-weight="600">2. Y=0 검사</text>
+    <text x="170" y="488" fill="#8b949e" font-size="10">아이템 높이가 2라서 Row 0과 Row 1을 OR로 병합한다.</text>
+    <text x="170" y="508" fill="#8b949e" font-size="10">const uint16 Merged = R0 | R1;  // 0x17 | 0x0C = 0x1F</text>
 
-    <text x="50" y="502" fill="#3fb950" font-size="11" font-weight="600">→ return true  —  비트 AND 2회로 검증 완료 (O(H), H=아이템 높이)</text>
+    <text x="65" y="536" fill="#d29922" font-size="10" font-weight="600">3. X 슬라이딩</text>
+    <text x="170" y="536" fill="#8b949e" font-size="10">BaseMask를 X만큼 shift해서 3칸 후보 영역과 Merged를 AND 한다.</text>
+
+    <text x="90" y="564" fill="#8b949e" font-size="10">X=0</text>
+    <text x="135" y="564" fill="#8b949e" font-size="9">cols 0,1,2</text>
+    <text x="230" y="564" fill="#f85149" font-size="9">충돌</text>
+    <text x="285" y="564" fill="#8b949e" font-size="10">X=1</text>
+    <text x="330" y="564" fill="#8b949e" font-size="9">cols 1,2,3</text>
+    <text x="425" y="564" fill="#f85149" font-size="9">충돌</text>
+    <text x="480" y="564" fill="#8b949e" font-size="10">X=2</text>
+    <text x="525" y="564" fill="#8b949e" font-size="9">cols 2,3,4</text>
+    <text x="620" y="564" fill="#f85149" font-size="9">충돌</text>
+
+    <text x="90" y="588" fill="#8b949e" font-size="10">X=3</text>
+    <text x="135" y="588" fill="#8b949e" font-size="9">cols 3,4,5</text>
+    <text x="230" y="588" fill="#f85149" font-size="9">충돌</text>
+    <text x="285" y="588" fill="#8b949e" font-size="10">X=4</text>
+    <text x="330" y="588" fill="#8b949e" font-size="9">cols 4,5,6</text>
+    <text x="425" y="588" fill="#f85149" font-size="9">충돌</text>
+    <text x="480" y="588" fill="#8b949e" font-size="10">X=5</text>
+    <text x="525" y="588" fill="#8b949e" font-size="9">cols 5,6,7</text>
+    <text x="620" y="588" fill="#3fb950" font-size="9" font-weight="600">통과</text>
+
+    <text x="65" y="624" fill="#d29922" font-size="10" font-weight="600">4. 첫 성공 위치</text>
+    <text x="170" y="624" fill="#8b949e" font-size="10">X=5에서 Merged &amp; (0b111 &lt;&lt; 5) == 0 이므로 충돌이 없다.</text>
+
+    <rect x="60" y="646" width="875" height="48" rx="4" fill="#0d1117" stroke="#238636"/>
+    <text x="80" y="674" fill="#3fb950" font-size="12" font-weight="700">return OutPosition = (col=5, row=0)</text>
+    <text x="355" y="674" fill="#8b949e" font-size="10">상단 MED 오른쪽의 3×2 빈 영역을 찾고 즉시 종료한다. Y=1 이후는 검사하지 않는다.</text>
+
+    <text x="50" y="725" fill="#58a6ff" font-size="10" font-weight="600">핵심</text>
+    <text x="105" y="725" fill="#8b949e" font-size="9">H개 행을 OR로 합쳐 후보 높이 안의 점유 열을 하나로 만들고, X 후보마다 3비트 마스크와 AND해서 충돌 여부를 판정한다.</text>
+    <text x="105" y="743" fill="#8b949e" font-size="9">칸 단위 사각형 검사 대신 비트 연산으로 첫 배치 가능 위치를 빠르게 찾는 구조다.</text>
 
   </svg>
 </div>

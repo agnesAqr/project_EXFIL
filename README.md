@@ -8,7 +8,7 @@
 
 ## 🎬 시연 영상
 
-[![시연 영상](https://img.shields.io/badge/YouTube-시연_영상-red?logo=youtube)](https://youtu.be/OF0snQA3hdw?si=EU7B3wh0OLt1pxQ9)
+[시연 영상 바로 보기](https://youtu.be/YY7HUjYSVkw)
 
 ---
 
@@ -17,7 +17,7 @@
 | | |
 |---|---|
 | **엔진** | Unreal Engine 5.6 |
-| **언어** | C++ (100%, 블루프린트 미사용) |
+| **구현 방식** | 게임플레이 로직은 C++, 에셋 조립과 UMG 레이아웃은 에디터/BP 에셋 사용 |
 | **아키텍처** | Dedicated Server / Server Authority |
 | **개발 기간** | 2026.03.18 - 2026.04.27 |
 | **작업 인원** | 1명 |
@@ -65,7 +65,7 @@
 
 | 시스템 | 설명 |
 |--------|------|
-| **Grid Inventory (10×12)** | 다중 크기 아이템 배치, 회전, 드래그앤드롭, 스택 병합, 비트맵 기반 O(H) 슬롯 검색 |
+| **Grid Inventory (10×20)** | 다중 크기 아이템 배치, 회전, 드래그앤드롭, 스택 병합, 비트맵 기반 O(H) 슬롯 검색 |
 | **FastArray Replication** | `FInventoryFastArray` + `NetDeltaSerialize`, `PreReplicatedRemove` 캡처 + `PostReplicatedAdd/Change` 부분 패치 + `PostReplicatedReceive` flush |
 | **Crafting** | DataTable 레시피 기반, 원자적 재료 소모 + 실패 시 롤백, 서버 타이머 기반 결과 지급 |
 | **Equipment** | 6슬롯 (Head/Face/Eyewear/Body/Weapon1/Weapon2), 장착 시 GE Apply / 해제 시 Remove |
@@ -98,7 +98,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - **Data-Driven:** 아이템 / 레시피 / 장비 스펙은 DataTable CSV. 텍스처·GE 클래스는 TSoftObjectPtr / TSoftClassPtr로 지연 로드 후 Subsystem 캐시
 - **Input routing:** 인벤토리 Tab 입력은 상태에 따라 처리 계층이 다릅니다. 닫힌 상태의 열기만 Enhanced Input `IA_ToggleInventory`가 담당하고, 열린 상태에서는 UI가 `UIOnly/Menu`로 포커스를 잡은 뒤 `UInventoryPanelWidget::NativeOnKeyDown()`이 Tab 닫기와 드래그 중 R 회전을 처리합니다. 따라서 인벤토리 열린 상태의 Tab은 캐릭터 입력으로 내려가지 않습니다. `PlayerInputComponent->BindKey(EKeys::Tab, ...)` 직접 바인딩은 사용하지 않습니다.
 - **Crafting GA 제거 결정:** 제작은 UI 선택형 서버 권한 시스템이라 `UCraftingComponent`가 검증/재료 소모/타이머/결과 지급을 직접 처리합니다. 프로토타입 단계에서는 `UGA_Craft`가 별도 GA lifecycle 가치를 만들지 못해 제거했고, 제작 중 태그 기반 차단·쿨다운·코스트가 필요해지는 시점에만 GA 재도입을 검토합니다.
-- **Incremental Cache Patch:** FastArray의 Add/Change/Remove 변경분만 받아 캐시(`ItemIndexMap`, `ItemCountCache`, `RowBitmap`, `GridSlots`)를 부분 갱신. Remove는 `RemoveAtSwap`과 pending remove 캡처로 처리하며 전체 리빌드에 의존하지 않음
+- **Incremental Cache Patch:** FastArray의 Add/Change/Remove 변경분만 받아 캐시(`ItemIndexMap`, `ItemCountCache`, `RowBitmap`, `GridSlots`)를 부분 갱신. 서버 mutation은 dirty slot 수집 없이 캐시만 갱신하고, 클라이언트 FastArray 콜백만 `PendingDirtyIndices`를 모아 UI 갱신 범위를 전달. Remove는 `RemoveAtSwap`과 pending remove 캡처로 처리하며 전체 리빌드에 의존하지 않음
 
 ---
 
@@ -106,7 +106,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 
 ### FEATURE 01 — 그리드 인벤토리 + 비트맵 검색 + FastArray 델타 동기화
 - 1D `TArray`로 2D 그리드를 표현하는 타르코프 스타일 인벤토리 — 멀티셀 아이템 배치, 회전, 스택 병합
-- `RowBitmap (TArray<uint16>)` 기반 빈 영역 검증: **O(H)** (행당 비트 AND 1회, 현재 `GridWidth <= 16`으로 제한)
+- `RowBitmap (TArray<uint16>)` 기반 빈 영역 검증: **O(H)** (행당 비트 AND 1회, 현재 `GridWidth <= 16`으로 제한). 신규 배치와 이동/회전의 자기 footprint 무시 검사는 `AreSlotsFree_Internal`의 비트마스크 경로로 통합
 - `ItemIndexMap (TMap<FGuid, int32>)`로 인스턴스 탐색: **O(1)**
 - `ItemCountCache (TMap<FName, int32>)`로 ID별 수량 합계: **O(1)**
 - Replicated 데이터(`FInventoryFastArray InventoryList`) + 로컬 전용 캐시(GridSlots / TMap / Bitmap) 분리
@@ -188,7 +188,7 @@ classDiagram
             +Server_RequestConsumeItemByID() «Server, Reliable»
             +Server_RequestDropItem() «Server, Reliable»
             +AddItemByID_Internal()  «Authority»
-            +AreSlotsFree() O(H) bitmap
+            +AreSlotsFree()/AreSlotsFreeForItem() O(H) bitmap
         }
 
         class UEquipmentComponent {
@@ -235,7 +235,7 @@ classDiagram
         }
 
         class USurvivalViewModel {
-            +OnStatChanged(EExfilStatType, Current, Max) «Dynamic Multicast Delegate»
+            +OnStatChanged(EExfilStatType, Current, Max) «Native Multicast Delegate»
             +InitializeWithASC()
         }
     }
@@ -302,7 +302,7 @@ classDiagram
     class GE_Equipment {
         <<Blueprint>>
         Duration: Infinite
-        MaxHealth +N 등 (구조 구현)
+        EquipmentEffect 기반 modifier
     }
 
     class GE_Damage {

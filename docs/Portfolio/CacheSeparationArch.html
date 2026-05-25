@@ -37,8 +37,8 @@
 
     <!-- Server modify -->
     <rect x="20" y="165" width="420" height="35" rx="4" fill="#161b22" stroke="#3fb95044"/>
-    <text x="35" y="180" fill="#3fb950" font-size="9">Add/Move/Stack -> Apply*_Local + MarkItemDirty</text>
-    <text x="35" y="193" fill="#3fb950" font-size="9">Remove -> RemoveAtSwap + ApplyItemRemoved_Local + MarkArrayDirty</text>
+    <text x="35" y="180" fill="#3fb950" font-size="9">Add/Move/Stack -> Apply*_Local(nullptr) + MarkItemDirty</text>
+    <text x="35" y="193" fill="#3fb950" font-size="8">Remove -> RemoveAtSwap + ApplyItemRemoved_Local(nullptr) + MarkArrayDirty</text>
     
     <!-- ==================== REPLICATION ARROW (marker 기반) ==================== -->
     <text x="245" y="218" fill="#58a6ff" font-size="9">DOREPLIFETIME</text>
@@ -63,9 +63,9 @@
     <!-- FastArray callbacks box -->
     <rect x="345" y="305" width="200" height="80" rx="6" fill="#161b22" stroke="#d2992244"/>
     <text x="357" y="325" fill="#d29922" font-size="9" font-weight="600">FastArray delta callbacks</text>
-    <text x="357" y="345" fill="#e6edf3" font-size="9">Add/Change -> Apply*_Local</text>
+    <text x="357" y="345" fill="#e6edf3" font-size="9">Add/Change -> Apply*_Local(&amp;Dirty)</text>
     <text x="357" y="360" fill="#e6edf3" font-size="9">Remove -> PendingRemoves</text>
-    <text x="357" y="375" fill="#8b949e" font-size="8">PostReceive -> ApplyRemoved / InitSync</text>
+    <text x="357" y="375" fill="#8b949e" font-size="7">PostReceive -> ApplyItemRemoved_Local(&amp;Dirty)</text>
     
     <!-- Cache rebuild arrows (marker 기반) -->
     <line x1="545" y1="325" x2="588" y2="325" stroke="#3fb950" stroke-width="1.5" marker-end="url(#ag)"/>
@@ -104,12 +104,12 @@
     <text x="252" y="483" fill="#8b949e" font-size="8">→ ItemCountCache.Find() <tspan fill="#00e5ff" font-weight="600">O(1)</tspan></text>
     
     <rect x="460" y="455" width="200" height="35" rx="4" fill="#161b22" stroke="#3fb95033"/>
-    <text x="472" y="470" fill="#3fb950" font-size="9">AreSlotsFree()</text>
-    <text x="472" y="483" fill="#8b949e" font-size="8">→ RowBitmap &amp; Mask (height loop) <tspan fill="#00e5ff" font-weight="600">O(H)</tspan></text>
+    <text x="472" y="470" fill="#3fb950" font-size="9">AreSlotsFree*()</text>
+    <text x="472" y="483" fill="#8b949e" font-size="8">→ RowBitmap mask / ignore mask <tspan fill="#00e5ff" font-weight="600">O(H)</tspan></text>
     
     <rect x="680" y="455" width="260" height="35" rx="4" fill="#161b22" stroke="#d2992233"/>
     <text x="692" y="470" fill="#d29922" font-size="9">Dirty Flag → ViewModel</text>
-    <text x="692" y="483" fill="#8b949e" font-size="8">변경 슬롯만 TSet&lt;int32&gt;로 전파</text>
+    <text x="692" y="483" fill="#8b949e" font-size="8">Client dirty TSet&lt;int32&gt;만 전파</text>
     
   </svg>
 </div>

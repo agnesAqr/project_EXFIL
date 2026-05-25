@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>ASC Initialization Timing — Before vs After</title>
+<title>ASC Initialization Timing — Current Flow</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0a0e17; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: 'Consolas', 'Courier New', monospace; }
@@ -50,11 +50,11 @@
 
     <line x1="150" y1="174" x2="150" y2="192" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
 
-    <!-- Step 3: InitializeViewModels -->
+    <!-- Step 3: ASC ready -->
     <rect x="30" y="194" width="240" height="54" rx="5" fill="#161b22" stroke="#3fb95044"/>
-    <text x="42" y="210" fill="#3fb950" font-size="10" font-weight="600">InitializeViewModels()</text>
-    <text x="42" y="224" fill="#e6edf3" font-size="9">ASC→GetSet&lt;SurvivalAttributeSet&gt;()</text>
-    <text x="42" y="238" fill="#3fb950" font-size="9" font-weight="600">→ Valid ✅ StatsBar 정상</text>
+    <text x="42" y="210" fill="#3fb950" font-size="10" font-weight="600">ASC Ready for Gameplay</text>
+    <text x="42" y="224" fill="#e6edf3" font-size="9">GA_Fire grant + server authority</text>
+    <text x="42" y="238" fill="#3fb950" font-size="9" font-weight="600">→ Valid ✅ Server abilities</text>
 
     <!-- 결과 -->
     <rect x="30" y="264" width="240" height="26" rx="5" fill="#23863622" stroke="#3fb95044"/>
@@ -64,7 +64,7 @@
     <!-- ============================================ -->
     <!-- 중앙: CLIENT BEFORE (문제)                     -->
     <!-- ============================================ -->
-    <text x="340" y="18" fill="#f85149" font-size="11" letter-spacing="2" font-weight="600">CLIENT — BEFORE (문제)</text>
+    <text x="340" y="18" fill="#f85149" font-size="11" letter-spacing="2" font-weight="600">CLIENT — BEFORE (구버전 문제)</text>
     <line x1="340" y1="28" x2="630" y2="28" stroke="#f8514933" stroke-width="2"/>
 
     <!-- 수직 타임라인 -->
@@ -72,18 +72,18 @@
 
     <!-- Step 1: BeginPlay + InitVM -->
     <rect x="355" y="60" width="260" height="68" rx="5" fill="#161b22" stroke="#f8514944"/>
-    <text x="367" y="76" fill="#f85149" font-size="10" font-weight="600">BeginPlay()</text>
-    <text x="367" y="90" fill="#e6edf3" font-size="9">InitializeViewModels() ← 여기서 호출</text>
-    <text x="367" y="104" fill="#e6edf3" font-size="9">ASC→GetSet&lt;SurvivalAttributeSet&gt;()</text>
+    <text x="367" y="76" fill="#f85149" font-size="10" font-weight="600">Character BeginPlay()</text>
+    <text x="367" y="90" fill="#e6edf3" font-size="9">VM 직접 생성/바인딩 시도</text>
+    <text x="367" y="104" fill="#e6edf3" font-size="9">ASC 준비 전 SurvivalViewModel 초기화</text>
     <text x="367" y="118" fill="#f85149" font-size="9" font-weight="600">→ null ❌ ASC 미초기화</text>
 
     <line x1="485" y1="128" x2="485" y2="146" stroke="#f85149" stroke-width="1" marker-end="url(#ar)"/>
 
-    <!-- Step 2: OnRep_PlayerState (나중에 도착) -->
+    <!-- Step 2: AcknowledgePossession (나중에 도착) -->
     <rect x="355" y="148" width="260" height="54" rx="5" fill="#161b22" stroke="#8b949e44"/>
-    <text x="367" y="164" fill="#8b949e" font-size="10" font-weight="600">OnRep_PlayerState()</text>
-    <text x="367" y="178" fill="#8b949e" font-size="9">InitAbilityActorInfo(this, this)</text>
-    <text x="367" y="192" fill="#8b949e" font-size="9">ASC 초기화됨 — 하지만 이미 늦음</text>
+    <text x="367" y="164" fill="#8b949e" font-size="10" font-weight="600">PC AcknowledgePossession()</text>
+    <text x="367" y="178" fill="#8b949e" font-size="9">InitAbilityActorInfoForClient()</text>
+    <text x="367" y="192" fill="#8b949e" font-size="9">ASC 초기화됨 — 하지만 VM은 이미 실패</text>
 
     <!-- 결과 -->
     <rect x="355" y="264" width="260" height="26" rx="5" fill="#f8514922" stroke="#f8514944"/>
@@ -106,17 +106,17 @@
     <!-- Step 1: BeginPlay (VM 안 함) -->
     <rect x="695" y="60" width="255" height="40" rx="5" fill="#161b22" stroke="#58a6ff44"/>
     <text x="707" y="76" fill="#58a6ff" font-size="10" font-weight="600">BeginPlay()</text>
-    <text x="707" y="90" fill="#8b949e" font-size="9">InitializeViewModels() 시도 → AttrSet null → early return</text>
+    <text x="707" y="90" fill="#8b949e" font-size="9">VM 바인딩 없음 — Actor 초기화만 수행</text>
 
     <line x1="822" y1="100" x2="822" y2="118" stroke="#3fb950" stroke-width="1" marker-end="url(#ag)"/>
 
-    <!-- Step 2: OnRep_PlayerState → ASC Init + VM -->
+    <!-- Step 2: AcknowledgePossession → ASC Init + UI Bind -->
     <rect x="695" y="120" width="255" height="82" rx="5" fill="#161b22" stroke="#3fb95044"/>
-    <text x="707" y="136" fill="#3fb950" font-size="10" font-weight="600">OnRep_PlayerState()</text>
-    <text x="707" y="150" fill="#e6edf3" font-size="9">InitAbilityActorInfo(this, this)</text>
+    <text x="707" y="136" fill="#3fb950" font-size="10" font-weight="600">PC AcknowledgePossession()</text>
+    <text x="707" y="150" fill="#e6edf3" font-size="9">Character::InitAbilityActorInfoForClient()</text>
     <text x="707" y="164" fill="#3fb950" font-size="9" font-weight="600">ASC 초기화 ✅</text>
-    <text x="707" y="182" fill="#e6edf3" font-size="9">InitializeViewModels()</text>
-    <text x="707" y="196" fill="#3fb950" font-size="9" font-weight="600">→ Valid ✅ StatsBar 정상</text>
+    <text x="707" y="182" fill="#e6edf3" font-size="9">EnsureUIManager + BindCurrentPawnUI</text>
+    <text x="707" y="196" fill="#3fb950" font-size="9" font-weight="600">→ BindModels ✅ StatsBar 정상</text>
 
     <!-- 결과 -->
     <rect x="695" y="264" width="255" height="26" rx="5" fill="#23863622" stroke="#3fb95044"/>
@@ -124,7 +124,7 @@
 
     <!-- 핵심 포인트 표시 -->
     <rect x="707" y="218" width="230" height="30" rx="4" fill="#0a0e17" stroke="#00e5ff44"/>
-    <text x="822" y="237" fill="#00e5ff" font-size="9" text-anchor="middle">ASC 초기화 후 VM 바인딩 → 순서 보장</text>
+    <text x="822" y="237" fill="#00e5ff" font-size="9" text-anchor="middle">ASC 초기화 후 UIManager BindModels → 순서 보장</text>
 
 
     <!-- ============================================ -->
@@ -141,10 +141,10 @@
     <text x="27" y="403" fill="#8b949e" font-size="9">Listen Server에서는 호스트=서버라 타이밍 차이 없음 → 문제 미발생</text>
 
     <rect x="500" y="345" width="465" height="68" rx="5" fill="#161b22" stroke="#3fb95044"/>
-    <text x="512" y="361" fill="#3fb950" font-size="10" font-weight="600">해결: 양쪽 호출 + 중복 가드</text>
-    <text x="512" y="375" fill="#e6edf3" font-size="9">BeginPlay와 OnRep_PlayerState 양쪽에서 호출</text>
-    <text x="512" y="389" fill="#e6edf3" font-size="9">중복 가드 (if SurvivalViewModel return) + AttrSet null 체크</text>
-    <text x="512" y="403" fill="#8b949e" font-size="9">ASC 준비 완료가 보장된 시점에서만 SurvivalViewModel 바인딩</text>
+    <text x="512" y="361" fill="#3fb950" font-size="10" font-weight="600">해결: PC 소유 바인딩 경로로 일원화</text>
+    <text x="512" y="375" fill="#e6edf3" font-size="9">AcknowledgePossession에서 ASC 초기화 후 BindCurrentPawnUI</text>
+    <text x="512" y="389" fill="#e6edf3" font-size="9">UIManager::BindModels가 VM 4종을 생성/주입</text>
+    <text x="512" y="403" fill="#8b949e" font-size="9">SurvivalViewModel은 준비된 ASC에만 바인딩</text>
 
 
     <!-- ============================================ -->
