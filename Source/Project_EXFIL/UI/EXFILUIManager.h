@@ -60,6 +60,12 @@ private:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> CrosshairWidget;
 
+	UPROPERTY()
+	TSubclassOf<UInventoryPanelWidget> InventoryPanelClass;
+
+	UPROPERTY()
+	TSubclassOf<UUserWidget> CrosshairWidgetClass;
+
 	TWeakObjectPtr<UInventoryComponent> BoundInventoryComponent;
 	TWeakObjectPtr<UEquipmentComponent> BoundEquipmentComponent;
 	TWeakObjectPtr<UCraftingComponent> BoundCraftingComponent;
@@ -79,9 +85,15 @@ private:
 
 	bool bWantsCrosshairVisible = false;
 
+	bool EnsureInventoryPanelReady();
+	void ApplyViewModelsToInventoryPanel();
+	bool EnsureCrosshairWidgetReady();
+
 	void UpdateCrosshairVisibility();
 
 	void SetInputModeGame();
 
 	void SetInputModeUIOnly();
+
+	void LogUIState(const TCHAR* Context) const;
 };
