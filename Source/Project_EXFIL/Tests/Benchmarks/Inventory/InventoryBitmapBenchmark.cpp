@@ -225,8 +225,7 @@ FBenchmarkFixture BuildFixture(const FBenchmarkCase& BenchmarkCase)
 	return Fixture;
 }
 
-// Before source: pre-RowBitmap InventoryComponent implementation, restored from
-// commit 57fe371^ where AreSlotsFree scanned GridSlots cell-by-cell.
+// Pre-RowBitmap baseline: scans GridSlots cell-by-cell instead of using the bitmap.
 bool AreSlotsFree_Before(const FBenchmarkFixture& Fixture, FIntPoint Position, FItemSize Size)
 {
 	if (Position.X < 0 || Position.Y < 0)
@@ -273,8 +272,7 @@ bool FindFirstAvailableSlot_Before(
 	return false;
 }
 
-// After source: current InventoryComponent bitmap path, mirrored from
-// AreSlotsFree_Internal without the ignore-instance branch.
+// Current bitmap path, mirrored from AreSlotsFree_Internal without the ignore-instance branch.
 bool AreSlotsFree_After(const FBenchmarkFixture& Fixture, FIntPoint Position, FItemSize Size)
 {
 	if (Size.Width <= 0 || Size.Height <= 0
@@ -304,7 +302,7 @@ bool AreSlotsFree_After(const FBenchmarkFixture& Fixture, FIntPoint Position, FI
 	return true;
 }
 
-// After source: current InventoryComponent::FindFirstAvailableSlot bitmap path.
+// Current InventoryComponent::FindFirstAvailableSlot bitmap path.
 bool FindFirstAvailableSlot_After(
 	const FBenchmarkFixture& Fixture, FItemSize Size, FIntPoint& OutPosition)
 {
