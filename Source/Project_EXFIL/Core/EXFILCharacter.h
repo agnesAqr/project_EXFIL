@@ -12,6 +12,7 @@ class UCraftingComponent;
 class UEquipmentComponent;
 class UGameplayAbility;
 class UGameplayEffect;
+class UHitRewindComponent;
 class UInputAction;
 class UInventoryComponent;
 class UMaterialInterface;
@@ -51,7 +52,8 @@ public:
 
 	
 	UFUNCTION(Server, Reliable)
-	void Server_ConfirmHit(AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal);
+	void Server_ConfirmHit(AActor* HitActor, FVector_NetQuantize TraceStart,
+		FVector_NetQuantizeNormal TraceDirection, float FireServerTime);
 
 	
 	UFUNCTION(NetMulticast, Unreliable)
@@ -101,6 +103,25 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float FireRange = 5000.f;
+
+	// 서버 rewind hit 검증용 capsule history (서버 전용, replicated 아님).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+	TObjectPtr<UHitRewindComponent> HitRewindComponent;
+
+	// shooter가 서버에 전달한 조준 방향이 서버가 아는 control rotation과 이 각도(deg) 이상
+	// 벌어지면 aim-deviation으로 간주. RemoteViewPitch 양자화 + time-shift 흡수를 위해 느슨하게 둔다.
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float MaxAimDeviationDegrees = 30.f;
+
+	// true면 aim-deviation 시 hit을 거부, false면 로그만 남기고 통과 (튜닝용).
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	bool bRejectOnAimDeviation = true;
+
+	// 클라가 보고한 TraceStart가 서버가 아는 pawn 시점 위치에서 이 거리(cm) 이상 벗어나면
+	// 원점 위조로 간주하고 reject. spring arm 카메라 오프셋 + rewind window 동안의
+	// 이동량을 흡수할 만큼 느슨하게 둔다.
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float MaxTraceStartDistance = 600.f;
 
 	
 	UPROPERTY(EditAnywhere, Category = "Combat")

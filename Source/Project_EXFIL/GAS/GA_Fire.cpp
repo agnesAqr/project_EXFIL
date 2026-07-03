@@ -5,6 +5,7 @@
 #include "Data/Equipment/EquipmentComponent.h"
 #include "Core/EXFILCharacter.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/GameStateBase.h"
 
 UGA_Fire::UGA_Fire()
 {
@@ -84,8 +85,13 @@ void UGA_Fire::ActivateAbility(
     {
         if (OwnerChar && OwnerChar->IsLocallyControlled())
         {
+            float FireServerTime = 0.f;
+            if (const AGameStateBase* GameState = AvatarActor->GetWorld()->GetGameState<AGameStateBase>())
+            {
+                FireServerTime = GameState->GetServerWorldTimeSeconds();
+            }
             OwnerChar->Server_ConfirmHit(
-                HitResult.GetActor(), HitResult.ImpactPoint, HitResult.ImpactNormal);
+                HitResult.GetActor(), TraceStart, CameraRotation.Vector(), FireServerTime);
         }
     }
 

@@ -8,7 +8,9 @@
 #include "Inventory/InventoryComponent.h"
 #include "Crafting/CraftingComponent.h"
 #include "Data/Equipment/EquipmentComponent.h"
+#include "Core/HitRewindComponent.h"
 #include "Core/EXFILPlayerController.h"
+#include "GameFramework/GameStateBase.h"
 #include "EnhancedInputComponent.h"
 #include "EngineUtils.h"
 #include "World/WorldItem.h"
@@ -33,6 +35,7 @@ AEXFILCharacter::AEXFILCharacter()
     AbilitySystemComponent->SetIsReplicated(true);
     AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
     SurvivalAttributes = CreateDefaultSubobject<USurvivalAttributeSet>(TEXT("SurvivalAttributes"));
+    HitRewindComponent = CreateDefaultSubobject<UHitRewindComponent>(TEXT("HitRewindComponent"));
 }
 
 void AEXFILCharacter::InitAbilityActorInfoForClient()
@@ -224,35 +227,116 @@ void AEXFILCharacter::OnAimToggled()
 }
 
 void AEXFILCharacter::Server_ConfirmHit_Implementation(
-    AActor* HitActor, FVector_NetQuantize HitLocation, FVector_NetQuantize HitNormal)
+    AActor* HitActor, FVector_NetQuantize TraceStart,
+    FVector_NetQuantizeNormal TraceDirection, float FireServerTime)
 {
-    APlayerController* PC = Cast<APlayerController>(GetController());
-    if (!PC) return;
-
-    FVector CameraLocation;
-    FRotator CameraRotation;
-    PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
-
-    FHitResult VerifyHit;
-    FCollisionQueryParams Params;
-    Params.AddIgnoredActor(this);
-    const FVector TraceEnd = CameraLocation + CameraRotation.Vector() * FireRange;
-    GetWorld()->LineTraceSingleByChannel(VerifyHit, CameraLocation, TraceEnd, ECC_Pawn, Params);
-
-    if (VerifyHit.GetActor() != HitActor)
+    if (RespawnPhase != ERespawnPhase::Alive)
     {
-        UE_LOG(LogEXFIL, Warning, TEXT("Server_ConfirmHit: hit verification mismatch"));
+        return;
+    }
+    if (!EquipmentComponent || !EquipmentComponent->HasWeaponEquipped())
+    {
+        return;
+    }
+    if (!AbilitySystemComponent)
+    {
         return;
     }
 
     AEXFILCharacter* TargetChar = Cast<AEXFILCharacter>(HitActor);
-    if (!TargetChar || !TargetChar->GetAbilitySystemComponent()) return;
+    if (!TargetChar || TargetChar == this)
+    {
+        return;
+    }
+    if (TargetChar->RespawnPhase != ERespawnPhase::Alive || !TargetChar->GetAbilitySystemComponent())
+    {
+        return;
+    }
 
-    if (DamageEffectClass && AbilitySystemComponent)
+    const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState<AGameStateBase>() : nullptr;
+    if (!GameState)
+    {
+        return;
+    }
+
+    // TraceStart sanity: 원점은 클라 주장값이므로 서버가 아는 pawn 시점 위치와 대조.
+    // 이 검사가 없으면 원점 위조 하나로 segment/LOS 검증 전체가 우회된다.
+    const float StartDistSq = FVector::DistSquared(FVector(TraceStart), GetPawnViewLocation());
+    if (StartDistSq > FMath::Square(MaxTraceStartDistance))
+    {
+        UE_LOG(LogEXFIL, Warning, TEXT("Server_ConfirmHit: reason=TraceStartSanity dist=%.0f max=%.0f shooter=%s"),
+            FMath::Sqrt(StartDistSq), MaxTraceStartDistance, *GetName());
+        return;
+    }
+
+    const float MaxRewind = HitRewindComponent ? HitRewindComponent->GetMaxHitRewindSeconds() : 0.2f;
+    const float Now = GameState->GetServerWorldTimeSeconds();
+    const float ClampedTime = FMath::Clamp(FireServerTime, Now - MaxRewind, Now);
+
+    FVector CapsuleLoc;
+    float CapsuleRadius = 0.f;
+    float CapsuleHalfHeight = 0.f;
+    UHitRewindComponent* TargetRewind = TargetChar->FindComponentByClass<UHitRewindComponent>();
+    const bool bRewound = TargetRewind
+        && TargetRewind->GetCapsuleAtTime(ClampedTime, CapsuleLoc, CapsuleRadius, CapsuleHalfHeight);
+    if (!bRewound)
+    {
+        const UCapsuleComponent* TargetCapsule = TargetChar->GetCapsuleComponent();
+        if (!TargetCapsule)
+        {
+            return;
+        }
+        CapsuleLoc = TargetCapsule->GetComponentLocation();
+        CapsuleRadius = TargetCapsule->GetScaledCapsuleRadius();
+        CapsuleHalfHeight = TargetCapsule->GetScaledCapsuleHalfHeight();
+    }
+
+    const FVector Dir = FVector(TraceDirection).GetSafeNormal();
+    if (Dir.IsNearlyZero())
+    {
+        return;
+    }
+    const FVector ShotStart = TraceStart;
+    const FVector ShotEnd = ShotStart + Dir * FireRange;
+    const FVector CapsuleTop = CapsuleLoc + FVector(0.f, 0.f, CapsuleHalfHeight - CapsuleRadius);
+    const FVector CapsuleBottom = CapsuleLoc - FVector(0.f, 0.f, CapsuleHalfHeight - CapsuleRadius);
+
+    FVector ClosestOnShot, ClosestOnAxis;
+    FMath::SegmentDistToSegmentSafe(ShotStart, ShotEnd, CapsuleBottom, CapsuleTop, ClosestOnShot, ClosestOnAxis);
+    if (FVector::DistSquared(ClosestOnShot, ClosestOnAxis) > FMath::Square(CapsuleRadius))
+    {
+        return;
+    }
+
+    // 느슨한 tolerance: RemoteViewPitch 양자화 + time-shift로 인한 false-reject 방지.
+    if (const APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        const FVector ControlDir = PC->GetControlRotation().Vector();
+        const float AngleDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(ControlDir, Dir), -1.f, 1.f)));
+        if (AngleDeg > MaxAimDeviationDegrees)
+        {
+            UE_LOG(LogEXFIL, Warning, TEXT("Server_ConfirmHit: reason=AimDeviation angle=%.1f max=%.1f reject=%d shooter=%s"),
+                AngleDeg, MaxAimDeviationDegrees, bRejectOnAimDeviation ? 1 : 0, *GetName());
+            if (bRejectOnAimDeviation)
+            {
+                return;
+            }
+        }
+    }
+
+    FHitResult LosHit;
+    FCollisionQueryParams LosParams;
+    LosParams.AddIgnoredActor(this);
+    LosParams.AddIgnoredActor(TargetChar);
+    if (GetWorld()->LineTraceSingleByChannel(LosHit, ShotStart, CapsuleLoc, ECC_Visibility, LosParams))
+    {
+        return;
+    }
+
+    if (DamageEffectClass)
     {
         FGameplayEffectContextHandle Context = AbilitySystemComponent->MakeEffectContext();
         Context.AddSourceObject(this);
-        Context.AddHitResult(VerifyHit);
 
         FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(
             DamageEffectClass, 1.f, Context);
