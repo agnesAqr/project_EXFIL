@@ -29,7 +29,7 @@
 
 ```
   Source/Project_EXFIL/
-  ├── Core/              EXFILCharacter · EXFILGameMode · EXFILPlayerController + EXFILLog
+  ├── Core/              EXFILCharacter · EXFILGameMode · EXFILPlayerController · HitRewindComponent + EXFILLog
   ├── Inventory/         InventoryComponent + FastArray/슬롯/아이템 구조체
   ├── GAS/               SurvivalAttributeSet · GA_Fire · SurvivalViewModel
   ├── Crafting/          CraftingComponent
@@ -70,7 +70,7 @@
 | **Crafting** | DataTable 레시피 기반, 원자적 재료 소모 + 실패 시 롤백, 서버 타이머 기반 결과 지급 |
 | **Equipment** | 6슬롯 (Head/Face/Eyewear/Body/Weapon1/Weapon2), 장착 시 GE Apply / 해제 시 Remove |
 | **Survival Stats** | GAS AttributeSet 8속성 (Health, Hunger, Thirst, Stamina + Max), Pre/Post 클램핑 2단계 |
-| **Line Trace Shooting** | LocalPredicted GA_Fire → Server_ConfirmHit (서버 라인 트레이스 재검증) |
+| **Line Trace Shooting** | LocalPredicted GA_Fire → Server_ConfirmHit (서버 rewind 히트 재검증: 원점/조준각 sanity + 캡슐 히스토리 + LOS) |
 | **Death / Respawn** | `ERespawnPhase` Replicated enum (Alive→Dead→HiddenDead→Respawning→Alive), OnRep 단일 경로로 late-joiner 안전 |
 
 ---
@@ -113,9 +113,13 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - FastArray 콜백(`PreReplicatedRemove` / `PostReplicatedAdd` / `PostReplicatedChange` / `PostReplicatedReceive`)에서 변경분만 캐시에 패치 후 ViewModel → IconOverlay까지 dirty 인덱스 전파
 - **Remove 경로도 부분 패치:** 서버 `RemoveItem_Internal` / `ConsumeItemByID_Internal`(full-stack)은 `RemoveAtSwap(Index, 1, EAllowShrinking::No)` 직후 `ApplyItemRemoved_Local`로 캐시를 갱신. 클라이언트는 `PreReplicatedRemove`에서 제거 항목을 `PendingRemoves`에 캡처하고, FastArray 내부 mutation 완료 후 `PostReplicatedReceive`에서 같은 헬퍼를 호출. 제거 footprint는 같은 replication batch의 Add/Change가 선처리될 수 있으므로 `OccupyingItemID == Removed.InstanceID`일 때만 슬롯을 clear
 
-### FEATURE 02 — 서버 히트 재검증 슈팅
-- `GA_Fire` (LocalPredicted, InstancedPerActor) → 클라이언트가 카메라 기준 라인 트레이스 (5000cm, ECC_Pawn)
-- `Server_ConfirmHit (Reliable)` → 서버에서 동일 시점 라인 트레이스 재실행 → 클라가 보고한 액터와 일치할 때만 데미지 적용
+### FEATURE 02 — 서버 히트 재검증 슈팅 (Rewind Validation)
+- `GA_Fire` (LocalPredicted, InstancedPerActor) → 클라이언트가 카메라 기준 라인 트레이스 (5000cm, ECC_Pawn) 후 `Server_ConfirmHit(HitActor, TraceStart, TraceDirection, FireServerTime)` (Reliable) 전송
+- 서버 재검증 파이프라인 — 하나라도 실패하면 히트 거부:
+  1. **원점 sanity** — 클라가 보고한 `TraceStart`를 서버가 아는 pawn 시점 위치와 대조 (기본 600cm 초과 시 원점 위조로 거부)
+  2. **캡슐 rewind** — `UHitRewindComponent`가 30Hz로 기록한 타겟 캡슐 히스토리를 `FireServerTime`(최대 0.2초 rewind로 클램프)으로 보간 → 발사 선분–캡슐 교차 검사
+  3. **조준각 sanity** — 발사 방향과 서버가 아는 control rotation의 각도 차가 기본 30° 초과 시 거부 (`bRejectOnAimDeviation` 토글, RemoteViewPitch 양자화 흡수를 위해 느슨하게 설정)
+  4. **LOS 재확인** — 서버 ECC_Visibility 라인 트레이스로 shooter→타겟 시야 차단 여부 확인 (월핵 차단)
 - 검증 통과 시 `MakeOutgoingSpec → ApplyGameplayEffectSpecToTarget`로 `DamageEffectClass` 적용
 - 피격: `Multicast_PlayHitReact` (Unreliable) → 0.2초 오버레이 머티리얼 플래시
 
@@ -134,7 +138,7 @@ Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
 - 리플리케이션 조건 전략 분리:
   - `COND_OwnerOnly` — Inventory(`InventoryList`), Equipment(`ReplicatedSlots`), Crafting(`bIsCrafting`, `CurrentRecipeID`), Survival 상세 스탯(`Hunger`, `Thirst`, `Stamina` 계열)
   - `COND_None` — WorldItem, `Health`/`MaxHealth`, ERespawnPhase (전체 가시성 또는 확장 가능성 필요)
-- 치트 방어 3계층: 파라미터 sanity check → 서버 라인 트레이스 재검증 → `HasAuthority` 가드
+- 치트 방어 3계층: 파라미터 sanity check → 서버 rewind 히트 재검증(원점/조준각/캡슐/LOS) → `HasAuthority` 가드
 
 ### FEATURE 05 — Deferred UI Refresh + Drag & Drop
 - ViewModel 갱신과 Slate 레이아웃 측정의 순서가 보장되지 않는 문제를, `bLayoutReady` + `bHasPendingOverlayRefresh` 2조건이 모두 충족된 시점에서 한 번만 flush 하는 패턴으로 해결 (데이터 동기화 polling 없음, NativePaint 트리거)
@@ -165,6 +169,7 @@ classDiagram
             +UInventoryComponent* InventoryComp
             +UEquipmentComponent* EquipmentComp
             +UCraftingComponent* CraftingComp
+            +UHitRewindComponent* HitRewindComponent «server-only capsule history»
             +ERespawnPhase RespawnPhase «ReplicatedUsing»
             +PossessedBy() — server-side ASC init + GA_Fire grant
             +InitAbilityActorInfoForClient() — called by PC.AcknowledgePossession

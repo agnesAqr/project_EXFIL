@@ -122,7 +122,7 @@
     <text x="27" y="350" fill="#58a6ff" font-size="8">Server_RequestConsumeItemByID</text>
     <text x="340" y="350" fill="#8b949e" font-size="8">Inventory</text>
     <text x="530" y="350" fill="#8b949e" font-size="8">소비 (스택 차감 + GE 적용)</text>
-    <text x="830" y="350" fill="#3fb950" font-size="8">!IsNone &amp;&amp; Count>0</text>
+    <text x="830" y="350" fill="#3fb950" font-size="8">!IsNone &amp;&amp; Count==1</text>
 
     <rect x="15" y="356" width="950" height="16" rx="0" fill="transparent"/>
     <text x="27" y="368" fill="#58a6ff" font-size="8">Server_RequestRemoveItem</text>
@@ -134,7 +134,7 @@
     <text x="27" y="386" fill="#58a6ff" font-size="8">Server_RequestMoveItem</text>
     <text x="340" y="386" fill="#8b949e" font-size="8">Inventory</text>
     <text x="530" y="386" fill="#8b949e" font-size="8">그리드 내 이동</text>
-    <text x="830" y="386" fill="#3fb950" font-size="8">ID Valid + Index</text>
+    <text x="830" y="386" fill="#3fb950" font-size="8">ID Valid + Pos ≥ 0</text>
 
     <rect x="15" y="392" width="950" height="16" rx="0" fill="transparent"/>
     <text x="27" y="404" fill="#58a6ff" font-size="8">Server_RequestDropItem</text>
@@ -153,7 +153,7 @@
     <text x="27" y="440" fill="#3fb950" font-size="8">Server_RequestUnequipToInventory / At</text>
     <text x="340" y="440" fill="#8b949e" font-size="8">Equipment</text>
     <text x="530" y="440" fill="#8b949e" font-size="8">장비→인벤 / 지정좌표 배치</text>
-    <text x="830" y="440" fill="#3fb950" font-size="8">Slot Valid (+Pos)</text>
+    <text x="830" y="440" fill="#3fb950" font-size="8">Slot != None</text>
 
     <rect x="15" y="446" width="950" height="16" rx="0" fill="#3fb95008"/>
     <text x="27" y="458" fill="#3fb950" font-size="8">Server_RequestDropEquippedItem</text>
@@ -179,13 +179,13 @@
     <text x="27" y="512" fill="#f85149" font-size="8">Server_RequestPickupItem</text>
     <text x="340" y="512" fill="#8b949e" font-size="8">Character</text>
     <text x="530" y="512" fill="#8b949e" font-size="8">월드 아이템 픽업</text>
-    <text x="830" y="512" fill="#3fb950" font-size="8">Actor != null</text>
+    <text x="830" y="512" fill="#3fb950" font-size="8">IsValid + 거리 ≤ 400cm</text>
 
     <rect x="15" y="518" width="950" height="16" rx="0" fill="transparent"/>
     <text x="27" y="530" fill="#f85149" font-size="8">Server_ConfirmHit</text>
     <text x="340" y="530" fill="#8b949e" font-size="8">Character</text>
     <text x="530" y="530" fill="#8b949e" font-size="8">슈팅 히트 검증</text>
-    <text x="830" y="530" fill="#3fb950" font-size="8">HitActor != null</text>
+    <text x="830" y="530" fill="#3fb950" font-size="8">Alive/무기/타겟 + rewind 검증</text>
 
     <line x1="15" y1="536" x2="965" y2="536" stroke="#30363d" stroke-width="1"/>
 
@@ -202,8 +202,8 @@
     <text x="730" y="586" fill="#3fb950" font-size="9">12개 RPC 전수 적용</text>
 
     <rect x="15" y="604" width="950" height="30" rx="4" fill="#161b22" stroke="#d2992244"/>
-    <text x="27" y="624" fill="#d29922" font-size="9" font-weight="600">2차 — 서버 라인 트레이스 재검증</text>
-    <text x="320" y="624" fill="#8b949e" font-size="9">에임봇, 월핵 (클라이언트 조작) 차단</text>
+    <text x="27" y="624" fill="#d29922" font-size="9" font-weight="600">2차 — 서버 rewind 히트 재검증</text>
+    <text x="320" y="624" fill="#8b949e" font-size="9">원점/조준각 sanity + 캡슐 rewind + LOS 재확인 — 에임봇/월핵 차단</text>
     <text x="730" y="624" fill="#d29922" font-size="9">Server_ConfirmHit에 적용</text>
 
     <rect x="15" y="642" width="950" height="30" rx="4" fill="#161b22" stroke="#f8514944"/>
