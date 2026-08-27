@@ -375,20 +375,6 @@ git clone https://github.com/agnesAqr/project_EXFIL.git
 
 ---
 
-## 📄 관련 시각 자료 (`docs/Portfolio/`)
-
-인터랙티브 HTML 다이어그램:
-
-- [Shooting 네트워크 흐름](docs/Portfolio/ShootingNetworkFlow.html)
-- [GAS 통합 파이프라인](docs/Portfolio/GASPipeline.html)
-- [Replication 아키텍처](docs/Portfolio/ReplicationArch.html)
-- [그리드 + Bitmap 시각화](docs/Portfolio/GridBitmapVisualization.html)
-- [캐시 분리 아키텍처 (FastArray + 로컬 캐시)](docs/Portfolio/CacheSeparationArch.html)
-- [ASC 초기화 타이밍](docs/Portfolio/ASCTimingDiagram.html)
-- [최적화 비교표](docs/Portfolio/OptimizationTable.html)
-
----
-
 ## 📝 라이선스
 
 본 프로젝트는 포트폴리오 목적으로 제작되었습니다.
