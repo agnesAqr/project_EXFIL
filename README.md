@@ -1,384 +1,239 @@
 # Project EXFIL
 
-**UE5 C++ Dedicated Server 기반 멀티플레이어 서바이벌 시스템 프로토타입**
+#### 타르코프 스타일 그리드 인벤토리와 서버 히트 리와인드 검증 슈팅을 </br>UE 5.6 C++ Dedicated Server 아키텍처로 구현한 멀티플레이어 서바이벌 시스템 프로토타입
 
-타르코프 스타일 그리드 인벤토리, GAS 통합 전투, 크래프팅 시스템을 UE 5.6 C++ Dedicated Server 아키텍처로 구현한 포트폴리오 프로젝트.
+<!-- 대표 미디어 판정: 다중 클라이언트 조작·UI 상호작용이 보여야 이해되는 프로젝트 → mp4가 적합하나
+     GitHub user-attachments mp4가 없어 기존 README의 실재 시연 영상(YouTube)을 썸네일 링크로 사용. — 확인 필요 #2 -->
 
----
+[![Project EXFIL 시연 영상](https://github.com/user-attachments/assets/c94dbeb5-e22b-4753-9341-837f87aa7839)](https://youtu.be/YY7HUjYSVkw)
 
-## 🎬 시연 영상
+<sub>썸네일을 클릭하면 시연 영상을 시청할 수 있습니다.</sub>
 
-[시연 영상 바로 보기](https://youtu.be/YY7HUjYSVkw)
 
----
+## Contents
 
-## 📌 개요
+| # | 섹션 | 내용 |
+|---|---|---|
+| 1 | [Overview](#1-overview) | UE 5.6 · GAS · MVVM 스택과 담당 범위 |
+| 2 | [Architecture](#2-architecture) | Client / Server 권한 경계와 데이터 흐름 |
+| 3 | [Key Features](#3-key-features) | 그리드 인벤토리 · 히트 리와인드 · GAS · 리플리케이션 |
+| 4 | [Performance](#4-performance) | 비트맵 탐색 5.38x 개선 측정 기록과 조건 |
+| 5 | [Getting Started](#5-getting-started) | 빌드 요구사항과 개발 환경 세팅 |
+| 6 | [Documentation](#6-documentation) | 벤치마크 · 자동화 테스트 · 아키텍처 문서 |
 
-| | |
+
+## 1. Overview
+
+| Category | Description                                                                                                                                    |
+|---|------------------------------------------------------------------------------------------------------------------------------------------------|
+| Engine | Unreal Engine 5.6 (Launcher 배포판)                                                                                                               |
+| Language | C++ (게임플레이 로직 전부 C++ · 에셋 조립과 UMG 레이아웃은 에디터/BP)                                                                                                |
+| Core Tech | <ul><li>Dedicated Server 리플리케이션 (FastArraySerializer)</li><li>GAS (GameplayAbilities)</li><li>MVVM (CommonUI + ModelViewViewModel)</li></ul> |
+| Genre / Type | 멀티플레이어 서바이벌(익스트랙션 슈터) 시스템 프로토타입                                                                                                                |
+| Period | 2026.03.18 – 2026.05.26 (실 개발 : 27일)                                                                                                           |
+| Team | Solo                                                                                                                                           |
+
+**My Role**
+
+| 담당 영역 | 구현 범위 |
 |---|---|
-| **엔진** | Unreal Engine 5.6 |
-| **구현 방식** | 게임플레이 로직은 C++, 에셋 조립과 UMG 레이아웃은 에디터/BP 에셋 사용 |
-| **아키텍처** | Dedicated Server / Server Authority |
-| **개발 기간** | 2026.03.18 - 2026.04.27 |
-| **작업 인원** | 1명 |
-| **주요 모듈** | GameplayAbilities · ModelViewViewModel · CommonUI · NetCore |
+| Inventory | <ul><li>10×20 그리드 배치 알고리즘</li><li>RowBitmap O(H) 빈 슬롯 탐색</li><li>FastArray 델타 캐시 부분 패치</li><li>스택 병합·회전·드래그앤드롭</li></ul> |
+| Hit Rewind Validation | <ul><li>UHitRewindComponent (30Hz 캡슐 히스토리)</li><li>Server_ConfirmHit 4단계 재검증 (원점·리와인드 캡슐 교차·조준각·LOS)</li></ul> |
+| GAS | <ul><li>SurvivalAttributeSet 8속성</li><li>2단계 클램핑</li><li>GA_Fire</li><li>장비/소모품 GameplayEffect 파이프라인</li></ul> |
+| Model Components | <ul><li>EquipmentComponent (6슬롯)</li><li>CraftingComponent (서버 타이머·원자적 재료 소모)</li><li>ItemDataSubsystem (DataTable + 지연 로드 캐시)</li></ul> |
+| ViewModel · View | <ul><li>Inventory/Equipment/Crafting/Survival ViewModel</li><li>CommonUI 위젯</li><li>멀티셀 아이콘 오버레이</li><li>Dirty Index 부분 갱신</li></ul> |
 
----
+<!-- Solo 프로젝트 (전 커밋 동일 인물 — git identity 2개: 강수현 <rkdtngus3579@gmail.com> 82커밋,
+     suhyun <86099781+agnesAqr@users.noreply.github.com> 2커밋, 동일 GitHub 계정 agnesAqr) — My Commits 링크 생략 -->
 
-## 📁 프로젝트 구조
 
-```
-  Source/Project_EXFIL/
-  ├── Core/              EXFILCharacter · EXFILGameMode · EXFILPlayerController · HitRewindComponent + EXFILLog
-  ├── Inventory/         InventoryComponent + FastArray/슬롯/아이템 구조체
-  ├── GAS/               SurvivalAttributeSet · GA_Fire · SurvivalViewModel
-  ├── Crafting/          CraftingComponent
-  ├── Data/              ItemDataSubsystem + Item/Crafting 데이터 타입
-  │   └── Equipment/     EquipmentComponent + Equipment 슬롯 타입
-  ├── UI/                MVVM ViewModel/View / 드래그드롭 / UIManager
-  ├── World/             WorldItem
-  ├── Project_EXFILCharacter.h
-  ├── Project_EXFILGameMode.h
-  ├── Project_EXFILPlayerController.h
-  └── Project_EXFIL.h
-```
+## 2. Architecture
 
-> Core 클래스(`AEXFILCharacter` 등)는 Epic 템플릿 베이스(`AProject_EXFILCharacter` 등)를 상속해 EXFIL 도메인 로직을 확장합니다.
-
----
-
-## 📊 기술 스택
-
-| 분류 | 기술 |
-|------|------|
-| 엔진 | UE 5.6 |
-| 언어 | C++ |
-| GAS | AbilitySystemComponent (Mixed Mode), AttributeSet, GameplayAbility, GameplayEffect |
-| 네트워크 | Dedicated Server, Server RPC, OnRep, Multicast, **FFastArraySerializer (NetDeltaSerialize)** |
-| UI | CommonUI (UCommonActivatableWidget), **MVVM (ModelViewViewModel · FieldNotify)**, Slate NativePaint |
-| 입력 | Enhanced Input (`UInputAction` + `IMC_Default`), 캐릭터 레벨 직접 `BindKey` 미사용 |
-| 데이터 | UDataTable + CSV, UItemDataSubsystem (GameInstanceSubsystem), TSoftObjectPtr / TSoftClassPtr 지연 로드 |
-
----
-
-## 🎯 핵심 시스템
-
-| 시스템 | 설명 |
-|--------|------|
-| **Grid Inventory (10×20)** | 다중 크기 아이템 배치, 회전, 드래그앤드롭, 스택 병합, 비트맵 기반 O(H) 슬롯 검색 |
-| **FastArray Replication** | `FInventoryFastArray` + `NetDeltaSerialize`, `PreReplicatedRemove` 캡처 + `PostReplicatedAdd/Change` 부분 패치 + `PostReplicatedReceive` flush |
-| **Crafting** | DataTable 레시피 기반, 원자적 재료 소모 + 실패 시 롤백, 서버 타이머 기반 결과 지급 |
-| **Equipment** | 6슬롯 (Head/Face/Eyewear/Body/Weapon1/Weapon2), 장착 시 GE Apply / 해제 시 Remove |
-| **Survival Stats** | GAS AttributeSet 8속성 (Health, Hunger, Thirst, Stamina + Max), Pre/Post 클램핑 2단계 |
-| **Line Trace Shooting** | LocalPredicted GA_Fire → Server_ConfirmHit (서버 rewind 히트 재검증: 원점/조준각 sanity + 캡슐 히스토리 + LOS) |
-| **Death / Respawn** | `ERespawnPhase` Replicated enum (Alive→Dead→HiddenDead→Respawning→Alive), OnRep 단일 경로로 late-joiner 안전 |
-
----
-
-## 🏗️ 아키텍처
-
-```
-View Layer (CommonUI Widgets + Drag/Drop Overlay)
-    │  Delegate / FieldNotify
-ViewModel Layer (InventoryViewModel · EquipmentViewModel · CraftingViewModel · SurvivalViewModel)
-    │  Delegate
-Model Layer (UInventoryComponent · UCraftingComponent · UEquipmentComponent)
-    │
-GAS Layer (USurvivalAttributeSet · GA_Fire · GE_Damage/Consumable/Equipment 등)
-    │
-Data Layer (UItemDataSubsystem · UDataTable · CSV)
-    │
-Network Layer (FastArray · Server RPC · OnRep · COND 전략 분리)
-```
-
-### 설계 원칙
-
-- **MVVM 단방향:** View → ViewModel → Model 방향으로만 참조. 게임플레이 상태 동기화는 Delegate / OnRep / FieldNotify 기반이며 Tick/Timer 기반 Model polling은 금지
-- **Server Authority:** 모든 게임 로직은 서버에서만 실행. 클라이언트는 Request → Server RPC → `_Internal` 3계층으로 요청만 전달
-- **Data-Driven:** 아이템 / 레시피 / 장비 스펙은 DataTable CSV. 텍스처·GE 클래스는 TSoftObjectPtr / TSoftClassPtr로 지연 로드 후 Subsystem 캐시
-- **Input routing:** 인벤토리 Tab 입력은 상태에 따라 처리 계층이 다릅니다. 닫힌 상태의 열기만 Enhanced Input `IA_ToggleInventory`가 담당하고, 열린 상태에서는 UI가 `UIOnly/Menu`로 포커스를 잡은 뒤 `UInventoryPanelWidget::NativeOnKeyDown()`이 Tab 닫기와 드래그 중 R 회전을 처리합니다. 따라서 인벤토리 열린 상태의 Tab은 캐릭터 입력으로 내려가지 않습니다. `PlayerInputComponent->BindKey(EKeys::Tab, ...)` 직접 바인딩은 사용하지 않습니다.
-- **Crafting GA 제거 결정:** 제작은 UI 선택형 서버 권한 시스템이라 `UCraftingComponent`가 검증/재료 소모/타이머/결과 지급을 직접 처리합니다. 프로토타입 단계에서는 `UGA_Craft`가 별도 GA lifecycle 가치를 만들지 못해 제거했고, 제작 중 태그 기반 차단·쿨다운·코스트가 필요해지는 시점에만 GA 재도입을 검토합니다.
-- **Incremental Cache Patch:** FastArray의 Add/Change/Remove 변경분만 받아 캐시(`ItemIndexMap`, `ItemCountCache`, `RowBitmap`, `GridSlots`)를 부분 갱신. 서버 mutation은 dirty slot 수집 없이 캐시만 갱신하고, 클라이언트 FastArray 콜백만 `PendingDirtyIndices`를 모아 UI 갱신 범위를 전달. Remove는 `RemoveAtSwap`과 pending remove 캡처로 처리하며 전체 리빌드에 의존하지 않음
-
----
-
-## ✨ 핵심 기능 상세
-
-### FEATURE 01 — 그리드 인벤토리 + 비트맵 검색 + FastArray 델타 동기화
-- 1D `TArray`로 2D 그리드를 표현하는 타르코프 스타일 인벤토리 — 멀티셀 아이템 배치, 회전, 스택 병합
-- `RowBitmap (TArray<uint16>)` 기반 빈 영역 검증: **O(H)** (행당 비트 AND 1회, 현재 `GridWidth <= 16`으로 제한). 신규 배치와 이동/회전의 자기 footprint 무시 검사는 `AreSlotsFree_Internal`의 비트마스크 경로로 통합
-- `ItemIndexMap (TMap<FGuid, int32>)`로 인스턴스 탐색: **O(1)**
-- `ItemCountCache (TMap<FName, int32>)`로 ID별 수량 합계: **O(1)**
-- Replicated 데이터(`FInventoryFastArray InventoryList`) + 로컬 전용 캐시(GridSlots / TMap / Bitmap) 분리
-- FastArray 콜백(`PreReplicatedRemove` / `PostReplicatedAdd` / `PostReplicatedChange` / `PostReplicatedReceive`)에서 변경분만 캐시에 패치 후 ViewModel → IconOverlay까지 dirty 인덱스 전파
-- **Remove 경로도 부분 패치:** 서버 `RemoveItem_Internal` / `ConsumeItemByID_Internal`(full-stack)은 `RemoveAtSwap(Index, 1, EAllowShrinking::No)` 직후 `ApplyItemRemoved_Local`로 캐시를 갱신. 클라이언트는 `PreReplicatedRemove`에서 제거 항목을 `PendingRemoves`에 캡처하고, FastArray 내부 mutation 완료 후 `PostReplicatedReceive`에서 같은 헬퍼를 호출. 제거 footprint는 같은 replication batch의 Add/Change가 선처리될 수 있으므로 `OccupyingItemID == Removed.InstanceID`일 때만 슬롯을 clear
-
-### FEATURE 02 — 서버 히트 재검증 슈팅 (Rewind Validation)
-- `GA_Fire` (LocalPredicted, InstancedPerActor) → 클라이언트가 카메라 기준 라인 트레이스 (5000cm, ECC_Pawn) 후 `Server_ConfirmHit(HitActor, TraceStart, TraceDirection, FireServerTime)` (Reliable) 전송
-- 서버 재검증 파이프라인 — 하나라도 실패하면 히트 거부:
-  1. **원점 sanity** — 클라가 보고한 `TraceStart`를 서버가 아는 pawn 시점 위치와 대조 (기본 600cm 초과 시 원점 위조로 거부)
-  2. **캡슐 rewind** — `UHitRewindComponent`가 30Hz로 기록한 타겟 캡슐 히스토리를 `FireServerTime`(최대 0.2초 rewind로 클램프)으로 보간 → 발사 선분–캡슐 교차 검사
-  3. **조준각 sanity** — 발사 방향과 서버가 아는 control rotation의 각도 차가 기본 30° 초과 시 거부 (`bRejectOnAimDeviation` 토글, RemoteViewPitch 양자화 흡수를 위해 느슨하게 설정)
-  4. **LOS 재확인** — 서버 ECC_Visibility 라인 트레이스로 shooter→타겟 시야 차단 여부 확인 (월핵 차단)
-- 검증 통과 시 `MakeOutgoingSpec → ApplyGameplayEffectSpecToTarget`로 `DamageEffectClass` 적용
-- 피격: `Multicast_PlayHitReact` (Unreliable) → 0.2초 오버레이 머티리얼 플래시
-
-### FEATURE 03 — GAS 통합 파이프라인
-- `USurvivalAttributeSet` 8속성 (Health/MaxHealth, Hunger/MaxHunger, Thirst/MaxThirst, Stamina/MaxStamina) — 각각 `ReplicatedUsing = OnRep_*`
-- 복제 조건은 가시성 기준으로 분리: **Health/MaxHealth = `COND_None`** (다른 플레이어 HP 표시 필요), **Hunger/Thirst/Stamina (+Max) = `COND_OwnerOnly`** (개인 생존 스탯이라 본인 HUD에만 노출)
-- 클램핑 2단계: `PreAttributeChange` (CurrentValue 클램프) + `PostGameplayEffectExecute` (BaseValue 클램프 + Health ≤ 0 시 `OnDeath()`)
-- ASC Mixed Replication: GE는 Owner Client에만, GameplayCue / Tag는 전체 전파
-
-### FEATURE 04 — Dedicated Server 리플리케이션 전략
-- Server Authority 모델 — 클라는 Request → Server RPC → `_Internal` 3계층 패턴으로만 요청
-- **Server RPC 12개**(Inventory 4 · Equipment 4 · Crafting 2 · Character 2)
-  - 모든 Server RPC는 `_Implementation` 내부 sanity-check + early return
-  - Character RPC(`Server_ConfirmHit`, `Server_RequestPickupItem`)도 동일 정책으로 정리
-  - `_Validate` 실패는 클라이언트 disconnect 성격이므로, 정상 플레이에서도 발생 가능한 요청 실패는 `_Implementation`에서 서버 상태 기준으로 거부 처리
-- 리플리케이션 조건 전략 분리:
-  - `COND_OwnerOnly` — Inventory(`InventoryList`), Equipment(`ReplicatedSlots`), Crafting(`bIsCrafting`, `CurrentRecipeID`), Survival 상세 스탯(`Hunger`, `Thirst`, `Stamina` 계열)
-  - `COND_None` — WorldItem, `Health`/`MaxHealth`, ERespawnPhase (전체 가시성 또는 확장 가능성 필요)
-- 치트 방어 3계층: 파라미터 sanity check → 서버 rewind 히트 재검증(원점/조준각/캡슐/LOS) → `HasAuthority` 가드
-
-### FEATURE 05 — Deferred UI Refresh + Drag & Drop
-- ViewModel 갱신과 Slate 레이아웃 측정의 순서가 보장되지 않는 문제를, `bLayoutReady` + `bHasPendingOverlayRefresh` 2조건이 모두 충족된 시점에서 한 번만 flush 하는 패턴으로 해결 (데이터 동기화 polling 없음, NativePaint 트리거)
-- `InventoryIconOverlay`는 `UInventoryViewModel`이 만든 overlay delta(Upsert/Remove)를 소비하고, `UniformGridPanel` 위 `CanvasPanel`에 멀티셀 아이콘을 정확한 픽셀 위치로 배치
-- 드래그 시 회전(R 키) + 자동 스크롤 + 빈 영역 하이라이트(초록/빨강) 지원. 배치 가능 표시는 `bPredictedPlaceable` 기반 UX hint이며 최종 성공 여부는 서버가 재검증
-
----
-
-## ⚠️ 현재 한계
-
-- `AEXFILCharacter::BeginPlay()`의 시작 로드아웃(Bandage/Pistol/BodyArmor/Painkillers/Medkit)과 `AEXFILGameMode::SpawnTestWorldItems()`의 테스트 월드 스폰은 아직 DataTable/DataAsset로 분리되지 않은 데모용 seed 코드입니다.
-- `UItemDataSubsystem`의 `LoadSynchronous()` 기반 최초 로드는 현재 데이터 규모에서는 단순성을 우선한 선택입니다. 아이템/아이콘/GE 수가 늘거나 첫 상호작용 hitch가 프로파일링에서 확인되면, 핵심 에셋은 GameInstance 초기화 단계에서 warm-up하고 나머지는 `StreamableManager` 기반 async load + 캐시 완료 콜백 구조로 전환할 예정입니다.
-- `TraceForWorldItem()`의 `TActorIterator` 기반 근접 검색은 테스트 월드의 소수 아이템 기준 구현입니다. 월드 아이템 수가 증가하거나 상호작용 탐색 비용이 프레임에 영향을 주는 시점에는 overlap candidate cache 또는 `OverlapMultiByObjectType`/spatial query 기반 탐색으로 교체할 예정입니다.
-- GameplayEffect는 DataTable에서 SoftClassPtr로 참조하지만, 실제 modifier 수치는 GE 에셋 내부에 분산되어 있습니다. 현재 규모에서는 빠른 제작과 GAS 파이프라인 검증을 우선한 선택이며, 아이템/장비/효과 수가 늘어나면 modifier magnitude를 DataTable/DataAsset 또는 SetByCaller 기반으로 분리해 밸런스 값을 한 곳에서 관리할 예정입니다.
-- `GA_Fire`는 `LocalPredicted` 정책을 사용하지만 진짜 GAS Prediction Key 발급/롤백은 구현하지 않았습니다 — 클라 즉시 활성화 + 서버 ConfirmHit 재검증 조합입니다.
-
----
-
-## 📐 클래스 구조
+모든 게임 상태는 Dedicated Server가 확정하고, 클라이언트는 요청과 예측 표시만 담당하는 Server Authority 구조입니다.
 
 ```mermaid
-classDiagram
-    direction TB
+flowchart TB
+    subgraph CLIENT["Client"]
+        VIEW["View<br/>CommonUI Widgets · Drag/Drop Overlay"]
+        VM["ViewModel<br/>Inventory · Equipment · Crafting · Survival"]
+        FIRE["GA_Fire (LocalPredicted)<br/>클라 카메라 라인 트레이스"]
+    end
 
-    namespace Character_Actor_Layer {
-        class AEXFILCharacter {
-            +UAbilitySystemComponent* ASC «Mixed Mode»
-            +UInventoryComponent* InventoryComp
-            +UEquipmentComponent* EquipmentComp
-            +UCraftingComponent* CraftingComp
-            +UHitRewindComponent* HitRewindComponent «server-only capsule history»
-            +ERespawnPhase RespawnPhase «ReplicatedUsing»
-            +PossessedBy() — server-side ASC init + GA_Fire grant
-            +InitAbilityActorInfoForClient() — called by PC.AcknowledgePossession
-            +Server_ConfirmHit() «Server, Reliable»
-            +Server_RequestPickupItem() «Server, Reliable»
-            +Multicast_PlayHitReact() «Unreliable»
-            +Multicast_PlayHitEffect() «Unreliable»
-            +Client_ShowNotification() «Client, Reliable»
-        }
-    }
+    subgraph SERVER["Server — Authority"]
+        MODEL["Model Components<br/>Inventory · Equipment · Crafting"]
+        REWIND["Hit Rewind Validation<br/>UHitRewindComponent + Server_ConfirmHit"]
+        GAS["GAS<br/>SurvivalAttributeSet · GameplayEffect"]
+        DATA["Data<br/>ItemDataSubsystem · DataTable CSV"]
+    end
 
-    namespace Model_Component_Layer {
-        class UInventoryComponent {
-            +FInventoryFastArray InventoryList «Replicated, NetDeltaSerialize»
-            -TArray~FInventorySlot~ GridSlots «Local»
-            -TMap~FGuid,int32~ ItemIndexMap «Local»
-            -TMap~FName,int32~ ItemCountCache «Local»
-            -TArray~uint16~ RowBitmap «Local, GridWidth<=16»
-            +Server_RequestRemoveItem() «Server, Reliable»
-            +Server_RequestMoveItem() «Server, Reliable»
-            +Server_RequestConsumeItemByID() «Server, Reliable»
-            +Server_RequestDropItem() «Server, Reliable»
-            +AddItemByID_Internal()  «Authority»
-            +AreSlotsFree()/AreSlotsFreeForItem() O(H) bitmap
-        }
-
-        class UEquipmentComponent {
-            +TArray~FEquipmentSlotData~ ReplicatedSlots «ReplicatedUsing=OnRep_Slots»
-            -TMap~EEquipmentSlot,int32~ SlotIndexMap «Local»
-            +Server_RequestEquipFromInventory() «Server, Reliable»
-            +Server_RequestUnequipToInventory() «Server, Reliable»
-            +Server_RequestUnequipToInventoryAt() «Server, Reliable»
-            +Server_RequestDropEquippedItem() «Server, Reliable»
-            +ApplyEquipmentEffect() / RemoveEquipmentEffect()
-        }
-
-        class UCraftingComponent {
-            +bool bIsCrafting «ReplicatedUsing=OnRep_CraftingState»
-            +FName CurrentRecipeID «Replicated»
-            -TArray~FConsumedIngredient~ ConsumedIngredients
-            +Server_RequestStartCraft() «Server, Reliable»
-            +Server_RequestCancelCraft() «Server, Reliable»
-            +Client_NotifyCraftStartFailed() «Client, Reliable»
-        }
-    }
-
-    namespace ViewModel_Layer {
-        class UInventoryViewModel {
-            +TArray~UInventorySlotViewModel~ SlotViewModels
-            +HandleInventoryUpdated(TSet~int32~)
-            +OnViewModelRefreshed «Native Multicast Delegate»
-        }
-
-        class UInventorySlotViewModel {
-            +GridPosition / ItemDataID / StackCount «FieldNotify»
-            +ItemInstanceID / Icon / Size / Rotated «FieldNotify»
-        }
-
-        class UEquipmentViewModel {
-            +GetSlotViewData()
-            +OnEquipmentSlotChanged «Native Multicast Delegate»
-        }
-
-        class UCraftingViewModel {
-            +BuildInitialRecipeListDelta()
-            +OnRecipeListDeltaChanged «Native Multicast Delegate»
-            +OnCraftingProgressStarted «Native Multicast Delegate»
-        }
-
-        class USurvivalViewModel {
-            +OnStatChanged(EExfilStatType, Current, Max) «Native Multicast Delegate»
-            +InitializeWithASC()
-        }
-    }
-
-    namespace Data_GAS_Layer {
-        class USurvivalAttributeSet {
-            +Health / MaxHealth «ReplicatedUsing, COND_None»
-            +Hunger / MaxHunger «ReplicatedUsing, COND_OwnerOnly»
-            +Thirst / MaxThirst «ReplicatedUsing, COND_OwnerOnly»
-            +Stamina / MaxStamina «ReplicatedUsing, COND_OwnerOnly»
-            +PreAttributeChange()
-            +PostGameplayEffectExecute()
-        }
-
-        class UItemDataSubsystem {
-            +UDataTable* ItemDataTable
-            +UDataTable* CraftingRecipeTable
-            -TMap TextureCache
-            -TMap EffectClassCache
-            +GetItemData(FName) FItemData*
-            +GetCachedTexture() UTexture2D*
-            +GetCachedEffect() UClass*
-        }
-    }
-
-    AEXFILCharacter *-- UInventoryComponent
-    AEXFILCharacter *-- UEquipmentComponent
-    AEXFILCharacter *-- UCraftingComponent
-    AEXFILCharacter --> USurvivalAttributeSet : ASC owns
-
-    UInventoryComponent ..> UItemDataSubsystem : queries
-    UEquipmentComponent ..> UItemDataSubsystem : queries
-    UCraftingComponent ..> UInventoryComponent : consumes / adds items
-    UCraftingComponent ..> UItemDataSubsystem : queries
-
-    UInventoryComponent ..> UInventoryViewModel : OnInventoryUpdated
-    UEquipmentComponent ..> UEquipmentViewModel : OnItemEquipped/Unequipped
-    UCraftingComponent ..> UCraftingViewModel : OnCraftingStateChanged
-    USurvivalAttributeSet ..> USurvivalViewModel : ASC AttributeChanged
-    UInventoryViewModel *-- UInventorySlotViewModel : owns slot VMs
+    VIEW -->|"UI 입력 이벤트 전달"| VM
+    VM -->|"Delegate · FieldNotify로 상태 반영"| VIEW
+    VM -->|"Request → Server RPC 12개"| MODEL
+    MODEL -->|"FastArray 델타 · OnRep → dirty index 전파"| VM
+    FIRE -->|"Server_ConfirmHit (원점·방향·발사 시각)"| REWIND
+    REWIND -->|"4단계 검증 통과 시 GE_Damage 적용"| GAS
+    GAS -->|"Attribute Change Delegate"| VM
+    MODEL -->|"아이템·레시피·GE 클래스 조회"| DATA
 ```
 
-```mermaid
-classDiagram
-    direction LR
+**설계 원칙**
 
-    class GA_Fire {
-        +CanActivateAbility() — 무기 장착 검사
-        +ActivateAbility() — LineTrace → Server_ConfirmHit
-    }
+- Server Authority
+  - 모든 게임 로직은 서버에서만 실행, 클라이언트는 Request → Server RPC → `_Internal` 3계층으로 요청만 전달
+- MVVM 단방향
+  - Model 변경은 Delegate / OnRep / FieldNotify로만 전파, Tick/Timer 기반 Model polling 금지
+- Data-Driven
+  - 아이템·레시피·장비 스펙은 DataTable CSV, 텍스처·GE 클래스는 TSoftObjectPtr / TSoftClassPtr 지연 로드 후 Subsystem 캐시
 
-    class UCraftingComponent {
-        +RequestStartCraft()
-        +StartCraft_Internal()
-        Server RPC → 재료 검증/타이머/결과 지급
-    }
+**권한 경계**
 
-    class GE_Consumable {
-        <<Blueprint>>
-        Duration: Instant
-        Health/Hunger/Thirst +N
-    }
+- 클라이언트는 발사 라인 트레이스와 인벤토리 배치 가능 하이라이트(`bPredictedPlaceable`)만 예측하고, 히트·배치·소모는 전부 서버가 확정
+- 확정 상태는 FastArray `NetDeltaSerialize`와 OnRep으로 전파 — Inventory/Equipment/Crafting/개인 스탯은 `COND_OwnerOnly`, Health·WorldItem·RespawnPhase는 `COND_None`
+- 피격 연출은 `Multicast_PlayHitReact` (Unreliable) 단일 경로로만 출력
 
-    class GE_Equipment {
-        <<Blueprint>>
-        Duration: Infinite
-        EquipmentEffect 기반 modifier
-    }
+[아키텍처 다이어그램 →](docs/Portfolio)
 
-    class GE_Damage {
-        <<Blueprint>>
-        Duration: Instant
-        Health -N
-    }
 
-    class USurvivalAttributeSet {
-        PreAttributeChange()
-        PostGameplayEffectExecute()
-        HP ≤ 0 → OnDeath()
-    }
+## 3. Key Features
 
-    GA_Fire --> GE_Damage : Apply
-    GE_Equipment --> USurvivalAttributeSet : Modify
-    GE_Consumable --> USurvivalAttributeSet : Modify
-    GE_Damage --> USurvivalAttributeSet : Modify
-```
+### 3.1 그리드 인벤토리 비트맵 탐색
 
----
+<sub>Architecture · **Inventory**</sub>
 
-## 🔄 네트워크 흐름
+| 소스 | 역할 |
+|---|---|
+| [`InventoryComponent.h`](Source/Project_EXFIL/Inventory/InventoryComponent.h) · [`.cpp`](Source/Project_EXFIL/Inventory/InventoryComponent.cpp) | 그리드 배치·회전·스택 병합, RowBitmap 빈 슬롯 탐색, `FInventoryFastArray` 복제 타입 정의 |
+| [`EXFILInventoryTypes.h`](Source/Project_EXFIL/Inventory/EXFILInventoryTypes.h) | `FInventoryItemInstance` 아이템 엔트리와 `FItemSize` / `FInventorySlot` 정의 |
+| [`InventoryBitmapBenchmark.cpp`](Source/Project_EXFIL/Tests/Benchmarks/Inventory/InventoryBitmapBenchmark.cpp) | Before/After 성능 비교 벤치마크 (4. Performance 근거) |
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Dedicated Server
-    participant T as Other Client
+![RowBitmap 빈 슬롯 탐색 — 행 OR 병합 후 후보 X마다 AND 1회로 배치 위치를 판정하는 흐름](https://github.com/user-attachments/assets/27e2a745-acad-410c-967c-baa9e6974503)
 
-    C->>S: Server RPC (Request → Server_Request)
-    S->>S: Sanity check + 게임 로직 실행 (Authority)
+- 1D `TArray`로 2D 그리드(기본 10×20)를 표현 — 멀티셀 아이템 배치, R 키 회전, 스택 병합, 드래그앤드롭
+- `RowBitmap (TArray<uint16>)` 비트마스크 AND 검사로 빈 영역 검증을 O(H)로 축소, `ItemIndexMap` / `ItemCountCache`로 인스턴스·수량 조회를 상수 시간화
+- Replicated 데이터(`FInventoryFastArray`)와 로컬 캐시(GridSlots·TMap·Bitmap)를 분리하고, FastArray 콜백에서 변경분만 부분 패치
 
-    S-->>C: NetDeltaSerialize / OnRep (COND_OwnerOnly)
-    Note over C: Inventory(FastArray) / Equipment / Crafting<br/>Hunger·Thirst·Stamina (+Max)
+### 3.2 서버 히트 리와인드 검증 슈팅
 
-    S-->>C: OnRep (COND_None)
-    S-->>T: OnRep (COND_None)
-    Note over C,T: WorldItem / Health·MaxHealth / ERespawnPhase
+<sub>Architecture · **Hit Rewind Validation**</sub>
 
-    S->>C: Multicast (Unreliable)
-    S->>T: Multicast (Unreliable)
-    Note over C,T: PlayHitReact / PlayHitEffect
+| 소스 | 역할 |
+|---|---|
+| [`HitRewindComponent.h`](Source/Project_EXFIL/Core/HitRewindComponent.h) · [`.cpp`](Source/Project_EXFIL/Core/HitRewindComponent.cpp) | 30Hz 캡슐 히스토리 기록, 0.2초 범위 리와인드 보간 |
+| [`EXFILCharacter.h`](Source/Project_EXFIL/Core/EXFILCharacter.h) · [`.cpp`](Source/Project_EXFIL/Core/EXFILCharacter.cpp) | `Server_ConfirmHit` 4단계 재검증 (원점·리와인드 캡슐 교차·조준각·LOS) |
+| [`GA_Fire.h`](Source/Project_EXFIL/GAS/GA_Fire.h) · [`.cpp`](Source/Project_EXFIL/GAS/GA_Fire.cpp) | 클라이언트 라인 트레이스 후 서버 확인 요청 |
 
-    S->>C: Client RPC (Reliable)
-    Note over C: ShowNotification / NotifyCraftStartFailed
-```
+![Server_ConfirmHit 시퀀스 — 클라이언트 트레이스 요청부터 서버 4단계 재검증, GE_Damage 적용, Multicast 연출까지](https://github.com/user-attachments/assets/1d8136c5-b35b-4b90-8caa-d75756f78f18)
 
----
+- `GA_Fire` (LocalPredicted · InstancedPerActor) — 클라이언트가 카메라 기준 라인 트레이스 후 `Server_ConfirmHit(HitActor, TraceStart, TraceDirection, FireServerTime)` 호출
+- 서버 4단계 재검증:
+  1. **원점 sanity** — 클라가 주장한 `TraceStart`와 서버가 아는 pawn 시점 위치 거리 검사 (기본 600cm 초과 시 거부)
+  2. **리와인드 캡슐 교차** — `UHitRewindComponent`가 30Hz로 기록한 히스토리를 `FireServerTime`(0.2초 window로 clamp)으로 보간해 과거 캡슐을 복원하고, 사격 segment와 캡슐 축 segment의 최단거리로 교차 판정. 히스토리가 해당 시각을 덮지 못하면 대상의 **현재 캡슐로 fallback** 후 동일 판정
+  3. **조준각** — 서버 control rotation과 전달된 방향의 각도 차 30° 초과 시 거부 (`bRejectOnAimDeviation`, 기본 `true`)
+  4. **LOS** — `ECC_Visibility` 라인 트레이스로 차폐 확인
+- 1·3·4단계는 실패 시 즉시 히트 거부, 2단계는 교차 실패 시 거부 — 통과 시에만 `GE_Damage` 적용
+- 랙 보정(히트 리와인드)은 구현 완료, GAS Prediction Key 발급·롤백은 미구현 (4. Performance 한계 참조)
 
-## 🔧 빌드 및 실행
+### 3.3 GAS 서바이벌 파이프라인
 
-### 요구사항
-- Unreal Engine 5.6
+<sub>Architecture · **GAS**</sub>
+
+| 소스 | 역할 |
+|---|---|
+| [`SurvivalAttributeSet.h`](Source/Project_EXFIL/GAS/SurvivalAttributeSet.h) · [`.cpp`](Source/Project_EXFIL/GAS/SurvivalAttributeSet.cpp) | 8속성 정의, 2단계 클램핑, 복제 조건 분리 |
+| [`EquipmentComponent.cpp`](Source/Project_EXFIL/Data/Equipment/EquipmentComponent.cpp) | 6슬롯 장비 장착 시 Infinite GE Apply · 해제 시 `RemoveActiveGameplayEffect` |
+| [`InventoryComponent.cpp`](Source/Project_EXFIL/Inventory/InventoryComponent.cpp) | 소모품 `ConsumableEffect` Instant GE 적용 |
+| [`SurvivalViewModel.h`](Source/Project_EXFIL/GAS/SurvivalViewModel.h) | ASC Attribute Change Delegate를 구독해 `FOnStatChanged`로 UI에 중계 |
+
+![GAS 서바이벌 파이프라인 — 3종 GE 소스가 ASC로 수렴해 2단계 클램핑을 거치고 복제 조건 분리 후 클라이언트 UI로 전파되는 흐름](https://github.com/user-attachments/assets/6a9018de-6ea9-45b6-bf10-73cb185a77ec)
+
+- `USurvivalAttributeSet` 8속성 (Health/Hunger/Thirst/Stamina + Max) — `PreAttributeChange`(CurrentValue) + `PostGameplayEffectExecute`(BaseValue) 2단계 클램핑
+- 복제 조건을 가시성 기준으로 분리 — Health/MaxHealth는 `COND_None`(타 플레이어 HP 표시), 개인 생존 스탯은 `COND_OwnerOnly`
+- 장비 장착 시 Infinite GE Apply / 해제 시 Remove, 소모품은 Instant GE — 6슬롯 장비(Head/Face/Eyewear/Body/Weapon1/Weapon2)와 연동
+- `USurvivalViewModel`은 MVVM ViewModel이 아닌 얇은 passthrough `UObject` — `GetGameplayAttributeValueChangeDelegate` 구독 결과를 멀티캐스트 델리게이트로 재방출
+
+### 3.4 Dedicated Server 리플리케이션 전략
+
+<sub>Architecture · **Server Authority**</sub>
+
+| 소스 | 역할 |
+|---|---|
+| [`InventoryComponent.cpp`](Source/Project_EXFIL/Inventory/InventoryComponent.cpp) | Inventory Server RPC 4종, FastArray `NetDeltaSerialize` 델타 복제 |
+| [`CraftingComponent.h`](Source/Project_EXFIL/Crafting/CraftingComponent.h) | 서버 타이머 기반 제작, 원자적 재료 소모·실패 롤백 |
+| [`EXFILCharacter.h`](Source/Project_EXFIL/Core/EXFILCharacter.h) · [`.cpp`](Source/Project_EXFIL/Core/EXFILCharacter.cpp) | 사망·리스폰 `ERespawnPhase` OnRep 단일 경로 |
+| [`ItemDataSubsystem.h`](Source/Project_EXFIL/Data/ItemDataSubsystem.h) | DataTable 로드와 지연 캐시 |
+
+![인벤토리 리플리케이션 — Request, Server RPC, _Internal 3계층 요청과 FastArray 델타 왕복, dirty index 부분 갱신 시퀀스](https://github.com/user-attachments/assets/1f8dae8d-be0c-44c8-b150-bec66ed203fc)
+
+- Server RPC 12개 (Inventory 4 · Equipment 4 · Crafting 2 · Character 2) — `_Implementation`에서 sanity check 후 early return, 통과분만 `_Internal`에 위임
+- 크래프팅은 서버 타이머 기반 결과 지급 + 원자적 재료 소모/실패 시 롤백, 인벤토리는 FastArray `NetDeltaSerialize` 델타 복제
+- 사망/리스폰은 `AEXFILCharacter`의 `ERespawnPhase` Replicated enum OnRep 단일 경로로 처리해 late-joiner에도 안전
+
+
+## 4. Performance
+
+| 항목 | Before | After | 개선 | 근거 |
+|---|---|---|---|---|
+| `FindFirstAvailableSlot` (10×20 · Fragmented50 · 2×3 아이템) | 31.06ms | 5.77ms | 5.38x (−81.4%) | [측정](docs/Benchmarks/GridInventoryBitmap.md#representative-result) |
+| `FindFirstAvailableSlot` 10×20 전체 30케이스 평균 | — | — | 평균 2.96x (최대 5.71x) | [측정](docs/Benchmarks/GridInventoryBitmap.md#summary) |
+| `AreSlotsFree` 10×20 전체 30케이스 평균 | — | — | 평균 1.36x (최대 2.73x) | [측정](docs/Benchmarks/GridInventoryBitmap.md#summary) |
+
+**측정 조건**
+
+| 항목 | 값 |
+|---|---|
+| 측정 도구 | UE Automation Test (Development Editor) |
+| 벤치마크 코드 | `Source/Project_EXFIL/Tests/Benchmarks/Inventory/InventoryBitmapBenchmark.cpp` |
+| 점유 패턴 | 고정 시드(3579)로 재현 |
+| 반복 횟수 | 케이스당 100,000회 |
+| 측정 방식 | 워밍업 후 3회 실행 중 최단값 (`FPlatformTime::Seconds()`) |
+| 최근 검증일 | 2026-05-19 |
+
+**개선 과정**
+
+| 단계 | 내용 |
+|---|---|
+| Before | `GridSlots` 셀 스캔 — 후보 좌표마다 아이템 footprint 내부 셀을 재순회, 단편화된 그리드에서 비용 급증 |
+| After | `RowBitmap` 비트마스크 — 각 행의 점유 상태를 `uint16`로 압축, 충돌 검사를 행당 AND 1회로 축소 |
+| 검증 | Before/After 결과 동일성 확인 후 재측정 → 대표 케이스 5.38x 개선 확인 |
+| 예외 | Empty/1×1처럼 첫 후보에서 바로 성공하는 케이스는 개선폭이 작거나 근소하게 느림 (최소 0.97x) |
+
+**한계**
+
+- GAS Prediction 미구현
+  - `GA_Fire`는 `LocalPredicted` 정책이지만 실제 Prediction Key 발급·롤백은 없음 (클라 즉시 활성화 + 서버 `ConfirmHit` 재검증 조합으로 대체)
+  - 참고: 랙 보정 자체는 `UHitRewindComponent` 기반 서버 히트 리와인드로 별도 구현되어 있어, 위 미구현 사항과는 별개
+- Planned 항목
+  - 시작 로드아웃 seed 코드(`AEXFILCharacter::BeginPlay`의 하드코딩 ItemID)의 DataTable 분리
+  - `ItemDataSubsystem`의 `LoadSynchronous` 최초 로드 → async 전환
+  - `TActorIterator` 근접 검색 → spatial query 교체
+
+[상세 측정 기록 →](docs/Benchmarks/GridInventoryBitmap.md)
+
+
+## 5. Getting Started
+
+**Requirements**
+
+- Unreal Engine 5.6 (Launcher 배포판 · Source Build 불필요)
 - Visual Studio 2022 또는 JetBrains Rider
 - Windows 11
+- 외부 SDK 없음 (사용 플러그인은 전부 엔진 내장: GameplayAbilities · CommonUI · ModelViewViewModel · StateTree · GameplayStateTree)
 
-### 설정
+**Setup**
+
 ```bash
 git clone https://github.com/agnesAqr/project_EXFIL.git
 ```
+
 1. `Project_EXFIL.uproject` 우클릭 → Generate Visual Studio project files
-2. Development Editor로 빌드
-3. 에디터에서 PIE → 2 Players → Net Mode: Play As Listen Server / Dedicated Server
+2. Development Editor 구성으로 빌드
+3. 에디터에서 PIE → Players 2 → Net Mode: Play As Listen Server 또는 Dedicated Server
 
----
 
-## 📝 라이선스
+## 6. Documentation
 
-본 프로젝트는 포트폴리오 목적으로 제작되었습니다.
-
----
-
-*UE 5.6 · C++ · Dedicated Server · GAS · MVVM · FastArraySerializer*
+| 문서 | 내용 |
+|---|---|
+| [GridInventoryBitmap.md](docs/Benchmarks/GridInventoryBitmap.md) | 인벤토리 비트맵 탐색 벤치마크 — 방법론·시나리오 매트릭스·결과 |
+| [GridSearchBenchmarkTest/](docs/Benchmarks/GridSearchBenchmarkTest) | 벤치마크 원본 실행 기록 (일자별) |
+| [InventoryAutomationTests.md](docs/Tests/InventoryAutomationTests.md) | 인벤토리 자동화 유닛 테스트 12개 목록 |
